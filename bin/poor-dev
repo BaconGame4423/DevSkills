@@ -63,10 +63,8 @@ check_dependencies() {
         missing+=("claude or opencode (at least one runtime required)")
     fi
 
-    if command -v gum &>/dev/null; then
-        printf "  %b✓%b gum (optional, enhanced rendering)\n" "$C_GREEN" "$C_RESET"
-    else
-        printf "  %b○%b gum (optional, using ANSI fallback)\n" "$C_YELLOW" "$C_RESET"
+    if ! command -v gum &>/dev/null; then
+        missing+=("gum (required) — go install github.com/charmbracelet/gum@latest")
     fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then

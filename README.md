@@ -46,7 +46,7 @@ poor-dev init
 | [yq](https://github.com/mikefarah/yq#install) | 必須 | YAML 設定ファイルの読み取りに使用 |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`) | いずれか必須 | デフォルトランタイム |
 | [OpenCode](https://github.com/opencode-ai/opencode) (`opencode`) | いずれか必須 | 代替ランタイム |
-| [gum](https://github.com/charmbracelet/gum) | 任意 | リッチな TUI レンダリング（なくても動作） |
+| [gum](https://github.com/charmbracelet/gum) | 必須 | TUI レンダリング（`go install github.com/charmbracelet/gum@latest`） |
 
 ---
 

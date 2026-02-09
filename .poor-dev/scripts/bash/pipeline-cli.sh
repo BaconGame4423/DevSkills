@@ -138,8 +138,17 @@ setup_tmux() {
     CONTROL_PIPE="/tmp/${SESSION_NAME}-control"
     mkfifo "$CONTROL_PIPE" 2>/dev/null || true
 
-    # Create tmux session with a shell (dashboard starts later when FEATURE_DIR is available)
-    tmux new-session -d -s "$SESSION_NAME" -n "dashboard"
+    # Create tmux session
+    # Interactive mode: dashboard ウィンドウで直接 prompt スクリプトを実行
+    # → raw コマンドがユーザーに見えない
+    # → スクリプト終了後は exec bash で shell を維持（dashboard 起動用）
+    if $INTERACTIVE; then
+        local desc_file="/tmp/${SESSION_NAME}-description"
+        tmux new-session -d -s "$SESSION_NAME" -n "dashboard" \
+            "bash '${SCRIPT_DIR}/pipeline-prompt.sh' '${desc_file}'; exec bash"
+    else
+        tmux new-session -d -s "$SESSION_NAME" -n "dashboard"
+    fi
 
     # Start dashboard now if FEATURE_DIR is available (--from mode)
     if [[ -n "$FEATURE_DIR" && -f "$FEATURE_DIR/workflow-state.yaml" ]]; then
@@ -741,13 +750,7 @@ main() {
     # Trap for cleanup
     trap 'cleanup_and_exit 1' INT TERM
 
-    # Interactive mode: launch prompt inside tmux dashboard window
-    if $INTERACTIVE; then
-        local desc_file="/tmp/${SESSION_NAME}-description"
-        sleep 0.3
-        tmux send-keys -t "$SESSION_NAME:dashboard" \
-            "bash '${SCRIPT_DIR}/pipeline-prompt.sh' '${desc_file}'" Enter
-    fi
+    # Interactive mode: prompt は setup_tmux() で dashboard ウィンドウに直接設定済み
 
     # Attach to tmux and run pipeline
     # Run pipeline in background within tmux, then attach
