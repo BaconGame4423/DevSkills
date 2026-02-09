@@ -1,31 +1,163 @@
 # PoorDevSkills
 
-> **PoorDevSkills** is a structured AI-driven development workflow for solo developers
-> using affordable but less reliable models (e.g., GLM4.7).
-> It compensates for model quality gaps through multi-persona reviews
-> with automatic fix loops, ensuring production-grade output from budget AI.
+> AI-powered development CLI — 安価モデルでもプロダクション品質を実現する開発ツール
 
----
+- **ワンコマンドで仕様→実装→レビューの全パイプライン実行**
+- **20 の AI ペルソナによる多角的自動レビュー＋修正ループ**
+- **Claude Code / OpenCode マルチランタイム対応**
+- **tmux ベースの並列ステップ実行**
 
-## このプロジェクトについて
-
-### 対象読者
-
-**GLM4.7 など安価だが品質にばらつきがある AI モデル**で開発を進める**個人開発者**のためのツールセットです。
-
-### 解決する問題
-
+GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を進める個人開発者のためのツールセットです。
 安価モデルはハルシネーション・品質低下が起きやすく、1 人では全てをレビューしきれません。
-
-### 解決策
-
 **構造化ワークフロー + 多角的 AI レビュー + 自動修正ループ**で品質を底上げします。
 
 「貧乏開発者（Poor Dev）」のための開発スキルセット ── それが **PoorDevSkills** です。
 
 ---
 
+## インストール
+
+```bash
+git clone https://github.com/<your-account>/DevSkills.git
+cd DevSkills
+```
+
+### 前提条件
+
+| ツール | 必須/任意 | 備考 |
+|--------|----------|------|
+| [tmux](https://github.com/tmux/tmux) | 必須 | パイプラインの並列実行に使用 |
+| [yq](https://github.com/mikefarah/yq#install) | 必須 | YAML 設定ファイルの読み取りに使用 |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude`) | いずれか必須 | デフォルトランタイム |
+| [OpenCode](https://github.com/opencode-ai/opencode) (`opencode`) | いずれか必須 | 代替ランタイム |
+| [gum](https://github.com/charmbracelet/gum) | 任意 | リッチな TUI レンダリング（なくても動作） |
+
+---
+
+## クイックスタート
+
+PoorDevSkills には **2 つの実行モード**があります。
+
+### CLI モード（`poor-dev-cli`）
+
+tmux セッション内で全パイプラインを独立プロセスとして自動実行します。
+
+```bash
+# 基本実行 — 機能説明を渡すだけ
+./poor-dev-cli "ユーザー認証機能を追加する"
+
+# 途中から再開
+./poor-dev-cli --from plan --feature-dir specs/001-user-auth
+
+# 確認プロンプトなしで自動進行
+./poor-dev-cli --no-confirm "ユーザー認証機能を追加する"
+```
+
+### インタラクティブモード（スラッシュコマンド）
+
+Claude Code / OpenCode のチャット内からスラッシュコマンドで個別ステップを実行します。
+
+```bash
+# トリアージ（自動で機能/バグを分類）
+/poor-dev.triage "ユーザー認証機能を追加する"     # → 機能開発フローへ
+/poor-dev.triage "ログイン時に500エラーが発生する"  # → バグ修正フローへ
+
+# パイプラインモード: triage から自動遷移で全ステップ実行
+# コンテキスト喪失時は /poor-dev.pipeline resume で復帰
+```
+
+---
+
+## CLI リファレンス（`poor-dev-cli`）
+
+### Usage
+
+```
+./poor-dev-cli [OPTIONS] "feature description"
+```
+
+### Options
+
+| オプション | 説明 |
+|-----------|------|
+| `--runtime <claude\|opencode>` | デフォルトランタイムを上書き |
+| `--model <model>` | デフォルトモデルを上書き |
+| `--config <path>` | 設定ファイルパス（デフォルト: `.poor-dev/pipeline-config.yaml`） |
+| `--from <step-id>` | 途中のステップからパイプラインを再開 |
+| `--feature-dir <path>` | フィーチャーディレクトリ（`--from` と併用） |
+| `--no-confirm` | 確認プロンプトなしで自動進行 |
+| `--help` | ヘルプを表示 |
+
+**ステップ ID**: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`
+
+### 実行例
+
+```bash
+# 基本実行
+./poor-dev-cli "Add user authentication"
+
+# OpenCode + GLM-4.7 で実行
+./poor-dev-cli --runtime opencode --model glm-4.7 "Add OAuth2 support"
+
+# plan ステップから再開
+./poor-dev-cli --from plan --feature-dir specs/003-auth
+
+# 確認なし自動進行
+./poor-dev-cli --no-confirm "Quick feature"
+```
+
+### 操作キー（tmux セッション内）
+
+| キー | 動作 |
+|------|------|
+| `Enter` | 次のステップへ進む（確認プロンプト時） |
+| `p` | パイプライン一時停止（ステップ完了後） |
+| `s` | 次ステップをスキップ（確認プロンプト時） |
+| `q` | パイプライン終了（状態保存、`--from` で再開可能） |
+| `m` | 次ステップに追加指示を付与（確認プロンプト時） |
+| `←→` | tmux タブ切替（完了ステップのログ参照） |
+
+---
+
+## コマンドリファレンス（スラッシュコマンド）
+
+### 仕様・計画系
+
+| コマンド | 用途 | 出力 |
+|---------|------|------|
+| `/poor-dev.triage` | 入力のトリアージ（機能/バグ分類） | ルーティング判定 |
+| `/poor-dev.specify` | 機能仕様の作成 | spec.md |
+| `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
+| `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
+| `/poor-dev.plan` | 技術計画の作成 | plan.md |
+| `/poor-dev.tasks` | タスク分解 | tasks.md |
+| `/poor-dev.implement` | タスクに従い実装 | 実装コード |
+| `/poor-dev.analyze` | 仕様・計画・タスクの整合性分析 | 分析レポート |
+| `/poor-dev.checklist` | ドメイン別チェックリスト生成 | チェックリスト |
+
+### レビュー系
+
+| コマンド | 用途 | ペルソナ数 |
+|---------|------|----------|
+| `/poor-dev.planreview` | 計画レビュー + 自動修正 | 4 |
+| `/poor-dev.tasksreview` | タスクレビュー + 自動修正 | 4 |
+| `/poor-dev.architecturereview` | 設計レビュー + 自動修正 | 4 |
+| `/poor-dev.qualityreview` | 品質レビュー + 自動修正 | 4 |
+| `/poor-dev.phasereview` | フェーズ完了レビュー + 自動修正 | 4 |
+
+### ユーティリティ
+
+| コマンド | 用途 |
+|---------|------|
+| `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
+| `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
+| `/poor-dev.pipeline` | パイプライン状態確認・コンテキスト喪失後の復帰 |
+
+---
+
 ## 開発フロー
+
+### 機能開発フロー
 
 | # | ステップ | コマンド | 内容 |
 |---|---------|---------|------|
@@ -123,104 +255,47 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 
 ---
 
-## クイックスタート
+## 設定
 
-```bash
-# 0. トリアージ（自動で機能/バグを分類）
-/poor-dev.triage "ユーザー認証機能を追加する"     # → 機能開発フローへ
-/poor-dev.triage "ログイン時に500エラーが発生する"  # → バグ修正フローへ
+パイプラインの動作は `.poor-dev/pipeline-config.yaml` でカスタマイズできます。
 
-# 1. 仕様を作成（triage から自動遷移、または直接実行）
-/poor-dev.specify "ユーザー認証機能を追加する"
+### デフォルト設定
 
-# 2. 技術計画を作成
-/poor-dev.plan
+```yaml
+defaults:
+  runtime: claude          # claude | opencode
+  model: sonnet
+  max_budget_usd: 5.0     # claude -p --max-budget-usd
+  confirm: true            # ステップ間で確認プロンプトを表示
 
-# 3. 計画をレビュー（自動修正ループ付き）
-/poor-dev.planreview
-
-# 4. タスクを分解
-/poor-dev.tasks
-
-# 5. タスクをレビュー（自動修正ループ付き）
-/poor-dev.tasksreview
-
-# 6. 実装
-/poor-dev.implement
-
-# 7. 品質レビュー（品質ゲート + 自動修正ループ付き）
-/poor-dev.qualityreview
-
-# 8. フェーズ完了レビュー
-/poor-dev.phasereview
-
-# パイプラインモード: triage から自動遷移で全ステップ実行
-# コンテキスト喪失時は /poor-dev.pipeline resume で復帰
-
-# CLI オーケストレーター: tmux で独立プロセスとして全ステップ実行
-./poor-dev-cli "ユーザー認証機能を追加する"
-
-# 途中再開
-./poor-dev-cli --from plan --feature-dir specs/001-user-auth
+steps:
+  triage:
+    model: haiku           # トリアージは軽量モデルで十分
+  implement:
+    model: opus            # 実装は高精度モデルを使用
 ```
 
----
+### ステップごとのカスタマイズ例
 
-## コマンドリファレンス
+`steps` 配下にステップ ID をキーとして、個別にランタイム・モデル・バジェットを上書きできます。
 
-### 仕様・計画系
+```yaml
+steps:
+  triage:
+    model: haiku
+  specify:
+    model: sonnet
+  plan:
+    runtime: opencode       # このステップだけ OpenCode で実行
+    model: glm-4.7
+  implement:
+    model: opus
+    max_budget_usd: 10.0    # 実装ステップはバジェットを多めに
+  qualityreview:
+    model: sonnet
+```
 
-| コマンド | 用途 | 出力 |
-|---------|------|------|
-| `/poor-dev.triage` | 入力のトリアージ（機能/バグ分類） | ルーティング判定 |
-| `/poor-dev.specify` | 機能仕様の作成 | spec.md |
-| `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
-| `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
-| `/poor-dev.plan` | 技術計画の作成 | plan.md |
-| `/poor-dev.tasks` | タスク分解 | tasks.md |
-| `/poor-dev.implement` | タスクに従い実装 | 実装コード |
-| `/poor-dev.analyze` | 仕様・計画・タスクの整合性分析 | 分析レポート |
-| `/poor-dev.checklist` | ドメイン別チェックリスト生成 | チェックリスト |
-
-### レビュー系
-
-| コマンド | 用途 | ペルソナ数 |
-|---------|------|----------|
-| `/poor-dev.planreview` | 計画レビュー + 自動修正 | 4 |
-| `/poor-dev.tasksreview` | タスクレビュー + 自動修正 | 4 |
-| `/poor-dev.architecturereview` | 設計レビュー + 自動修正 | 4 |
-| `/poor-dev.qualityreview` | 品質レビュー + 自動修正 | 4 |
-| `/poor-dev.phasereview` | フェーズ完了レビュー + 自動修正 | 4 |
-
-### ユーティリティ
-
-| コマンド | 用途 |
-|---------|------|
-| `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
-| `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
-| `/poor-dev.pipeline` | パイプライン状態確認・コンテキスト喪失後の復帰 |
-
-### CLI オーケストレーター
-
-| コマンド | 用途 |
-|---------|------|
-| `./poor-dev-cli "説明"` | tmux 内で全パイプラインを独立プロセスとして実行 |
-| `./poor-dev-cli --from <step>` | 途中のステップからパイプラインを再開 |
-| `./poor-dev-cli --no-confirm "説明"` | 確認プロンプトなしで自動進行 |
-| `./poor-dev-cli --runtime opencode "説明"` | OpenCode バックエンドで実行 |
-
-**操作キー**（tmux セッション内）:
-
-| キー | 動作 |
-|------|------|
-| `Enter` | 次のステップへ進む（確認プロンプト時） |
-| `p` | パイプライン一時停止（ステップ完了後） |
-| `s` | 次ステップをスキップ（確認プロンプト時） |
-| `q` | パイプライン終了（状態保存、`--from` で再開可能） |
-| `m` | 次ステップに追加指示を付与（確認プロンプト時） |
-| `←→` | tmux タブ切替（完了ステップのログ参照） |
-
-**設定ファイル**: `.poor-dev/pipeline-config.yaml` でステップごとのランタイム・モデル・バジェットを設定可能。
+未指定のステップは `defaults` の値を継承します。
 
 ---
 
