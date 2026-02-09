@@ -1,454 +1,144 @@
 ---
-description: 指定された成果物に対して多角的なレビューを実行する
+description: Route review commands to appropriate orchestrators with sub-agent architecture
 handoffs:
   - label: 修正実装
-    agent: speckit.implement
+    agent: poor-dev.implement
     prompt: レビュー指摘事項を修正して実装を続けてください
   - label: 計画再調整
-    agent: speckit.plan
+    agent: poor-dev.plan
     prompt: プランレビューのフィードバックに基づいて計画を修正してください
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-## アウトライン
+## Command Format
 
-**コマンド形式**: `/review <type> <target>`
+`/poor-dev <type> <target>`
 
-### 使用可能なレビュー種別
+## Architecture
 
-| レビュー種別 | ターゲット | ペルソナ | 主な確認項目 |
-|------------|----------|---------|------------|
-| `plan` | plan.md | PM・リスク・価値・批判 | 価値提供、リスク、実現可能性 |
-| `tasks` | tasks.md | テックリード・シニア・DevOps・ジュニア | 依存関係、並列化、網羅性 |
-| `architecture` | plan.md / 設計資料 | アーキテクト・セキュリティ・性能・運用 | SOLID、拡張性、セキュリティ、性能 |
-| `quality` | 実装コード | QA・テスト設計・コード・セキュリティ | テスト網羅性、コード品質、セキュリティ |
-| `phase` | phase完了 | 品質保証・リグレッション・文書化・UX | Definition of Done、統合、文書 |
+Each review type uses an **orchestrator** that:
+1. Spawns 4 persona sub-agents in parallel (read-only)
+2. Aggregates results
+3. Spawns a fixer sub-agent if issues found
+4. Loops until 0 issues remain
 
-### レビューフロー
+Persona definitions: `.opencode/agents/` (OpenCode) / `.claude/agents/` (Claude Code)
+Orchestrators: `.opencode/command/poor-dev.<type>review.md`
 
-1. **ターゲットの読み込み**:
-   - レビュー種別に基づいて適切なファイルを読み込む
-   - 関連する成果物（spec.md, plan.md, tasks.md, data-model.md等）も読み込む
+## Review Types
 
-2. **ペルソナごとのレビュー実行**:
-   - 指定されたレビュー種別の全ペルソナからレビューを収集
-   - 各ペルソナは独自の観点からフィードバックを提供
+| Type | Command | Personas | Target |
+|------|---------|----------|--------|
+| `plan` | `/poor-dev.planreview` | PM, RISK, VAL, CRIT | plan.md |
+| `tasks` | `/poor-dev.tasksreview` | TECHLEAD, SENIOR, DEVOPS, JUNIOR | tasks.md |
+| `architecture` | `/poor-dev.architecturereview` | ARCH, SEC, PERF, SRE | plan.md / data-model.md |
+| `quality` | `/poor-dev.qualityreview` | QA, TESTDESIGN, CODE, SEC + adversarial | implementation code |
+| `phase` | `/poor-dev.phasereview` | QA, REGRESSION, DOCS, UX | phase artifacts |
 
-3. **フィードバックの統合**:
-   - 全ペルソナのフィードバックを統合
-   - 重要度の順序付け（Critical > High > Medium > Low）
+## Individual Persona Commands
 
-4. **判定**:
-   - **GO**: 重大な問題なし、実装を進めてよい
-   - **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-   - **NO-GO**: 重大な問題あり、修正が必要
+Each persona can also be invoked directly:
 
-5. **敵対的レビュー（品質レビューのみ）**:
-   - 品質レビューの場合、`swarm_adversarial_review` を実行
-   - VDDスタイルの厳密なコードレビュー
-   - 3ストライクルールを適用
+**Plan**: `/poor-dev.planreview-pm`, `-risk`, `-value`, `-critical`
+**Tasks**: `/poor-dev.tasksreview-techlead`, `-senior`, `-devops`, `-junior`
+**Architecture**: `/poor-dev.architecturereview-architect`, `-security`, `-performance`, `-sre`
+**Quality**: `/poor-dev.qualityreview-qa`, `-testdesign`, `-code`, `-security`
+**Phase**: `/poor-dev.phasereview-qa`, `-regression`, `-docs`, `-ux`
 
-## レビュー種別詳細
-
-### plan レビュー
-
-**ターゲット**: `plan.md`
-
-**ペルソナ**:
-- **PM**: ビジネス価値、優先順位、範囲の妥当性
-- **リスク**: 技術的・実務的リスクの特定
-- **価値**: ROI、成功指標、測定可能性
-- **批判**: 盲点、競合、代替案
-
-**出力形式**:
-```markdown
-# プランレビュー結果
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-## Critical Issues
-
-[重大な問題のリスト]
-
-## High Priority Issues
-
-[高優先度問題のリスト]
-
-## Medium Priority Issues
-
-[中優先度問題のリスト]
-
-## Recommendations
-
-[推奨事項]
-
-## ペルソナ別要約
-
-### PM
-[要約]
-
-### リスク
-[要約]
-
-### 価値
-[要約]
-
-### 批判
-[要約]
-```
-
-### tasks レビュー
-
-**ターゲット**: `tasks.md`
-
-**ペルソナ**:
-- **テックリード**: タスクの正確性、依存関係の正しさ
-- **シニア**: 最適化の機会、ベストプラクティス
-- **DevOps**: インフラ、デプロイ、モニタリング
-- **ジュニア**: タスクの明確性、実装可能性
-
-**出力形式**:
-```markdown
-# タスクレビュー結果
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-## Critical Issues
-
-## 依存関係分析
-
-[依存関係グラフまたは説明]
-
-## 並列化の機会
-
-[並列実行可能なタスク]
-
-## タスク網羅性チェック
-
-[ユーザーストーリーごとのタスク網羅性]
-
-## ペルソナ別要約
-
-### テックリード
-[要約]
-
-### シニア
-[要約]
-
-### DevOps
-[要約]
-
-### ジュニア
-[要約]
-```
-
-### architecture レビュー
-
-**ターゲット**: `plan.md`, `data-model.md`, `contracts/`
-
-**ペルソナ**:
-- **アーキテクト**: 設計原則（SOLID）、拡張性、保守性
-- **セキュリティ**: 脆弱性、認証認可、データ保護
-- **性能**: スケーラビリティ、レイテンシ、スループット
-- **運用**: デプロイ、監視、トラブルシューティング
-
-**出力形式**:
-```markdown
-# アーキテクチャレビュー結果
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-## Critical Issues
-
-## 設計原則チェック
-
-### SOLID原則
-- [S] 単一責任
-- [O] 開放閉鎖
-- [L] リスコフ置換
-- [I] インタフェース分離
-- [D] 依存性逆転
-
-### 拡張性
-[評価]
-
-### 保守性
-[評価]
-
-## セキュリティ評価
-
-[セキュリティ事項]
-
-## 性能評価
-
-[性能事項]
-
-## 運用性評価
-
-[運用事項]
-
-## ペルソナ別要約
-
-### アーキテクト
-[要約]
-
-### セキュリティ
-[要約]
-
-### 性能
-[要約]
-
-### 運用
-[要約]
-```
-
-### quality レビュー
-
-**ターゲット**: 実装コード、テスト
-
-**ペルソナ**:
-- **QA**: テスト網羅性、品質指標
-- **テスト設計**: テスト戦略、カバレッジ
-- **コード**: コード品質、保守性、可読性
-- **セキュリティ**: セキュリティ脆弱性
-
-**敵対的レビュー統合**:
-1. まずペルソナレビューを実行
-2. `swarm_adversarial_review` を実行
-3. 両方の結果を統合
-
-**出力形式**:
-```markdown
-# 品質レビュー結果
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-## Critical Issues
-
-## テスト網羅性
-
-### カバレッジ
-[カバレッジレポート]
-
-### テスト種別
-- [ ] ユニットテスト
-- [ ] 統合テスト
-- [ ] エンドツーエンドテスト
-- [ ] コントラクトテスト（該当の場合）
-
-## コード品質評価
-
-### コードの健全性
-[評価]
-
-### 保守性
-[評価]
-
-### 可読性
-[評価]
-
-## セキュリティ評価
-
-[セキュリティ事項]
-
-## 敵対的レビュー結果
-
-### 判定: APPROVED / NEEDS_CHANGES / HALLUCINATING
-
-### 発見された問題
-[問題のリスト]
-
-## ペルソナ別要約
-
-### QA
-[要約]
-
-### テスト設計
-[要約]
-
-### コード
-[要約]
-
-### セキュリティ
-[要約]
-```
-
-**敵対的レビューがNEEDS_CHANGESの場合**:
-- 修正項目をリスト化
-- ユーザーに確認: "敵対的レビューで問題が見つかりました。修正しますか？(yes/no)"
-- yesの場合: フィードバックに基づいて修正を開始
-- noの場合: ユーザーの指示を待つ
-
-**敵対的レビューがHALLUCINATINGの場合**:
-- コード品質が優れていることを報告
-- 次のフェーズに進むことができる
-
-### phase レビュー
-
-**ターゲット**: フェーズ完了時の全成果物
-
-**ペルソナ**:
-- **品質保証**: Definition of Doneの遵守
-- **リグレッション**: 既存機能への影響
-- **文書化**: ドキュメントの完全性
-- **UX**: ユーザー体験の評価
-
-**出力形式**:
-```markdown
-# フェーズ完了レビュー結果
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-## Definition of Done チェック
-
-[DoDアイテムのチェックリスト]
-
-## リグレッションテスト
-
-[リグレッションの結果]
-
-## ドキュメントチェック
-
-[ドキュメントの状態]
-
-## UX評価
-
-[UXの評価]
-
-## ペルソナ別要約
-
-### 品質保証
-[要約]
-
-### リグレッション
-[要約]
-
-### 文書化
-[要約]
-
-### UX
-[要約]
-```
-
-## 品質ゲート統合
-
-**憲法第VIII章：検証ゲートとの統合**
-
-品質レビュー時に以下の検証ゲートを実行:
-
-1. **型チェック**:
-   - TypeScript: `tsc --noEmit`
-   - Python: `mypy` or `ruff check`
-   - Rust: `cargo check`
-
-2. **リンティング**:
-   - JavaScript/TypeScript: `eslint`
-   - Python: `ruff lint` or `flake8`
-   - Rust: `cargo clippy`
-
-3. **フォーマットチェック**:
-   - JavaScript/TypeScript: `prettier --check`
-   - Python: `black --check`
-   - Rust: `cargo fmt --check`
-
-4. **テスト**:
-   - ユニットテスト: `npm test` / `pytest` / `cargo test`
-   - 統合テスト: プロジェクト固有のコマンド
-
-**ゲート失敗時の処理**:
-- フィードバックにゲートの失敗を含める
-- CRITICALまたはHIGHとして分類
-- 修正が必要
-
-## ワークフロー統合
-
-### 標準フロー
+## Review Loop Flow
 
 ```
-1. 仕様作成
-   /speckit.specify "機能の説明"
-
-2. 技術計画
-   /speckit.plan
-
-3. プランレビュー
-   /review plan plan.md
-   → GO / CONDITIONAL / NO-GO
-
-4. タスク分解
-   /speckit.tasks
-
-5. タスクレビュー
-   /review tasks tasks.md
-   → 依存関係・並列化の確認
-
-6. 設計レビュー（必要時）
-   /review architecture data-model.md
-   → SOLID・拡張性・セキュリティ確認
-
-7. 実装
-   /speckit.implement
-   または
-   /swarm "phase0を実装"
-
-8. 品質レビュー
-   /review quality
-   → テスト網羅性・コード品質確認
-
-9. フェーズ完了レビュー
-   /review phase phase0
-   → Definition of Done確認
+STEP 1: 4x Review sub-agents (parallel, READ-ONLY)
+   ↓ wait for all to complete
+STEP 2: Aggregate (orchestrator counts issues by C/H/M/L)
+   ↓
+STEP 3: Branch
+   ├─ Issues > 0 → STEP 4
+   └─ Issues = 0 → DONE + handoff
+   ↓
+STEP 4: 1x Fix sub-agent (sequential, WRITE)
+   ↓ wait for completion
+   → Back to STEP 1 (new sub-agents, fresh context)
 ```
 
-## 一般ガイドライン
+**Safety**: Review sub-agents are read-only (no Write/Edit/Bash). Only the fixer agent has write access.
 
-### レビュー品質基準
+## Output Format (compact English YAML)
 
-- **具体性**: 抽象的なフィードバックではなく、具体的な改善提案を提供する
-- **実現可能性**: 提案される変更が実用的であることを確認する
-- **優先順位付け**: 重要度に基づいてフィードバックを整理する
-- **建設的**: 批判的だが、解決策を提案する
+Per-persona:
+```yaml
+p: PM
+v: GO|CONDITIONAL|NO-GO
+i:
+  - C: description
+  - H: description
+r:
+  - recommendation
+```
 
-### 自動化との統合
+Aggregated:
+```yaml
+type: plan
+target: .specify/plan.md
+n: 3
+i:
+  H:
+    - issue description (PERSONA)
+  M:
+    - issue description (PERSONA)
+ps:
+  PM: GO
+  RISK: CONDITIONAL
+  VAL: GO
+  CRIT: GO
+act: FIX
+```
 
-- 品質ゲート（型チェック、リンティング、テスト）は自動実行
-- 敵対的レビューはコード品質の客観的評価を提供
-- ペルソナレビューは主観的だが専門的な観点を提供
+Final (0 issues):
+```yaml
+type: plan
+target: .specify/plan.md
+v: GO
+n: 7
+log:
+  - {n: 1, issues: 6, fixed: "summary"}
+  - {n: 7, issues: 0}
+next: /poor-dev.tasks
+```
 
-### 憲法コンプライアンス
+## Quality Gates (quality review only)
 
-- **第III章（レビュー主導品質）**: 敵対的レビューと3ストライクルールの遵守
-- **第VIII章（検証ゲート）**: 品質ゲートの実行と合格確認
-- **第IX章（メモリと知識管理）**: 学習とパターンをHivemindに保存
+Run before persona reviews:
+1. Type check (`tsc --noEmit` / `mypy` / `cargo check` / `go vet`)
+2. Linting (`eslint` / `ruff lint` / `cargo clippy` / `golangci-lint`)
+3. Format check (`prettier --check` / `black --check` / `cargo fmt --check` / `gofmt`)
+4. Tests (`npm test` / `pytest` / `cargo test` / `go test`)
 
-## 使用例
+## Adversarial Review (quality review only)
 
-### プランレビュー
+After persona reviews, run `swarm_adversarial_review`.
+- APPROVED → no additional issues
+- NEEDS_CHANGES → add to issue list
+- HALLUCINATING → ignore
+- 3-strike rule applies
+
+## Constitution Compliance
+
+- **Section III**: Adversarial review and 3-strike rule
+- **Section VIII**: Quality gates before merge
+- **Section IX**: Store learnings in Hivemind
+
+## Usage Examples
+
 ```bash
-/review plan plan.md
-```
-
-### タスクレビュー
-```bash
-/review tasks tasks.md
-```
-
-### アーキテクチャレビュー
-```bash
-/review architecture data-model.md
-```
-
-### 品質レビュー（実装後）
-```bash
-/review quality
-```
-
-### フェーズ完了レビュー
-```bash
-/review phase phase0
+/poor-dev.planreview .specify/plan.md
+/poor-dev.tasksreview .specify/tasks.md
+/poor-dev.architecturereview .specify/data-model.md
+/poor-dev.qualityreview
+/poor-dev.phasereview phase0
 ```

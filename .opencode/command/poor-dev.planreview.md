@@ -1,5 +1,5 @@
 ---
-description: プランに対してPM・リスク・価値・批判のペルソナでレビューを実行する
+description: Run 4-persona plan review with auto-fix loop until zero issues
 handoffs:
   - label: タスク分解
     agent: poor-dev.tasks
@@ -10,111 +10,94 @@ handoffs:
     prompt: レビュー指摘に基づいて計画を修正してください
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-**使用方法**: `/review-plan <plan.mdのパス>`
+## Review Loop Procedure
 
-## アウトライン
+Repeat the following loop until issue count reaches 0.
 
-1. ターゲットファイルの読み込み（plan.md）
-2. 関連成果物の読み込み（spec.md等）
-3. 4つのペルソナでレビューを実行
-4. フィードバックを統合
-5. 判定と推奨事項を出力
+### STEP 1: Persona Reviews (parallel)
 
-## ペルソナ詳細
+Run 4 persona reviews as **parallel sub-agents** with fresh context each.
 
-### PM (Product Manager)
-**観点**: ビジネス価値、優先順位、範囲の妥当性
-**確認項目**:
-- ビジネス価値が明確に定義されているか？
-- 優先順位（P1, P2, P3）が適切か？
-- 範囲が明確で、実現可能か？
-- 成功指標が測定可能か？
+Persona sub-agents (defined in `.opencode/agents/`):
+- `planreview-pm`
+- `planreview-risk`
+- `planreview-value`
+- `planreview-critical`
 
-### リスクマネージャー
-**観点**: 技術的・実務的リスクの特定
-**確認項目**:
-- 技術的リスクが特定されているか？
-- リスク軽減策があるか？
-- 実装スケジュールが現実的か？
-- 依存関係が明確か？
+Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-### 価値アナリスト
-**観点**: ROI、成功指標、測定可能性
-**確認項目**:
-- 投資対効果が明確か？
-- 成功指標が測定可能か？
-- 定量的・定性的なメトリクスがあるか？
-- マイルストーンが現実的か？
+**IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-### クリティカル・シンカー
-**観点**: 盲点、競合、代替案
-**確認項目**:
-- 競合分析が十分か？
-- 代替案が検討されているか？
-- 盲点がないか？
-- 最悪のシナリオが考慮されているか？
+**Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
+**OpenCode**: Use `@planreview-pm`, `@planreview-risk`, `@planreview-value`, `@planreview-critical`.
 
-## 出力形式
+### STEP 2: Aggregate Results
 
-```markdown
-# プランレビュー結果
+Collect 4 sub-agent YAML results. Count issues by severity (C/H/M/L).
 
-**対象**: [plan.mdのパス]
-**レビュー日時**: [日時]
+### STEP 3: Branch
 
-## 判定: GO / CONDITIONAL / NO-GO
+- **Issues remain (any severity: C/H/M/L)** → STEP 4 (fix and re-review)
+- **Zero issues** → Loop complete. Output final result + handoff.
 
-[判定の理由]
+Continue loop until **zero issues**, not just GO verdict.
 
-## Critical Issues
+### STEP 4: Auto-Fix (sub-agent)
 
-[重大な問題のリスト]
+Spawn a fix sub-agent (`review-fixer`) with the aggregated issue list:
 
-## High Priority Issues
+> Fix `$ARGUMENTS` based on these issues.
+> Priority order: C → H → M → L
+> Issues: [paste aggregated issues from STEP 2]
 
-[高優先度問題のリスト]
+After fix completes → **back to STEP 1** (new review sub-agents, fresh context).
 
-## Medium Priority Issues
+### Loop Behavior
 
-[中優先度問題のリスト]
+- **Exit condition**: 0 issues from all personas
+- **No hard limit**: continues as long as issues remain (typical: 5-8 iterations)
+- **Safety valve**: after 10 iterations, ask user for confirmation (not auto-abort)
+- **Progress tracking**: record issue count per iteration, verify decreasing trend
 
-## Low Priority Issues
+## Iteration Output
 
-[低優先度問題のリスト]
-
-## Recommendations
-
-[推奨事項のリスト]
-
-## ペルソナ別フィードバック
-
-### PM
-[PMのフィードバック]
-
-### リスクマネージャー
-[リスクマネージャーのフィードバック]
-
-### 価値アナリスト
-[価値アナリストのフィードバック]
-
-### クリティカル・シンカー
-[クリティカル・シンカーのフィードバック]
+```yaml
+type: plan
+target: $ARGUMENTS
+n: 3
+i:
+  M:
+    - competitive analysis insufficient (CRIT)
+  L:
+    - minor naming inconsistency (PM)
+ps:
+  PM: GO
+  RISK: GO
+  VAL: GO
+  CRIT: CONDITIONAL
+act: FIX
 ```
 
-## 品質基準
+## Final Output (loop complete, 0 issues)
 
-- **GO**: Critical/High問題なし、実装を進めてよい
-- **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-- **NO-GO**: 重大な問題あり、修正が必要
-
-## 次のステップ
-
-- **GO**: `/poor-dev.tasks` でタスク分解
-- **CONDITIONAL**: 問題を修正し、再レビュー
-- **NO-GO**: 計画を修正し、再レビュー
+```yaml
+type: plan
+target: $ARGUMENTS
+v: GO
+n: 7
+log:
+  - {n: 1, issues: 6, fixed: "auth strategy, metrics"}
+  - {n: 2, issues: 3, fixed: "risk mitigation"}
+  - {n: 3, issues: 2, fixed: "competitive analysis"}
+  - {n: 4, issues: 1, fixed: "naming"}
+  - {n: 5, issues: 1, fixed: "edge case"}
+  - {n: 6, issues: 1, fixed: "doc clarity"}
+  - {n: 7, issues: 0}
+next: /poor-dev.tasks
+```

@@ -1,353 +1,161 @@
 ---
-description: 実装コードに対してQA・テスト設計・コード・セキュリティのペルソナでレビューを実行し、敵対的レビューを統合する
+description: Run quality gates + 4-persona review + adversarial review with auto-fix loop
 handoffs:
   - label: 修正実装
     agent: poor-dev.implement
     prompt: 品質レビューの指摘に基づいて修正を適用してください
     send: true
   - label: フェーズ完了レビュー
-    agent: review-phase
+    agent: poor-dev.phasereview
     prompt: フェーズ完了レビューを実行してください
     send: true
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-**使用方法**: `/review-quality`
+## Quality Review Procedure (5 stages)
 
-## アウトライン
+This review has additional stages compared to other review types.
 
-1. 品質ゲートの実行
-   - 型チェック
-   - リンティング
-   - フォーマットチェック
-   - テスト
-2. 実装コードとテストの読み込み
-3. 4つのペルソナでレビューを実行
-4. 敵対的レビュー（swarm_adversarial_review）の実行
-5. フィードバックの統合
-6. 判定と推奨事項を出力
+### STAGE 0: Quality Gates
 
-## ペルソナ詳細
-
-### QAエンジニア
-**観点**: テスト網羅性、品質指標
-**確認項目**:
-- テストカバレッジが要件を満たしているか？
-- テストが十分なシナリオをカバーしているか？
-- エッジケースがテストされているか？
-- テストが独立しているか？
-
-### テスト設計エンジニア
-**観点**: テスト戦略、カバレッジ
-**確認項目**:
-- テスト戦略が適切か？
-- 単体テストがあるか？
-- 統合テストがあるか？
-- エンドツーエンドテストがあるか？
-- テストが保守可能か？
-
-### コードレビューアー
-**観点**: コード品質、保守性、可読性
-**確認項目**:
-- コードがクリーンか？
-- コードが可読性が高いか？
-- 適切な命名がされているか？
-- 適切なコメントがあるか？
-- 重複がないか？
-- 技術的負債がないか？
-
-### セキュリティスペシャリスト
-**観点**: セキュリティ脆弱性
-**確認項目**:
-- SQLインジェクションの脆弱性がないか？
-- XSSの脆弱性がないか？
-- 認証認可が適切か？
-- データ検証があるか？
-- シークレットがハードコードされていないか？
-- 安全な関数を使用しているか？
-
-## 敵対的レビュー
-
-### 実行
-
-`swarm_adversarial_review` を実行:
+Run automated quality gates before persona review:
 
 ```bash
-/swarm_adversarial_review --diff [差分] --test_output [テスト出力]
-```
+# Detect project language and run appropriate commands:
 
-### 判定
-
-- **APPROVED**: コードは優れている。次のフェーズに進んでよい
-- **NEEDS_CHANGES**: 実際の問題が見つかった。修正が必要
-- **HALLUCINATING**: 敵対者が問題を捏造している。コードは優れている
-
-### 3ストライクルール
-
-- 3回の拒否後、タスクは失敗してバックログに戻る
-- 拒否ごとに理由を文書化
-- 修正後に再レビュー
-
-## 品質ゲート
-
-### 1. 型チェック
-
-```bash
 # TypeScript/JavaScript
-tsc --noEmit
+tsc --noEmit && eslint . --max-warnings 0 && prettier --check "**/*.{ts,tsx,js,jsx,json,md}" && npm test -- --coverage
 
 # Python
-mypy . || ruff check
+mypy . && ruff lint && black --check . && pytest --cov
 
 # Rust
-cargo check
+cargo check && cargo clippy -- -D warnings && cargo fmt --check && cargo test
 
 # Go
-go vet ./...
+go vet ./... && golangci-lint run && gofmt -l . && go test ./... -cover
 ```
 
-### 2. リンティング
+If quality gates fail, record failures as C or H severity issues and proceed to fix loop.
+
+### STAGE 1-4: Review Loop
+
+Repeat until issue count reaches 0.
+
+#### STEP 1: Persona Reviews (parallel)
+
+Run 4 persona reviews as **parallel sub-agents** with fresh context each.
+
+Persona sub-agents (defined in `.opencode/agents/`):
+- `qualityreview-qa`
+- `qualityreview-testdesign`
+- `qualityreview-code`
+- `qualityreview-security`
+
+Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
+
+**IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones.
+
+**Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona.
+**OpenCode**: Use `@qualityreview-qa`, `@qualityreview-testdesign`, `@qualityreview-code`, `@qualityreview-security`.
+
+#### STEP 2: Adversarial Review
+
+After persona reviews, run `swarm_adversarial_review`:
 
 ```bash
-# TypeScript/JavaScript
-eslint . --max-warnings 0
-
-# Python
-ruff lint || flake8 . --max-line-length=88
-
-# Rust
-cargo clippy -- -D warnings
-
-# Go
-golangci-lint run
+/swarm_adversarial_review --diff [diff] --test_output [test output]
 ```
 
-### 3. フォーマットチェック
+Judgments:
+- **APPROVED**: code is excellent, no issues
+- **NEEDS_CHANGES**: real issues found, add to issue list
+- **HALLUCINATING**: adversary fabricating issues, ignore
 
-```bash
-# TypeScript/JavaScript
-prettier --check "**/*.{ts,tsx,js,jsx,json,md}"
+#### STEP 3: Aggregate Results
 
-# Python
-black --check .
+Collect 4 persona YAML results + adversarial review results. Count all issues by severity.
 
-# Rust
-cargo fmt --check
+Apply **3-strike rule** for adversarial review:
+- Track adversarial rejection count
+- After 3 rejections, task fails and returns to backlog
+- Document reason for each rejection
 
-# Go
-gofmt -l .
+#### STEP 4: Branch
+
+- **Issues remain (any severity: C/H/M/L)** → STEP 5 (fix and re-review)
+- **Zero issues AND adversarial APPROVED/HALLUCINATING** → Loop complete
+- **3 adversarial strikes** → Abort. Report failure.
+
+#### STEP 5: Auto-Fix (sub-agent)
+
+Spawn a fix sub-agent (`review-fixer`) with the aggregated issue list:
+
+> Fix `$ARGUMENTS` based on these issues.
+> Priority order: C → H → M → L
+> Issues: [paste aggregated issues]
+
+After fix completes → **back to STEP 1** (new sub-agents, fresh context).
+
+### Loop Behavior
+
+- **Exit condition**: 0 issues from all personas + adversarial APPROVED/HALLUCINATING
+- **No hard limit**: continues as long as issues remain
+- **Safety valve**: after 10 iterations, ask user for confirmation
+- **3-strike rule**: adversarial review failures are tracked separately
+- **Progress tracking**: record issue count per iteration
+
+## Iteration Output
+
+```yaml
+type: quality
+target: $ARGUMENTS
+n: 2
+gates:
+  typecheck: pass
+  lint: pass
+  format: pass
+  test: pass
+i:
+  H:
+    - missing edge case test for null input (QA)
+    - XSS vulnerability in render function (SEC)
+  M:
+    - function too complex, cyclomatic complexity 15 (CODE)
+adversarial: NEEDS_CHANGES
+strikes: 1
+ps:
+  QA: CONDITIONAL
+  TESTDESIGN: GO
+  CODE: CONDITIONAL
+  SEC: NO-GO
+act: FIX
 ```
 
-### 4. テスト
+## Final Output (loop complete, 0 issues)
 
-```bash
-# TypeScript/JavaScript
-npm test -- --coverage
-
-# Python
-pytest --cov
-
-# Rust
-cargo test
-
-# Go
-go test ./... -cover
+```yaml
+type: quality
+target: $ARGUMENTS
+v: GO
+n: 5
+gates:
+  typecheck: pass
+  lint: pass
+  format: pass
+  test: pass
+adversarial: APPROVED
+strikes: 1
+log:
+  - {n: 1, issues: 9, fixed: "gate failures, coverage"}
+  - {n: 2, issues: 5, fixed: "XSS, null handling"}
+  - {n: 3, issues: 3, fixed: "complexity, naming"}
+  - {n: 4, issues: 1, fixed: "edge case test"}
+  - {n: 5, issues: 0}
+next: /poor-dev.phasereview
 ```
-
-### ゲートの結果
-
-| ゲート | 結果 | 説明 |
-|--------|------|------|
-| 型チェック | [✓/✗] | [説明] |
-| リンティング | [✓/✗] | [説明] |
-| フォーマットチェック | [✓/✗] | [説明] |
-| テスト | [✓/✗] | [説明] |
-
-## テスト網羅性
-
-### カバレッジ要件
-
-- **重要パス**: 100% カバレッジ（TDD必須）
-- **通常パス**: 80% 以上のカバレッジ
-- **全体**: 70% 以上のカバレッジ
-
-### カバレッジレポート
-
-```text
-File           | % Stmts | % Branch | % Funcs | % Lines |
----------------|---------|----------|---------|---------|
-src/module.ts  |   85.2  |    72.5  |   90.0  |   86.3  |
-src/utils.ts   |   92.3  |    85.0  |  100.0  |   93.1  |
----------------|---------|----------|---------|---------|
-All files      |   88.7  |    78.5  |   95.0  |   89.5  |
-```
-
-### テスト種別
-
-- [ ] ユニットテスト
-- [ ] 統合テスト
-- [ ] エンドツーエンドテスト
-- [ ] コントラクトテスト（該当の場合）
-
-## コード品質評価
-
-### コードの健全性
-
-| 項目 | 評価 | 説明 |
-|------|------|------|
-| 複雑度 | [1-5] | 1: 低い、5: 高い |
-| 重複 | [1-5] | 1: 低い、5: 高い |
-| 技術的負債 | [1-5] | 1: 低い、5: 高い |
-| メンテナンス性 | [1-5] | 1: 低い、5: 高い |
-
-### 保守性
-
-| 項目 | 評価 | 説明 |
-|------|------|------|
-| 可読性 | [1-5] | 1: 低い、5: 高い |
-| 命名 | [1-5] | 1: 低い、5: 高い |
-| コメント | [1-5] | 1: 低い、5: 高い |
-| ドキュメント | [1-5] | 1: 低い、5: 高い |
-
-## セキュリティ評価
-
-| カテゴリ | 評価 | 説明 |
-|---------|------|------|
-| SQLインジェクション | [✓/✗/?] | 脆弱性があるか？ |
-| XSS | [✓/✗/?] | 脆弱性があるか？ |
-| 認証認可 | [✓/✗/?] | 適切か？ |
-| データ検証 | [✓/✗/?] | あるか？ |
-| シークレット管理 | [✓/✗/?] | 安全か？ |
-
-## 出力形式
-
-```markdown
-# 品質レビュー結果
-
-**対象**: [実装コード]
-**レビュー日時**: [日時]
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-[判定の理由]
-
-## Critical Issues
-
-[重大な問題のリスト]
-
-## High Priority Issues
-
-[高優先度問題のリスト]
-
-## Medium Priority Issues
-
-[中優先度問題のリスト]
-
-## 品質ゲートの結果
-
-| ゲート | 結果 | 説明 |
-|--------|------|------|
-| 型チェック | [✓/✗] | [説明] |
-| リンティング | [✓/✗] | [説明] |
-| フォーマットチェック | [✓/✗] | [説明] |
-| テスト | [✓/✗] | [説明] |
-
-### ゲート失敗時の詳細
-[ゲート失敗の詳細情報]
-
-## テスト網羅性
-
-### カバレッジレポート
-[カバレッジレポート]
-
-### テスト種別
-- [ ] ユニットテスト
-- [ ] 統合テスト
-- [ ] エンドツーエンドテスト
-- [ ] コントラクトテスト
-
-### カバレッジ要件のチェック
-- [ ] 重要パス: 100%
-- [ ] 通常パス: 80%以上
-- [ ] 全体: 70%以上
-
-## コード品質評価
-
-### コードの健全性
-[コードの健全性の詳細]
-
-### 保守性
-[保守性の詳細]
-
-## セキュリティ評価
-[セキュリティ評価の詳細]
-
-## 敵対的レビュー結果
-
-### 判定: APPROVED / NEEDS_CHANGES / HALLUCINATING
-
-[判定の説明]
-
-### 発見された問題
-
-| 問題ID | 優先度 | 説明 | ファイル | 行 |
-|--------|--------|------|--------|-----|
-| 1      | Critical| [説明]| [file]| [line]|
-
-### 修正が必要な問題
-[修正が必要な問題のリスト]
-
-## ペルソナ別フィードバック
-
-### QAエンジニア
-[QAエンジニアのフィードバック]
-
-### テスト設計エンジニア
-[テスト設計エンジニアのフィードバック]
-
-### コードレビューアー
-[コードレビューアーのフィードバック]
-
-### セキュリティスペシャリスト
-[セキュリティスペシャリストのフィードバック]
-
-## 推奨事項
-
-### 優先度Critical
-[推奨事項のリスト]
-
-### 優先度High
-[推奨事項のリスト]
-
-### 優先度Medium
-[推奨事項のリスト]
-```
-
-## 品質基準
-
-- **GO**: Critical/High問題なし、全ての品質ゲートをパス、敵対的レビューAPPROVED
-- **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-- **NO-GO**: 重大な問題あり、品質ゲート失敗、または敵対的レビューNEEDS_CHANGES
-
-## 敵対的レビューNEEDS_CHANGES時の処理
-
-1. 発見された問題をリスト化
-2. ユーザーに確認: "敵対的レビューで問題が見つかりました。修正しますか？(yes/no)"
-3. yesの場合: フィードバックに基づいて修正を開始
-4. noの場合: ユーザーの指示を待つ
-
-## 敵対的レビューHALLUCINATING時の処理
-
-1. コード品質が優れていることを報告
-2. 次のフェーズに進むことができる
-
-## 次のステップ
-
-- **GO**: `/review phase` でフェーズ完了レビュー
-- **CONDITIONAL**: 問題を修正し、再レビュー
-- **NO-GO**: 問題を修正し、再レビュー

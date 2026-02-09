@@ -1,5 +1,5 @@
 ---
-description: タスク分解に対してテックリード・シニア・DevOps・ジュニアのペルソナでレビューを実行する
+description: Run 4-persona tasks review with auto-fix loop until zero issues
 handoffs:
   - label: 実装開始
     agent: poor-dev.implement
@@ -10,168 +10,98 @@ handoffs:
     prompt: レビュー指摘に基づいてタスクを修正してください
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-**使用方法**: `/review-tasks <tasks.mdのパス>`
+## Review Loop Procedure
 
-## アウトライン
+Repeat the following loop until issue count reaches 0.
 
-1. ターゲットファイルの読み込み（tasks.md）
-2. 関連成果物の読み込み（spec.md, plan.md, data-model.md等）
-3. 4つのペルソナでレビューを実行
-4. 依存関係と並列化の分析
-5. タスク網羅性のチェック
-6. 判定と推奨事項を出力
+### STEP 1: Persona Reviews (parallel)
 
-## ペルソナ詳細
+Run 4 persona reviews as **parallel sub-agents** with fresh context each.
 
-### テックリード
-**観点**: タスクの正確性、依存関係の正しさ
-**確認項目**:
-- タスクが正確かつ完全か？
-- 依存関係が正しいか？
-- タスクサイズが適切か？
-- 実装可能か？
+Persona sub-agents (defined in `.opencode/agents/`):
+- `tasksreview-techlead`
+- `tasksreview-senior`
+- `tasksreview-devops`
+- `tasksreview-junior`
 
-### シニアエンジニア
-**観点**: 最適化の機会、ベストプラクティス
-**確認項目**:
-- 最適化の機会があるか？
-- ベストプラクティスに従っているか？
-- コード品質が確保されるか？
-- 技術的負債がないか？
+Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-### DevOpsエンジニア
-**観点**: インフラ、デプロイ、モニタリング
-**確認項目**:
-- インフラタスクが含まれているか？
-- デプロイプロセスが明確か？
-- モニタリングのタスクがあるか？
-- CI/CDが考慮されているか？
+**IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-### ジュニアエンジニア
-**観点**: タスクの明確性、実装可能性
-**確認項目**:
-- タスクが明確か？
-- 実装のヒントがあるか？
-- 文脈が十分か？
-- 新人でも実装可能か？
+**Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
+**OpenCode**: Use `@tasksreview-techlead`, `@tasksreview-senior`, `@tasksreview-devops`, `@tasksreview-junior`.
 
-## 依存関係分析
+### STEP 2: Aggregate Results
 
-**依存関係グラフの確認**:
-- 循環依存がないか？
-- クリティカルパスが明確か？
-- 並列化の機会があるか？
+Collect 4 sub-agent YAML results. Count issues by severity (C/H/M/L).
 
-**並列化のルール**:
-- [P] マークのタスクは並列実行可能
-- 同じファイルに触れるタスクは順次実行
-- 依存関係がないタスクは並列実行可能
+Additionally check:
+- Dependency graph: no circular dependencies?
+- Critical path identified?
+- Parallelization opportunities noted?
+- User story coverage complete?
 
-## タスク網羅性チェック
+### STEP 3: Branch
 
-**ユーザーストーリーごとのタスク**:
-- [US1] モデル、サービス、エンドポイント、テスト
-- [US2] モデル、サービス、エンドポイント、テスト
-- [US3] モデル、サービス、エンドポイント、テスト
+- **Issues remain (any severity: C/H/M/L)** → STEP 4 (fix and re-review)
+- **Zero issues** → Loop complete. Output final result + handoff.
 
-**各フェーズのタスク**:
-- Phase 1: セットアップ（初期化、設定）
-- Phase 2: 基盤（ブロッキング前提条件）
-- Phase 3+: ユーザーストーリー
-- Final: ポリッシュとクロスカッティング懸念
+Continue loop until **zero issues**, not just GO verdict.
 
-## 出力形式
+### STEP 4: Auto-Fix (sub-agent)
 
-```markdown
-# タスクレビュー結果
+Spawn a fix sub-agent (`review-fixer`) with the aggregated issue list:
 
-**対象**: [tasks.mdのパス]
-**レビュー日時**: [日時]
+> Fix `$ARGUMENTS` based on these issues.
+> Priority order: C → H → M → L
+> Issues: [paste aggregated issues from STEP 2]
 
-## 判定: GO / CONDITIONAL / NO-GO
+After fix completes → **back to STEP 1** (new review sub-agents, fresh context).
 
-[判定の理由]
+### Loop Behavior
 
-## Critical Issues
+- **Exit condition**: 0 issues from all personas
+- **No hard limit**: continues as long as issues remain (typical: 5-8 iterations)
+- **Safety valve**: after 10 iterations, ask user for confirmation (not auto-abort)
+- **Progress tracking**: record issue count per iteration, verify decreasing trend
 
-[重大な問題のリスト]
+## Iteration Output
 
-## High Priority Issues
-
-[高優先度問題のリスト]
-
-## Medium Priority Issues
-
-[中優先度問題のリスト]
-
-## 依存関係分析
-
-### 依存関係グラフ
-[依存関係の図または説明]
-
-### クリティカルパス
-[クリティカルパスの特定]
-
-### 並列化の機会
-[並列実行可能なタスクのリスト]
-
-### 循環依存のチェック
-- [ ] 循環依存なし
-
-## タスク網羅性チェック
-
-### ユーザーストーリーごとのタスク
-
-| ユーザーストーリー | モデル | サービス | エンドポイント | テスト | 網羅性 |
-|------------------|--------|---------|---------------|--------|--------|
-| US1              | [X]    | [X]     | [X]           | [X]    | 100%  |
-| US2              | [X]    | [X]     | [X]           | [X]    | 100%  |
-| US3              | [X]    | [X]     | [X]           | [X]    | 100%  |
-
-### 各フェーズのタスク
-
-| フェーズ | タスク数 | 完了予定 | 備考 |
-|---------|---------|---------|------|
-| Phase 1 | N       | N       | セットアップ |
-| Phase 2 | N       | N       | 基盤 |
-| Phase 3 | N       | N       | US1 |
-| Phase 4 | N       | N       | US2 |
-| Phase 5 | N       | N       | US3 |
-| Final   | N       | N       | ポリッシュ |
-
-## ペルソナ別フィードバック
-
-### テックリード
-[テックリードのフィードバック]
-
-### シニアエンジニア
-[シニアエンジニアのフィードバック]
-
-### DevOpsエンジニア
-[DevOpsエンジニアのフィードバック]
-
-### ジュニアエンジニア
-[ジュニアエンジニアのフィードバック]
-
-## 推奨事項
-
-[推奨事項のリスト]
+```yaml
+type: tasks
+target: $ARGUMENTS
+n: 2
+i:
+  H:
+    - circular dependency between task 3 and 5 (TECHLEAD)
+  M:
+    - missing monitoring task (DEVOPS)
+ps:
+  TECHLEAD: CONDITIONAL
+  SENIOR: GO
+  DEVOPS: CONDITIONAL
+  JUNIOR: GO
+act: FIX
 ```
 
-## 品質基準
+## Final Output (loop complete, 0 issues)
 
-- **GO**: Critical/High問題なし、実装を進めてよい
-- **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-- **NO-GO**: 重大な問題あり、修正が必要
-
-## 次のステップ
-
-- **GO**: `/poor-dev.implement` または `/swarm` で実装開始
-- **CONDITIONAL**: 問題を修正し、再レビュー
-- **NO-GO**: タスクを修正し、再レビュー
+```yaml
+type: tasks
+target: $ARGUMENTS
+v: GO
+n: 5
+log:
+  - {n: 1, issues: 8, fixed: "dependency graph, task sizing"}
+  - {n: 2, issues: 4, fixed: "monitoring tasks, CI/CD"}
+  - {n: 3, issues: 2, fixed: "clarity, context"}
+  - {n: 4, issues: 1, fixed: "parallelization"}
+  - {n: 5, issues: 0}
+next: /poor-dev.implement
+```

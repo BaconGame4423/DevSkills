@@ -1,5 +1,5 @@
 ---
-description: フェーズ完了時の全成果物に対して品質保証・リグレッション・文書化・UXのペルソナでレビューを実行する
+description: Run 4-persona phase completion review with auto-fix loop until zero issues
 handoffs:
   - label: 次のフェーズ
     agent: poor-dev.implement
@@ -10,289 +10,111 @@ handoffs:
     prompt: レビュー指摘に基づいて修正を適用してください
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-**使用方法**: `/review-phase <フェーズ名>`
+## Review Loop Procedure
 
-## アウトライン
+Repeat the following loop until issue count reaches 0.
 
-1. フェーズ成果物の読み込み（コード、テスト、ドキュメント等）
-2. Definition of Doneのチェック
-3. リグレッションテストの実行
-4. 4つのペルソナでレビューを実行
-5. 判定と推奨事項を出力
+### STEP 1: Persona Reviews (parallel)
 
-## ペルソナ詳細
+Run 4 persona reviews as **parallel sub-agents** with fresh context each.
 
-### 品質保証エンジニア
-**観点**: Definition of Doneの遵守
-**確認項目**:
-- Definition of Doneが満たされているか？
-- 全ての品質ゲートを通過したか？
-- テストが全てパスしたか？
-- コードレビューが完了したか？
+Persona sub-agents (defined in `.opencode/agents/`):
+- `phasereview-qa`
+- `phasereview-regression`
+- `phasereview-docs`
+- `phasereview-ux`
 
-### リグレッションスペシャリスト
-**観点**: 既存機能への影響
-**確認項目**:
-- 既存機能が正常に動作しているか？
-- リグレッションがないか？
-- 統合テストがパスしたか？
-- エンドツーエンドテストがパスしたか？
+Each sub-agent instruction: "Review phase `$ARGUMENTS`. Check all phase artifacts including code, tests, docs. Output compact English YAML."
 
-### ドキュメンテーションエンジニア
-**観点**: ドキュメントの完全性
-**確認項目**:
-- コードコメントが適切か？
-- APIドキュメントがあるか？
-- ユーザードキュメントがあるか？
-- READMEが更新されたか？
-- CHANGELOGが更新されたか？
+**IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-### UXデザイナー
-**観点**: ユーザー体験の評価
-**確認項目**:
-- ユーザー体験が良いか？
-- ユーザーインタフェースが直感的か？
-- アクセシビリティが考慮されているか？
-- ユーザーフィードバックがあるか？
+**Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
+**OpenCode**: Use `@phasereview-qa`, `@phasereview-regression`, `@phasereview-docs`, `@phasereview-ux`.
 
-## Definition of Doneチェック
+### STEP 2: Aggregate Results
 
-### 必須項目
+Collect 4 sub-agent YAML results. Count issues by severity (C/H/M/L).
 
-- [ ] 全てのタスクが完了している
-- [ ] 全ての品質ゲートを通過した
-- [ ] 単体テストがパスした
-- [ ] 統合テストがパスした
-- [ ] エンドツーエンドテストがパスした
-- [ ] コードレビューが完了した
-- [ ] 敵対的レビューに合格した
-- [ ] ドキュメントが更新された
-- [ ] リグレッションがない
-- [ ] セキュリティレビューが完了した
+Additionally verify Definition of Done:
+- All tasks completed?
+- All quality gates passed?
+- All tests passing (unit, integration, E2E)?
+- Code review completed?
+- Adversarial review passed?
+- Documentation updated?
+- No regressions?
+- Security review completed?
 
-### オプション項目
+### STEP 3: Branch
 
-- [ ] パフォーマンステストがパスした
-- [ ] アクセシビリティテストがパスした
-- [ ] ユーザーテストが完了した
-- [ ] デプロイ準備が完了した
+- **Issues remain (any severity: C/H/M/L)** → STEP 4 (fix and re-review)
+- **Zero issues** → Loop complete. Output final result + handoff.
 
-### DoDの結果
+Continue loop until **zero issues**, not just GO verdict.
 
-| 項目 | 必須 | 結果 | 備考 |
-|------|------|------|------|
-| タスク完了 | ✓ | [✓/✗] | [説明] |
-| 品質ゲート | ✓ | [✓/✗] | [説明] |
-| 単体テスト | ✓ | [✓/✗] | [説明] |
-| 統合テスト | ✓ | [✓/✗] | [説明] |
-| E2Eテスト | ✓ | [✓/✗] | [説明] |
-| コードレビュー | ✓ | [✓/✗] | [説明] |
-| 敵対的レビュー | ✓ | [✓/✗] | [説明] |
-| ドキュメント | ✓ | [✓/✗] | [説明] |
-| リグレッション | ✓ | [✓/✗] | [説明] |
-| セキュリティ | ✓ | [✓/✗] | [説明] |
+### STEP 4: Auto-Fix (sub-agent)
 
-## リグレッションテスト
+Spawn a fix sub-agent (`review-fixer`) with the aggregated issue list:
 
-### 実行コマンド
+> Fix phase `$ARGUMENTS` artifacts based on these issues.
+> Priority order: C → H → M → L
+> Issues: [paste aggregated issues from STEP 2]
 
-```bash
-# 全てのテストを実行
-npm test  # または pytest, cargo test 等
+After fix completes → **back to STEP 1** (new review sub-agents, fresh context).
 
-# カバレッジを確認
-npm test -- --coverage
+### Loop Behavior
 
-# 特定のテストスイート
-npm test -- --testNamePattern="既存機能"
+- **Exit condition**: 0 issues from all personas
+- **No hard limit**: continues as long as issues remain (typical: 5-8 iterations)
+- **Safety valve**: after 10 iterations, ask user for confirmation (not auto-abort)
+- **Progress tracking**: record issue count per iteration, verify decreasing trend
+
+## Iteration Output
+
+```yaml
+type: phase
+target: $ARGUMENTS
+n: 3
+i:
+  H:
+    - README not updated with new API endpoints (DOCS)
+  M:
+    - accessibility not tested (UX)
+    - CHANGELOG missing entry (DOCS)
+ps:
+  QA: GO
+  REGRESSION: GO
+  DOCS: CONDITIONAL
+  UX: CONDITIONAL
+act: FIX
 ```
 
-### リグレッションチェック
+## Final Output (loop complete, 0 issues)
 
-- [ ] 既存機能のテストがパスした
-- [ ] 既存のAPIが正常に動作している
-- [ ] 既存のUIが正常に表示されている
-- [ ] 既存のデータが正常に処理されている
-
-### リグレッションの結果
-
-| テストスイート | 実行 | パス | 失敗 | スキップ | カバレッジ |
-|---------------|------|------|------|---------|---------|
-| 既存機能      | N    | N    | 0    | 0       | 85%      |
-| 新規機能      | N    | N    | 0    | 0       | 90%      |
-| 統合テスト    | N    | N    | 0    | 0       | 80%      |
-| E2Eテスト     | N    | N    | 0    | 0       | 75%      |
-
-## ドキュメントチェック
-
-### 必須ドキュメント
-
-- [ ] コードコメント
-- [ ] APIドキュメント（該当の場合）
-- [ ] ユーザードキュメント（該当の場合）
-- [ ] READMEの更新
-- [ ] CHANGELOGの更新
-
-### ドキュメントの品質
-
-| ドキュメント | 更新 | 品質 | 完全性 | 備考 |
-|-------------|------|------|--------|------|
-| README      | [✓/✗] | [1-5] | [1-5] | [説明] |
-| CHANGELOG   | [✓/✗] | [1-5] | [1-5] | [説明] |
-| API Docs    | [✓/✗] | [1-5] | [1-5] | [説明] |
-| Code Comms  | [✓/✗] | [1-5] | [1-5] | [説明] |
-
-## UX評価
-
-### UXの品質
-
-| 項目 | 評価 | 説明 |
-|------|------|------|
-| ユーザー体験 | [1-5] | 1: 低い、5: 高い |
-| ユーザーインタフェース | [1-5] | 1: 低い、5: 高い |
-| アクセシビリティ | [✓/✗/?] | 考慮されているか？ |
-| ユーザーフィードバック | [✓/✗/?] | あるか？ |
-
-## 出力形式
-
-```markdown
-# フェーズ完了レビュー結果
-
-**フェーズ**: [フェーズ名]
-**レビュー日時**: [日時]
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-[判定の理由]
-
-## Critical Issues
-
-[重大な問題のリスト]
-
-## High Priority Issues
-
-[高優先度問題のリスト]
-
-## Medium Priority Issues
-
-[中優先度問題のリスト]
-
-## Definition of Doneチェック
-
-### 必須項目
-
-| 項目 | 結果 | 備考 |
-|------|------|------|
-| タスク完了 | [✓/✗] | [説明] |
-| 品質ゲート | [✓/✗] | [説明] |
-| 単体テスト | [✓/✗] | [説明] |
-| 統合テスト | [✓/✗] | [説明] |
-| E2Eテスト | [✓/✗] | [説明] |
-| コードレビュー | [✓/✗] | [説明] |
-| 敵対的レビュー | [✓/✗] | [説明] |
-| ドキュメント | [✓/✗] | [説明] |
-| リグレッション | [✓/✗] | [説明] |
-| セキュリティ | [✓/✗] | [説明] |
-
-### オプション項目
-
-| 項目 | 結果 | 備考 |
-|------|------|------|
-| パフォーマンステスト | [✓/✗] | [説明] |
-| アクセシビリティテスト | [✓/✗] | [説明] |
-| ユーザーテスト | [✓/✗] | [説明] |
-| デプロイ準備 | [✓/✗] | [説明] |
-
-### DoDの結果
-- 必須項目: [完了数/総数]
-- オプション項目: [完了数/総数]
-- 合格: [はい/いいえ]
-
-## リグレッションテスト
-
-### 実行結果
-[実行結果の詳細]
-
-### リグレッションチェック
-- [ ] 既存機能のテストがパスした
-- [ ] 既存のAPIが正常に動作している
-- [ ] 既存のUIが正常に表示されている
-- [ ] 既存のデータが正常に処理されている
-
-### リグレッションの結果
-- リグレッション: [あり/なし]
-- 失敗したテスト: [数]
-
-## ドキュメントチェック
-
-### 必須ドキュメント
-- [ ] コードコメント
-- [ ] APIドキュメント
-- [ ] ユーザードキュメント
-- [ ] READMEの更新
-- [ ] CHANGELOGの更新
-
-### ドキュメントの品質
-[ドキュメントの品質の詳細]
-
-## UX評価
-[UX評価の詳細]
-
-## ペルソナ別フィードバック
-
-### 品質保証エンジニア
-[品質保証エンジニアのフィードバック]
-
-### リグレッションスペシャリスト
-[リグレッションスペシャリストのフィードバック]
-
-### ドキュメンテーションエンジニア
-[ドキュメンテーションエンジニアのフィードバック]
-
-### UXデザイナー
-[UXデザイナーのフィードバック]
-
-## 推奨事項
-
-### 優先度Critical
-[推奨事項のリスト]
-
-### 優先度High
-[推奨事項のリスト]
-
-### 優先度Medium
-[推奨事項のリスト]
+```yaml
+type: phase
+target: $ARGUMENTS
+v: GO
+n: 4
+dod:
+  tasks: pass
+  gates: pass
+  tests: pass
+  review: pass
+  adversarial: pass
+  docs: pass
+  regression: pass
+  security: pass
+log:
+  - {n: 1, issues: 6, fixed: "DoD gaps, test coverage"}
+  - {n: 2, issues: 3, fixed: "README, CHANGELOG"}
+  - {n: 3, issues: 1, fixed: "accessibility"}
+  - {n: 4, issues: 0}
+next: /poor-dev.implement (next phase)
 ```
-
-## 品質基準
-
-- **GO**: Critical/High問題なし、DoD全必須項目完了、リグレッションなし
-- **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-- **NO-GO**: 重大な問題あり、DoD未完了、またはリグレッションあり
-
-## 次のステップ
-
-- **GO**: 次のフェーズに進む、またはデプロイ
-- **CONDITIONAL**: 問題を修正し、再レビュー
-- **NO-GO**: 問題を修正し、再レビュー
-
-## デプロイ準備チェック
-
-GO判定後、デプロイ準備を確認:
-
-- [ ] 全ての品質ゲートを通過
-- [ ] リグレッションなし
-- [ ] ドキュメント更新完了
-- [ ] CHANGELOG更新完了
-- [ ] バージョン番号更新
-- [ ] リリースノート作成
-- [ ] デプロイスクリプト準備完了
-- [ ] ロールバック計画あり
-
-デプロイ準備が完了したら、デプロイを実行できます。

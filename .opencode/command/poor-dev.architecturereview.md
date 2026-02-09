@@ -1,5 +1,5 @@
 ---
-description: アーキテクチャに対してアーキテクト・セキュリティ・性能・運用のペルソナでレビューを実行する
+description: Run 4-persona architecture review with auto-fix loop until zero issues
 handoffs:
   - label: 実装開始
     agent: poor-dev.implement
@@ -10,197 +10,93 @@ handoffs:
     prompt: レビュー指摘に基づいてアーキテクチャを修正してください
 ---
 
-## ユーザー入力
+## User Input
 
 ```text
 $ARGUMENTS
 ```
 
-**使用方法**: `/review-architecture <data-model.mdまたはplan.mdのパス>`
+## Review Loop Procedure
 
-## アウトライン
+Repeat the following loop until issue count reaches 0.
 
-1. ターゲットファイルの読み込み（data-model.md, plan.md, contracts/）
-2. 関連成果物の読み込み（spec.md等）
-3. 4つのペルソナでレビューを実行
-4. 設計原則のチェック
-5. セキュリティ、性能、運用性の評価
-6. 判定と推奨事項を出力
+### STEP 1: Persona Reviews (parallel)
 
-## ペルソナ詳細
+Run 4 persona reviews as **parallel sub-agents** with fresh context each.
 
-### アーキテクト
-**観点**: 設計原則（SOLID）、拡張性、保守性
-**確認項目**:
-- **SOLID原則**:
-  - [S] 単一責任: クラス/モジュールが1つの責任を持っているか？
-  - [O] 開放閉鎖: 拡張に対して開かれ、変更に対して閉じているか？
-  - [L] リスコフ置換: サブタイプはスーパータイプを置換可能か？
-  - [I] インタフェース分離: インタフェースが適切に分離されているか？
-  - [D] 依存性逆転: 高レベルモジュールが低レベルモジュールに依存していないか？
-- **拡張性**: 新機能の追加が容易か？
-- **保守性**: コードの変更が容易か？
-- **モジュール性**: モジュールが適切に分離されているか？
+Persona sub-agents (defined in `.opencode/agents/`):
+- `architecturereview-architect`
+- `architecturereview-security`
+- `architecturereview-performance`
+- `architecturereview-sre`
 
-### セキュリティスペシャリスト
-**観点**: 脆弱性、認証認可、データ保護
-**確認項目**:
-- **認証認可**: 適切な認証と認可が実装されるか？
-- **データ保護**: 機密データが保護されるか？
-- **入力検証**: 全ての入力が検証されるか？
-- **SQLインジェクション/XSS**: 脆弱性がないか？
-- **暗号化**: データの暗号化が必要か？
-- **シークレット管理**: APIキー、認証情報が安全に管理されるか？
+Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-### パフォーマンスエンジニア
-**観点**: スケーラビリティ、レイテンシ、スループット
-**確認項目**:
-- **スケーラビリティ**: システムがスケールできるか？
-- **レイテンシ**: レイテンシ要件が満たされるか？
-- **スループット**: スループット要件が満たされるか？
-- **キャッシング**: キャッシング戦略があるか？
-- **データベース最適化**: データベースが最適化されるか？
-- **非同期処理**: 適切な非同期処理があるか？
+**IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-### SRE (Site Reliability Engineer)
-**観点**: デプロイ、監視、トラブルシューティング
-**確認項目**:
-- **デプロイ**: デプロイプロセスが自動化されているか？
-- **監視**: 監視とアラートがあるか？
-- **ログ**: 構造化ログがあるか？
-- **トラブルシューティング**: デバッグが容易か？
-- **バックアップ**: バックアップと復元があるか？
-- **フェイルオーバー**: フェイルオーバー戦略があるか？
+**Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
+**OpenCode**: Use `@architecturereview-architect`, `@architecturereview-security`, `@architecturereview-performance`, `@architecturereview-sre`.
 
-## 設計原則チェック
+### STEP 2: Aggregate Results
 
-### SOLID原則
+Collect 4 sub-agent YAML results. Count issues by severity (C/H/M/L).
 
-| 原則 | 説明 | チェック | 結果 |
-|------|------|---------|------|
-| S (Single Responsibility) | 単一責任 | 各クラス/モジュールが1つの責任を持つ | [✓/✗] |
-| O (Open/Closed) | 開放閉鎖 | 拡張可能で、変更に対して閉じている | [✓/✗] |
-| L (Liskov Substitution) | リスコフ置換 | サブタイプがスーパータイプを置換可能 | [✓/✗] |
-| I (Interface Segregation) | インタフェース分離 | インタフェースが適切に分離されている | [✓/✗] |
-| D (Dependency Inversion) | 依存性逆転 | 依存性が逆転されている | [✓/✗] |
+### STEP 3: Branch
 
-### 設計品質
+- **Issues remain (any severity: C/H/M/L)** → STEP 4 (fix and re-review)
+- **Zero issues** → Loop complete. Output final result + handoff.
 
-| 項目 | 評価 | 説明 |
-|------|------|------|
-| 拡張性 | [1-5] | 1: 低い、5: 高い |
-| 保守性 | [1-5] | 1: 低い、5: 高い |
-| モジュール性 | [1-5] | 1: 低い、5: 高い |
-| 再利用性 | [1-5] | 1: 低い、5: 高い |
+Continue loop until **zero issues**, not just GO verdict.
 
-## セキュリティ評価
+### STEP 4: Auto-Fix (sub-agent)
 
-| カテゴリ | 評価 | 説明 |
-|---------|------|------|
-| 認証認可 | [✓/✗/?] | 実装されるか？ |
-| データ保護 | [✓/✗/?] | 保護されるか？ |
-| 入力検証 | [✓/✗/?] | 全ての入力が検証されるか？ |
-| 脆弱性対策 | [✓/✗/?] | 対策があるか？ |
-| シークレット管理 | [✓/✗/?] | 安全に管理されるか？ |
+Spawn a fix sub-agent (`review-fixer`) with the aggregated issue list:
 
-## 性能評価
+> Fix `$ARGUMENTS` based on these issues.
+> Priority order: C → H → M → L
+> Issues: [paste aggregated issues from STEP 2]
 
-| カテゴリ | 評価 | 説明 |
-|---------|------|------|
-| スケーラビリティ | [✓/✗/?] | スケールできるか？ |
-| レイテンシ | [✓/✗/?] | 要件を満たすか？ |
-| スループット | [✓/✗/?] | 要件を満たすか？ |
-| キャッシング | [✓/✗/?] | 戦略があるか？ |
-| データベース最適化 | [✓/✗/?] | 最適化されるか？ |
+After fix completes → **back to STEP 1** (new review sub-agents, fresh context).
 
-## 運用性評価
+### Loop Behavior
 
-| カテゴリ | 評価 | 説明 |
-|---------|------|------|
-| デプロイ自動化 | [✓/✗/?] | 自動化されているか？ |
-| 監視 | [✓/✗/?] | 監視があるか？ |
-| 構造化ログ | [✓/✗/?] | ログがあるか？ |
-| トラブルシューティング | [✓/✗/?] | 容易か？ |
-| バックアップ | [✓/✗/?] | あるか？ |
+- **Exit condition**: 0 issues from all personas
+- **No hard limit**: continues as long as issues remain (typical: 5-8 iterations)
+- **Safety valve**: after 10 iterations, ask user for confirmation (not auto-abort)
+- **Progress tracking**: record issue count per iteration, verify decreasing trend
 
-## 出力形式
+## Iteration Output
 
-```markdown
-# アーキテクチャレビュー結果
-
-**対象**: [ファイルのパス]
-**レビュー日時**: [日時]
-
-## 判定: GO / CONDITIONAL / NO-GO
-
-[判定の理由]
-
-## Critical Issues
-
-[重大な問題のリスト]
-
-## High Priority Issues
-
-[高優先度問題のリスト]
-
-## Medium Priority Issues
-
-[中優先度問題のリスト]
-
-## 設計原則チェック
-
-### SOLID原則
-| 原則 | 結果 | 説明 |
-|------|------|------|
-| S (単一責任) | [✓/✗] | [説明] |
-| O (開放閉鎖) | [✓/✗] | [説明] |
-| L (リスコフ置換) | [✓/✗] | [説明] |
-| I (インタフェース分離) | [✓/✗] | [説明] |
-| D (依存性逆転) | [✓/✗] | [説明] |
-
-### 設計品質
-| 項目 | 評価 | 説明 |
-|------|------|------|
-| 拡張性 | [1-5] | [説明] |
-| 保守性 | [1-5] | [説明] |
-| モジュール性 | [1-5] | [説明] |
-| 再利用性 | [1-5] | [説明] |
-
-## セキュリティ評価
-[セキュリティ評価の詳細]
-
-## 性能評価
-[性能評価の詳細]
-
-## 運用性評価
-[運用性評価の詳細]
-
-## ペルソナ別フィードバック
-
-### アーキテクト
-[アーキテクトのフィードバック]
-
-### セキュリティスペシャリスト
-[セキュリティスペシャリストのフィードバック]
-
-### パフォーマンスエンジニア
-[パフォーマンスエンジニアのフィードバック]
-
-### SRE
-[SREのフィードバック]
-
-## 推奨事項
-[推奨事項のリスト]
+```yaml
+type: architecture
+target: $ARGUMENTS
+n: 2
+i:
+  C:
+    - no input validation on user endpoints (SEC)
+  H:
+    - missing caching strategy (PERF)
+ps:
+  ARCH: GO
+  SEC: NO-GO
+  PERF: CONDITIONAL
+  SRE: GO
+act: FIX
 ```
 
-## 品質基準
+## Final Output (loop complete, 0 issues)
 
-- **GO**: Critical/High問題なし、実装を進めてよい
-- **CONDITIONAL**: 軽微な問題あり、修正後に進めてよい
-- **NO-GO**: 重大な問題あり、修正が必要
-
-## 次のステップ
-
-- **GO**: `/poor-dev.implement` または `/swarm` で実装開始
-- **CONDITIONAL**: 問題を修正し、再レビュー
-- **NO-GO**: アーキテクチャを修正し、再レビュー
+```yaml
+type: architecture
+target: $ARGUMENTS
+v: GO
+n: 6
+log:
+  - {n: 1, issues: 7, fixed: "SOLID violations, auth gaps"}
+  - {n: 2, issues: 4, fixed: "input validation, caching"}
+  - {n: 3, issues: 2, fixed: "monitoring, failover"}
+  - {n: 4, issues: 1, fixed: "logging format"}
+  - {n: 5, issues: 1, fixed: "backup strategy"}
+  - {n: 6, issues: 0}
+next: /poor-dev.implement
+```

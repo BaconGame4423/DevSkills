@@ -54,15 +54,27 @@
 | `/speckit.analyze` | 整合性分析 | なし | 分析レポート |
 | `/speckit.checklist` | チェックリスト作成 | ドメイン | ドメインチェックリスト |
 
-### Review系コマンド
+### Review系コマンド（オーケストレータ）
 
-| コマンド | 用途 | ターゲット | ペルソナ |
-|----------|------|----------|---------|
-| `/review plan` | 計画レビュー | plan.md | PM・リスク・価値・批判 |
-| `/review tasks` | タスク分解レビュー | tasks.md | テックリード・シニア・DevOps・ジュニア |
-| `/review architecture` | 設計レビュー | plan.md / data-model.md | アーキテクト・セキュリティ・性能・運用 |
-| `/review quality` | 品質レビュー | 実装コード | QA・テスト設計・コード・セキュリティ |
-| `/review phase` | フェーズ完了レビュー | フェーズ成果物 | 品質保証・リグレッション・文書化・UX |
+| コマンド | 用途 | ペルソナ（サブエージェント） | 自動ループ |
+|----------|------|---------------------------|-----------|
+| `/poor-dev.planreview` | 計画レビュー | PM, RISK, VAL, CRIT | Yes |
+| `/poor-dev.tasksreview` | タスク分解レビュー | TECHLEAD, SENIOR, DEVOPS, JUNIOR | Yes |
+| `/poor-dev.architecturereview` | 設計レビュー | ARCH, SEC, PERF, SRE | Yes |
+| `/poor-dev.qualityreview` | 品質レビュー | QA, TESTDESIGN, CODE, SEC + adversarial | Yes |
+| `/poor-dev.phasereview` | フェーズ完了レビュー | QA, REGRESSION, DOCS, UX | Yes |
+
+### Review系コマンド（個別ペルソナ）
+
+各ペルソナは `subtask: true` で単体呼び出し可能:
+
+| グループ | コマンド |
+|---------|---------|
+| Plan | `/poor-dev.planreview-pm`, `-risk`, `-value`, `-critical` |
+| Tasks | `/poor-dev.tasksreview-techlead`, `-senior`, `-devops`, `-junior` |
+| Architecture | `/poor-dev.architecturereview-architect`, `-security`, `-performance`, `-sre` |
+| Quality | `/poor-dev.qualityreview-qa`, `-testdesign`, `-code`, `-security` |
+| Phase | `/poor-dev.phasereview-qa`, `-regression`, `-docs`, `-ux` |
 
 ### 実装・品質系コマンド
 
@@ -166,13 +178,13 @@
 
 | フェーズ | コマンド | 確認事項 |
 |----------|----------|----------|
-| 仕様 | `/speckit.specify` | ユーザー価値、明確な要件 |
-| 計画 | `/speckit.plan` → `/review plan` | 技術選択、アーキテクチャ |
-| タスク | `/speckit.tasks` → `/review tasks` | 依存関係、並列化 |
-| 設計 | `/review architecture` | SOLID、拡張性、セキュリティ |
-| 実装 | `/speckit.implement` or `/swarm` | 実装の完全性 |
-| 品質 | `/finish` → `/review quality` | テスト、コード品質 |
-| 完了 | `/review phase` | DoD、統合、文書 |
+| 仕様 | `/poor-dev.specify` | ユーザー価値、明確な要件 |
+| 計画 | `/poor-dev.plan` → `/poor-dev.planreview` | 技術選択、アーキテクチャ |
+| タスク | `/poor-dev.tasks` → `/poor-dev.tasksreview` | 依存関係、並列化 |
+| 設計 | `/poor-dev.architecturereview` | SOLID、拡張性、セキュリティ |
+| 実装 | `/poor-dev.implement` or `/swarm` | 実装の完全性 |
+| 品質 | `/finish` → `/poor-dev.qualityreview` | テスト、コード品質 |
+| 完了 | `/poor-dev.phasereview` | DoD、統合、文書 |
 
 ---
 
@@ -279,97 +291,42 @@ go test ./... -cover
 
 ## レビュー戦略
 
-### レビューの種別
+### アーキテクチャ: サブエージェント分離 + 自動ループ
 
-#### 1. プランレビュー
+レビューシステムは以下のアーキテクチャで動作:
 
-**目的**: 技術計画の品質と実現可能性を評価
+1. **ペルソナ分離**: 各ペルソナは独立エージェント定義（`.opencode/agents/`, `.claude/agents/`）
+2. **オーケストレータ**: ループ制御・結果集約のみ（ペルソナ定義はゼロ）
+3. **自動修正ループ**: issue 0件になるまで Review → Fix → Review を繰り返す
+4. **コンテキスト分離**: 毎イテレーションで新規サブエージェントを起動
 
-**チェック項目**:
-- [ ] ビジネス価値が明確に定義されている
-- [ ] 技術的リスクが特定されている
-- [ ] 実現可能性が検証されている
-- [ ] 成功指標が測定可能である
-- [ ] 競合や代替案が検討されている
+```
+STEP 1: 4x Review sub-agents (parallel, READ-ONLY)
+   ↓
+STEP 2: Aggregate issues by C/H/M/L
+   ↓
+STEP 3: Issues > 0 → Fix sub-agent → back to STEP 1
+         Issues = 0 → DONE + handoff to next stage
+```
 
-**ペルソナ**:
-- **PM**: ビジネス価値、ROI
-- **リスク**: 技術的・実務的リスク
-- **価値**: 成功指標、測定可能性
-- **批判**: 盲点、競合、代替案
+**安全策**:
+- レビューサブエージェント: read-only（Write/Edit/Bash 禁止）
+- 修正サブエージェント: write-enabled（`review-fixer`）
+- 10回超で安全弁（ユーザー確認）
 
-#### 2. タスクレビュー
+### エージェント間通信: 英語コンパクトYAML
 
-**目的**: タスク分解の正確性と実行可能性を評価
+トークン効率のため、エージェント間通信は全て英語:
 
-**チェック項目**:
-- [ ] ユーザーストーリーごとにタスクが整理されている
-- [ ] 依存関係が正しく識別されている
-- [ ] 並列化の機会が特定されている
-- [ ] タスクが具体的で実行可能である
-- [ ] 検証ゲートが含まれている
-
-**ペルソナ**:
-- **テックリード**: タスクの正確性、依存関係
-- **シニア**: 最適化の機会、ベストプラクティス
-- **DevOps**: インフラ、デプロイ、モニタリング
-- **ジュニア**: タスクの明確性、実装可能性
-
-#### 3. アーキテクチャレビュー
-
-**目的**: 設計の品質と拡張性を評価
-
-**チェック項目**:
-- [ ] SOLID原則に従っている
-- [ ] 拡張性と保守性が確保されている
-- [ ] セキュリティ脆弱性がない
-- [ ] 性能要件が満たされている
-- [ ] 運用要件が考慮されている
-
-**ペルソナ**:
-- **アーキテクト**: 設計原則、拡張性
-- **セキュリティ**: 脆弱性、認証認可
-- **性能**: スケーラビリティ、レイテンシ
-- **運用**: デプロイ、監視、トラブルシューティング
-
-#### 4. 品質レビュー
-
-**目的**: 実装品質とテスト網羅性を評価
-
-**チェック項目**:
-- [ ] テスト網羅性が要件を満たしている
-- [ ] コードがクリーンで保守可能である
-- [ ] セキュリティ脆弱性がない
-- [ ] 品質ゲートを通過している
-- [ ] 敵対的レビューに合格している
-
-**ペルソナ**:
-- **QA**: テスト網羅性、品質指標
-- **テスト設計**: テスト戦略、カバレッジ
-- **コード**: コード品質、保守性
-- **セキュリティ**: セキュリティ脆弱性
-
-**敵対的レビュー**:
-- `swarm_adversarial_review` を実行
-- VDDスタイルの厳密なコードレビュー
-- 3ストライクルールを適用
-
-#### 5. フェーズ完了レビュー
-
-**目的**: フェーズが完了基準を満たしているかを評価
-
-**チェック項目**:
-- [ ] Definition of Doneが満たされている
-- [ ] リグレッションがない
-- [ ] ドキュメントが完全である
-- [ ] UX要件が満たされている
-- [ ] デプロイ準備が整っている
-
-**ペルソナ**:
-- **品質保証**: Definition of Done
-- **リグレッション**: 既存機能への影響
-- **文書化**: ドキュメントの完全性
-- **UX**: ユーザー体験の評価
+```yaml
+p: PM
+v: CONDITIONAL
+i:
+  - H: success metrics not quantitative
+  - M: P2 priority rationale unclear
+r:
+  - add DAU/MAU ratio as metric
+```
 
 ### レビューの判定
 
@@ -379,10 +336,10 @@ go test ./... -cover
 
 ### フィードバックの優先順位
 
-- **CRITICAL**: 実装を妨げる重大な問題
-- **HIGH**: 品質に影響する重要な問題
-- **MEDIUM**: 改善が必要だが致命的ではない
-- **LOW**: 軽微な改善提案
+- **C (Critical)**: 実装を妨げる重大な問題
+- **H (High)**: 品質に影響する重要な問題
+- **M (Medium)**: 改善が必要だが致命的ではない
+- **L (Low)**: 軽微な改善提案
 
 ---
 
@@ -548,13 +505,11 @@ go test ./... -cover
 
 ### レビューがNO-GO
 
-**問題**: `/review` でNO-GO判定
+**問題**: レビューでNO-GO判定
 
 **解決策**:
-1. CRITICALとHIGHの問題を確認
-2. 問題を修正
-3. 再レビューをリクエスト
-4. GOまたはCONDITIONALになるまで繰り返す
+オーケストレータの自動ループが修正→再レビューを自動実行します。
+手動介入が必要な場合は10回超過時にユーザー確認が入ります。
 
 ### 敵対的レビューがNEEDS_CHANGES
 
@@ -653,8 +608,9 @@ go test ./... -cover
 
 ## リソース
 
-- [SpecKitドキュメント](.poor-dev/memory/constitution.md)
-- [Reviewコマンド](.opencode/command/review.md)
+- [憲法](.poor-dev/memory/constitution.md)
+- [レビューオーケストレータ](.opencode/command/poor-dev.*review.md)
+- [ペルソナエージェント](.opencode/agents/)
 - [テンプレート](.poor-dev/templates/)
 - [スクリプト](.poor-dev/scripts/)
 
