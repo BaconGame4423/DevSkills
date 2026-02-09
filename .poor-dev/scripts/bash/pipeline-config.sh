@@ -21,6 +21,14 @@ CONFIG_FILE="$REPO_ROOT/.poor-dev/pipeline-config.yaml"
 # Valid step names for validation
 VALID_STEPS="triage specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview concept goals milestones roadmap"
 
+# Valid agent names per step (for agent-level model config)
+declare -A VALID_AGENTS
+VALID_AGENTS[planreview]="pm critical risk value"
+VALID_AGENTS[tasksreview]="techlead senior devops junior"
+VALID_AGENTS[architecturereview]="architect performance security sre"
+VALID_AGENTS[qualityreview]="qa testdesign code security"
+VALID_AGENTS[phasereview]="qa regression docs ux"
+
 # Valid fields and their constraints
 VALID_RUNTIME_VALUES="claude opencode"
 VALID_CONFIRM_VALUES="true false"
@@ -44,6 +52,23 @@ validate_step_name() {
     done
     echo "ERROR: Invalid step name '$step'." >&2
     echo "Valid steps: $VALID_STEPS" >&2
+    return 1
+}
+
+validate_agent_name() {
+    local step="$1" agent="$2"
+    local agents="${VALID_AGENTS[$step]:-}"
+    if [[ -z "$agents" ]]; then
+        echo "ERROR: Step '$step' does not have sub-agents." >&2
+        return 1
+    fi
+    for valid in $agents; do
+        if [[ "$agent" == "$valid" ]]; then
+            return 0
+        fi
+    done
+    echo "ERROR: Invalid agent '$agent' for step '$step'." >&2
+    echo "Valid agents: $agents" >&2
     return 1
 }
 
@@ -125,6 +150,19 @@ cmd_show() {
             if [[ -n "$step_model" && "$step_model" != "null" ]]; then
                 printf "  %-24s %s\n" "$step.model" "$step_model"
             fi
+            # Agent-level overrides
+            local agents_count
+            agents_count="$(yq ".steps.$step.agents | keys | length" "$CONFIG_FILE" 2>/dev/null)" || agents_count=0
+            if [[ "$agents_count" -gt 0 ]]; then
+                while IFS= read -r agent; do
+                    [[ -z "$agent" ]] && continue
+                    local agent_model
+                    agent_model="$(yq ".steps.$step.agents.$agent.model // \"\"" "$CONFIG_FILE" 2>/dev/null)"
+                    if [[ -n "$agent_model" && "$agent_model" != "null" ]]; then
+                        printf "  %-24s %s\n" "$step.$agent.model" "$agent_model"
+                    fi
+                done < <(yq ".steps.$step.agents | keys | .[]" "$CONFIG_FILE" 2>/dev/null)
+            fi
         done < <(yq '.steps | keys | .[]' "$CONFIG_FILE" 2>/dev/null)
     fi
 
@@ -134,8 +172,24 @@ cmd_show() {
 cmd_get() {
     ensure_config
     local key="$1"
+    local yq_path
+
+    # Agent-level key: "planreview.pm.model" → ".steps.planreview.agents.pm.model"
+    case "$key" in
+        defaults.*) yq_path=".$key" ;;
+        *.*.*)
+            local step_name="${key%%.*}"
+            local rest="${key#*.}"
+            local agent_name="${rest%%.*}"
+            local field="${rest#*.}"
+            yq_path=".steps.$step_name.agents.$agent_name.$field"
+            ;;
+        *.*) yq_path=".steps.$key" ;;
+        *) yq_path=".$key" ;;
+    esac
+
     local value
-    value="$(yq ".$key // \"\"" "$CONFIG_FILE" 2>/dev/null)"
+    value="$(yq "$yq_path // \"\"" "$CONFIG_FILE" 2>/dev/null)"
     if [[ -z "$value" || "$value" == "null" ]]; then
         echo ""
     else
@@ -153,6 +207,17 @@ cmd_set() {
         defaults.*)
             validate_value "$key" "$value" || exit 1
             ;;
+        *.*.*)
+            # Agent-level: "planreview.pm.model" → "steps.planreview.agents.pm.model"
+            local step_name="${key%%.*}"
+            local rest="${key#*.}"
+            local agent_name="${rest%%.*}"
+            local field="${rest#*.}"
+            validate_step_name "$step_name" || exit 1
+            validate_agent_name "$step_name" "$agent_name" || exit 1
+            key="steps.$step_name.agents.$agent_name.$field"
+            validate_value "$key" "$value" || exit 1
+            ;;
         *.*)
             # Step-specific: extract step name
             local step_name="${key%%.*}"
@@ -163,8 +228,8 @@ cmd_set() {
             ;;
         *)
             echo "ERROR: Invalid key format '$key'." >&2
-            echo "Use 'defaults.<field>' or '<step>.<field>' format." >&2
-            echo "Examples: defaults.runtime, triage.model, implement.runtime" >&2
+            echo "Use 'defaults.<field>', '<step>.<field>', or '<step>.<agent>.<field>' format." >&2
+            echo "Examples: defaults.runtime, triage.model, planreview.pm.model" >&2
             exit 1
             ;;
     esac

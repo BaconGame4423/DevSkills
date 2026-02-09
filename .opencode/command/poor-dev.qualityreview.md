@@ -61,6 +61,12 @@ Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
 **IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones.
 
+**Model Configuration**: Before spawning sub-agents, read `.poor-dev/pipeline-config.yaml`. For each persona, resolve model:
+1. `steps.qualityreview.agents.<persona>.model`
+2. `steps.qualityreview.model`
+3. `defaults.model`
+Pass via Task tool `model` parameter.
+
 **Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona.
 **OpenCode**: Use `@qualityreview-qa`, `@qualityreview-testdesign`, `@qualityreview-code`, `@qualityreview-security`.
 

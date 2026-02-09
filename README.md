@@ -103,8 +103,8 @@ poor-dev [command] [options] ["description"]
 | `ask "質問"` | コードベースに関する質問応答（パイプライン不要） |
 | `report [種別]` | プロジェクトレポート生成（パイプライン不要） |
 | `config [args]` | パイプライン設定の表示・変更 |
-| `switch` | フローを直接選択して開始（triage スキップ） |
-| *(なし)* | インタラクティブモード（tmux 内でプロンプト入力 → triage として処理） |
+| `switch` | フローを直接選択して開始（triage スキップ）※TUI 内では Tab で切替可能 |
+| *(なし)* | インタラクティブモード（tmux 内でプロンプト入力 → Tab/Shift+Tab で6モード切替） |
 
 ### Options
 
@@ -154,11 +154,25 @@ poor-dev switch
 # 設定の表示・変更
 poor-dev config
 poor-dev config set triage.model haiku
+poor-dev config set planreview.pm.model haiku
 ```
 
 > **後方互換:** `./poor-dev-cli` も引き続き使用可能です（内部で `bin/poor-dev` に委譲）。
 
 ### 操作キー（tmux セッション内）
+
+#### 入力ポップアップ
+
+| キー | 動作 |
+|------|------|
+| `Tab` | 次のモードへ切替（triage → feature → bugfix → roadmap → ask → report） |
+| `Shift+Tab` | 前のモードへ切替 |
+| `Ctrl+S` | モデル設定画面を開く（ステップ別・サブエージェント別モデル変更） |
+| `Enter` | 送信（report は入力なしで実行） |
+| `Esc` | キャンセル |
+| `Ctrl+U` | 入力をクリア |
+
+#### パイプライン実行中
 
 | キー | 動作 |
 |------|------|
@@ -385,6 +399,33 @@ steps:
 
 未指定のステップは `defaults` の値を継承します。
 
+### サブエージェント別モデル設定
+
+レビューステップのサブエージェント（ペルソナ）ごとにモデルを指定できます。
+
+```yaml
+steps:
+  planreview:
+    model: sonnet            # ステップレベルのデフォルト
+    agents:
+      pm:
+        model: haiku         # PM ペルソナだけ軽量モデル
+      critical:
+        model: opus          # 批判ペルソナは高精度モデル
+```
+
+**モデル解決の優先順位**: エージェント設定 → ステップ設定 → デフォルト設定 → sonnet（フォールバック）
+
+サブエージェントを持つステップ:
+
+| ステップ | サブエージェント |
+|---|---|
+| `planreview` | pm, critical, risk, value |
+| `tasksreview` | techlead, senior, devops, junior |
+| `architecturereview` | architect, performance, security, sre |
+| `qualityreview` | qa, testdesign, code, security |
+| `phasereview` | qa, regression, docs, ux |
+
 ### CLI からの設定変更
 
 ```bash
@@ -398,6 +439,10 @@ poor-dev config set defaults.model opus
 # ステップ別設定
 poor-dev config set triage.model haiku
 poor-dev config set implement.runtime claude
+
+# サブエージェント別設定
+poor-dev config set planreview.pm.model haiku
+poor-dev config set planreview.critical.model opus
 
 # 設定をリセット
 poor-dev config reset

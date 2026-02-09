@@ -9,8 +9,9 @@ DESC_FILE="${1:?Usage: pipeline-prompt.sh <desc_output_file>}"
 SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/pipeline-ui.sh"
 
-STEPS=(triage specify clarify plan planreview tasks tasksreview
+FEATURE_STEPS=(triage specify clarify plan planreview tasks tasksreview
        architecturereview implement qualityreview phasereview)
+ROADMAP_STEPS=(concept goals milestones roadmap)
 
 cleanup() { cursor_show 2>/dev/null; exit 0; }
 trap cleanup INT TERM
@@ -51,17 +52,35 @@ gum style --border rounded --padding "1 2" --border-foreground "141" --width 56 
     "Feature: $description"
 echo ""
 
-# パイプラインステップ一覧
-printf "  %bPipeline steps:%b\n" "$C_PENDING" "$C_RESET"
-for step in "${STEPS[@]}"; do
-    if [[ "$step" == "triage" ]]; then
-        printf "    %b⠋%b  %s\n" "$C_RUNNING" "$C_RESET" "$step"
-    else
-        printf "    %b◌%b  %s\n" "$C_PENDING" "$C_RESET" "$step"
-    fi
-done
-echo ""
-
-# gum spin でアニメーションスピナー（C-c まで回り続ける）
-# orchestrator の C-c (pipeline-cli.sh:617) でこのプロセスが終了し、dashboard に引き継がれる
-gum spin --spinner dot --title "Triage を実行中..." -- sleep 3600 || true
+# FLOW: プレフィックスでステップ表示を分岐
+if [[ "$description" == FLOW:ask* || "$description" == FLOW:report ]]; then
+    # ask/report: シンプルスピナーのみ（ステップ表示なし）
+    gum spin --spinner dot --title "実行中..." -- sleep 3600 || true
+elif [[ "$description" == FLOW:roadmap:* ]]; then
+    # roadmap: ロードマップ用ステップ
+    printf "  %bPipeline steps:%b\n" "$C_PENDING" "$C_RESET"
+    for step in "${ROADMAP_STEPS[@]}"; do
+        if [[ "$step" == "${ROADMAP_STEPS[0]}" ]]; then
+            printf "    %b⠋%b  %s\n" "$C_RUNNING" "$C_RESET" "$step"
+        else
+            printf "    %b◌%b  %s\n" "$C_PENDING" "$C_RESET" "$step"
+        fi
+    done
+    echo ""
+    gum spin --spinner dot --title "実行中..." -- sleep 3600 || true
+elif [[ "$description" == FLOW:* ]]; then
+    # feature/bugfix: 現行の11ステップ表示
+    printf "  %bPipeline steps:%b\n" "$C_PENDING" "$C_RESET"
+    for step in "${FEATURE_STEPS[@]}"; do
+        if [[ "$step" == "triage" ]]; then
+            printf "    %b⠋%b  %s\n" "$C_RUNNING" "$C_RESET" "$step"
+        else
+            printf "    %b◌%b  %s\n" "$C_PENDING" "$C_RESET" "$step"
+        fi
+    done
+    echo ""
+    gum spin --spinner dot --title "Triage を実行中..." -- sleep 3600 || true
+else
+    # triage: フロー未確定 → ステップ表示なし、スピナーのみ
+    gum spin --spinner dot --title "Triage を実行中..." -- sleep 3600 || true
+fi

@@ -1,5 +1,16 @@
 # Pipeline CLI orchestrator configuration
 # Used by poor-dev-cli to control runtime, model, and behavior per step.
+#
+# Model resolution priority: agent setting → step setting → defaults → fallback(sonnet)
+# Agent-level example:
+#   steps:
+#     planreview:
+#       model: sonnet          # step-level override
+#       agents:
+#         pm:
+#           model: haiku       # agent-level override
+#         critical:
+#           model: opus
 
 defaults:
   runtime: claude          # claude | opencode
@@ -18,6 +29,11 @@ steps:
   #   model: sonnet
   # planreview:
   #   model: sonnet
+  #   agents:
+  #     pm:
+  #       model: haiku
+  #     critical:
+  #       model: opus
   # tasks:
   #   model: sonnet
   # tasksreview:

@@ -127,6 +127,23 @@ get_step_model() {
     echo "${def:-sonnet}"
 }
 
+get_agent_model() {
+    local step="$1" agent="$2"
+
+    # 1. Agent-specific config
+    if [[ -f "$CONFIG_FILE" ]]; then
+        local val
+        val="$(yq ".steps.$step.agents.$agent.model // \"\"" "$CONFIG_FILE" 2>/dev/null)"
+        if [[ -n "$val" && "$val" != "null" ]]; then
+            echo "$val"
+            return
+        fi
+    fi
+
+    # 2. Step-specific (existing get_step_model)
+    get_step_model "$step"
+}
+
 get_max_budget() {
     local val
     val="$(get_config_default "max_budget_usd")"
@@ -600,14 +617,17 @@ run_pipeline() {
         fi
 
         # Handle FLOW: prefix from flow selector (interactive popup)
-        if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:report ]]; then
-            local flow_type="${DESCRIPTION#FLOW:}"
+        if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:ask:* || "$DESCRIPTION" == FLOW:report ]]; then
+            local flow_rest="${DESCRIPTION#FLOW:}"
+            local flow_type="${flow_rest%%:*}"
+            local flow_args=""
+            [[ "$flow_rest" == *:* ]] && flow_args="${flow_rest#*:}"
             local runtime model
             runtime="$(get_step_runtime "triage")"
             model="$(get_step_model "triage")"
             tmux new-window -t "$SESSION_NAME" -n "$flow_type"
             local cmd
-            cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "")"
+            cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "$flow_args")"
             exec_in_window "$flow_type" "$cmd"
             while tmux list-windows -t "$SESSION_NAME" 2>/dev/null | grep -q "$flow_type"; do
                 sleep 2
@@ -625,14 +645,17 @@ run_pipeline() {
     fi
 
     # Handle FLOW: prefix from non-interactive mode (poor-dev switch / --description "FLOW:...")
-    if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:report ]]; then
-        local flow_type="${DESCRIPTION#FLOW:}"
+    if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:ask:* || "$DESCRIPTION" == FLOW:report ]]; then
+        local flow_rest="${DESCRIPTION#FLOW:}"
+        local flow_type="${flow_rest%%:*}"
+        local flow_args=""
+        [[ "$flow_rest" == *:* ]] && flow_args="${flow_rest#*:}"
         local runtime model
         runtime="$(get_step_runtime "triage")"
         model="$(get_step_model "triage")"
         tmux new-window -t "$SESSION_NAME" -n "$flow_type"
         local cmd
-        cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "")"
+        cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "$flow_args")"
         exec_in_window "$flow_type" "$cmd"
         while tmux list-windows -t "$SESSION_NAME" 2>/dev/null | grep -q "$flow_type"; do
             sleep 2
