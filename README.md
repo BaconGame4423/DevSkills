@@ -17,10 +17,26 @@ GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を
 
 ## インストール
 
+### グローバルインストール（推奨）
+
 ```bash
 git clone https://github.com/<your-account>/DevSkills.git
 cd DevSkills
+npm link
 ```
+
+これで `poor-dev` コマンドがグローバルに使えるようになります。
+
+### プロジェクトのセットアップ
+
+作業したいディレクトリで:
+
+```bash
+cd your-project
+poor-dev init
+```
+
+テンプレート・スクリプト・コマンド定義が `.poor-dev/` にコピーされ、自己完結型のプロジェクトがセットアップされます。
 
 ### 前提条件
 
@@ -36,24 +52,27 @@ cd DevSkills
 
 ## クイックスタート
 
-PoorDevSkills には **2 つの実行モード**があります。
+PoorDevSkills には **3 つの実行モード**があります。
 
-### CLI モード（`poor-dev-cli`）
+### CLI モード（`poor-dev`）
 
 tmux セッション内で全パイプラインを独立プロセスとして自動実行します。
 
 ```bash
 # 基本実行 — 機能説明を渡すだけ
-./poor-dev-cli "ユーザー認証機能を追加する"
+poor-dev "ユーザー認証機能を追加する"
+
+# インタラクティブモード（引数なしで起動 → 入力を triage として処理）
+poor-dev
 
 # 途中から再開
-./poor-dev-cli --from plan --feature-dir specs/001-user-auth
+poor-dev --from plan --feature-dir specs/001-user-auth
 
 # 確認プロンプトなしで自動進行
-./poor-dev-cli --no-confirm "ユーザー認証機能を追加する"
+poor-dev --no-confirm "ユーザー認証機能を追加する"
 ```
 
-### インタラクティブモード（スラッシュコマンド）
+### スラッシュコマンドモード
 
 Claude Code / OpenCode のチャット内からスラッシュコマンドで個別ステップを実行します。
 
@@ -68,13 +87,20 @@ Claude Code / OpenCode のチャット内からスラッシュコマンドで個
 
 ---
 
-## CLI リファレンス（`poor-dev-cli`）
+## CLI リファレンス（`poor-dev`）
 
 ### Usage
 
 ```
-./poor-dev-cli [OPTIONS] "feature description"
+poor-dev [command] [options] ["description"]
 ```
+
+### Commands
+
+| コマンド | 説明 |
+|---------|------|
+| `init [--force]` | 現在のディレクトリに poor-dev をセットアップ |
+| *(なし)* | インタラクティブモード（入力を triage として処理） |
 
 ### Options
 
@@ -86,25 +112,34 @@ Claude Code / OpenCode のチャット内からスラッシュコマンドで個
 | `--from <step-id>` | 途中のステップからパイプラインを再開 |
 | `--feature-dir <path>` | フィーチャーディレクトリ（`--from` と併用） |
 | `--no-confirm` | 確認プロンプトなしで自動進行 |
-| `--help` | ヘルプを表示 |
+| `--help, -h` | ヘルプを表示 |
+| `--version` | バージョンを表示 |
 
 **ステップ ID**: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`
 
 ### 実行例
 
 ```bash
+# プロジェクト初期化
+poor-dev init
+
+# インタラクティブモード
+poor-dev
+
 # 基本実行
-./poor-dev-cli "Add user authentication"
+poor-dev "Add user authentication"
 
 # OpenCode + GLM-4.7 で実行
-./poor-dev-cli --runtime opencode --model glm-4.7 "Add OAuth2 support"
+poor-dev --runtime opencode --model glm-4.7 "Add OAuth2 support"
 
 # plan ステップから再開
-./poor-dev-cli --from plan --feature-dir specs/003-auth
+poor-dev --from plan --feature-dir specs/003-auth
 
 # 確認なし自動進行
-./poor-dev-cli --no-confirm "Quick feature"
+poor-dev --no-confirm "Quick feature"
 ```
+
+> **後方互換:** `./poor-dev-cli` も引き続き使用可能です（内部で `bin/poor-dev` に委譲）。
 
 ### 操作キー（tmux セッション内）
 
@@ -174,7 +209,7 @@ Claude Code / OpenCode のチャット内からスラッシュコマンドで個
 
 > **パイプラインモード**: `/poor-dev.triage` から開始すると、各ステップ完了時に次のステップへ自動遷移します。コンテキスト喪失時は `/poor-dev.pipeline resume` で途中から復帰できます。
 
-> **CLI オーケストレーター**: `./poor-dev-cli "説明"` で tmux セッション内の独立プロセスとして全ステップを実行できます。各ステップごとにランタイム（claude/opencode）やモデルを設定可能です。
+> **CLI オーケストレーター**: `poor-dev "説明"` で tmux セッション内の独立プロセスとして全ステップを実行できます。各ステップごとにランタイム（claude/opencode）やモデルを設定可能です。
 
 ### バグ修正フロー
 
