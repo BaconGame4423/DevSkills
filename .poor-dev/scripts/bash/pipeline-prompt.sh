@@ -27,12 +27,6 @@ sleep 0.3  # attach 安定待ち
 screen_clear
 cursor_hide
 
-# popup 背景としてウェルカムメッセージを表示
-gum style --border rounded --padding "1 2" --border-foreground "141" --width 50 \
-    "$(gum style --bold --foreground 231 '◆ poor-dev pipeline')" \
-    "" \
-    "$(gum style --foreground 245 'Initializing...')"
-
 # popup 起動（-E: 終了時自動クローズ、-w/-h: サイズ指定）
 tmux display-popup -E -w 58 -h 12 \
     "bash '${SCRIPT_DIR}/pipeline-input-popup.sh' '${DESC_FILE}'" || true

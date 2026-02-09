@@ -6,6 +6,9 @@ set -euo pipefail
 
 DESC_FILE="${1:?Usage: pipeline-input-popup.sh <desc_output_file>}"
 
+# popup 内ターミナルを初期化（シェル初期化出力をクリアし、上辺の欠落を防止）
+printf "\033[2J\033[H"
+
 # ヘッダー
 gum style --border rounded --padding "1 2" --border-foreground "141" \
     "$(gum style --bold --foreground 231 '◆ poor-dev pipeline')" \
