@@ -1,5 +1,13 @@
 ---
 description: Execute the implementation plan by processing and executing all tasks defined in tasks.md
+handoffs:
+  - label: Quality Review
+    agent: poor-dev.qualityreview
+    prompt: Run quality review on the implementation
+    send: true
+  - label: Architecture Review
+    agent: poor-dev.architecturereview
+    prompt: Run architecture review on the implementation
 ---
 
 ## User Input

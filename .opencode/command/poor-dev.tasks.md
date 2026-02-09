@@ -1,9 +1,9 @@
 ---
 description: Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts.
-handoffs: 
-  - label: Analyze For Consistency
-    agent: poor-dev.analyze
-    prompt: Run a project analysis for consistency
+handoffs:
+  - label: Tasks Review
+    agent: poor-dev.tasksreview
+    prompt: Review the generated tasks for completeness and quality
     send: true
   - label: Implement Project
     agent: poor-dev.implement

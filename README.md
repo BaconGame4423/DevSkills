@@ -39,6 +39,8 @@
 | 8 | 品質レビュー | `/poor-dev.qualityreview` | 品質ゲート（型チェック・リント・テスト）実行後、コード品質を4ペルソナ+敵対的レビューで検証 |
 | 9 | 完了レビュー | `/poor-dev.phasereview` | 完了基準・リグレッション・ドキュメントを最終確認し、デプロイ可能判定 |
 
+> **パイプラインモード**: `/poor-dev.pipeline` を使うと、上記ステップを自動遷移で連続実行できます。コンテキスト喪失時も `resume` サブコマンドで途中から復帰可能です。
+
 ---
 
 ## レビューシステム
@@ -131,6 +133,9 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 
 # 8. フェーズ完了レビュー
 /poor-dev.phasereview
+
+# または、パイプラインモードで全ステップを自動実行
+/poor-dev.pipeline resume
 ```
 
 ---
@@ -165,6 +170,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|
 | `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
+| `/poor-dev.pipeline` | パイプライン管理（自動遷移・復帰） |
 
 ---
 

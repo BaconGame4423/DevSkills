@@ -1,9 +1,9 @@
 ---
 description: Execute implementation planning workflow using a plan template to generate design artifacts. Specify phase to create phase-specific plan files.
 handoffs:
-  - label: Create Tasks
-    agent: poor-dev.tasks
-    prompt: Break plan into tasks
+  - label: Plan Review
+    agent: poor-dev.planreview
+    prompt: Review the plan for quality and completeness
     send: true
   - label: Create Checklist
     agent: poor-dev.checklist
@@ -128,3 +128,45 @@ When creating plan files for specific phases, use the following naming conventio
 - ERROR on gate failures or unresolved clarifications
 - When phase is specified, only generate artifacts for that phase
 - Phase 1 requires research.md to exist; skip with warning if missing
+
+## Pipeline Continuation
+
+**This section executes ONLY after all skill work is complete (step 5 reporting done).**
+
+1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
+   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
+   - **Found** → Pipeline mode. Continue below.
+
+2. **Preemptive summary** (3-5 lines): Compose a summary including:
+   - Generated/modified artifact paths (plan.md, research.md, data-model.md, contracts/, quickstart.md)
+   - Key technical decisions made during planning
+   - Phase(s) executed (phase0, phase1, or all)
+
+3. **Update state**:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" plan completed --summary "<summary>"
+   ```
+
+4. **Get next step**:
+   ```bash
+   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
+   ```
+
+5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
+
+   **auto + confirm=true (default)**:
+   - **Claude Code**: Use `AskUserQuestion` tool with:
+     - question: "Pipeline: plan completed. Next is /poor-dev.$NEXT"
+     - options: "Continue" / "Skip" / "Pause"
+   - **OpenCode**: Use `question` tool with same content.
+   - On "Continue" → invoke `/poor-dev.$NEXT`
+   - On "Skip" → update that step to `skipped`, get next, ask again
+   - On "Pause" → set mode to `paused`, report how to resume
+
+   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
+
+   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
+
+6. **Error fallback**:
+   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
+   - If state update fails → warn but do not affect main skill output

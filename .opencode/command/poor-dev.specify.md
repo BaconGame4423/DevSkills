@@ -59,6 +59,12 @@ Given that feature description, do this:
       - Bash example: `.poor-dev/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" --json --number 5 --short-name "user-auth" "Add user authentication"`
       - PowerShell example: `.poor-dev/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" -Json -Number 5 -ShortName "user-auth" "Add user authentication"`
 
+   e. **Initialize pipeline state** (after branch creation succeeds):
+      ```bash
+      .poor-dev/scripts/bash/pipeline-state.sh init "$FEATURE_DIR"
+      ```
+      This creates `FEATURE_DIR/workflow-state.yaml` for pipeline tracking. If this fails, warn but continue (pipeline is optional).
+
    **IMPORTANT**:
    - Check all three sources (remote branches, local branches, specs directories) to find the highest number
    - Only match branches/directories with the exact short-name pattern
@@ -256,3 +262,52 @@ Success criteria must be:
 - "Database can handle 1000 TPS" (implementation detail, use user-facing metric)
 - "React components render efficiently" (framework-specific)
 - "Redis cache hit rate above 80%" (technology-specific)
+
+## Pipeline Continuation
+
+**This section executes ONLY after all skill work is complete (step 7 reporting done).**
+
+1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
+   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
+   - **Found** → Pipeline mode. Continue below.
+
+2. **Clarify condition check**: Scan the spec.md for `[NEEDS CLARIFICATION` markers:
+   - **Markers present** → Leave `clarify` step as `pending` (next will route to clarify).
+   - **No markers** → Skip clarify:
+     ```bash
+     .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" clarify skipped
+     ```
+
+3. **Preemptive summary** (3-5 lines): Compose a summary including:
+   - Generated artifacts (spec.md path, checklist path)
+   - Key decisions and assumptions made
+   - Number of clarification markers (if any)
+
+4. **Update state**:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" specify completed --summary "<summary>"
+   ```
+
+5. **Get next step**:
+   ```bash
+   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
+   ```
+
+6. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
+
+   **auto + confirm=true (default)**:
+   - **Claude Code**: Use `AskUserQuestion` tool with:
+     - question: "Pipeline: specify completed. Next is /poor-dev.$NEXT"
+     - options: "Continue" / "Skip" / "Pause"
+   - **OpenCode**: Use `question` tool with same content.
+   - On "Continue" → invoke `/poor-dev.$NEXT`
+   - On "Skip" → update that step to `skipped`, get next, ask again
+   - On "Pause" → set mode to `paused`, report how to resume
+
+   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
+
+   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
+
+7. **Error fallback**:
+   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
+   - If state update fails → warn but do not affect main skill output
