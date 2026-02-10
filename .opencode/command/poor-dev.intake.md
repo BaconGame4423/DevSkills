@@ -1,5 +1,5 @@
 ---
-description: Intake user input to determine whether to route to feature development or bug fix flow.
+description: Intake user input and route to the appropriate flow: feature, bugfix, roadmap, Q&A, or documentation.
 handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
@@ -12,6 +12,14 @@ handoffs:
   - label: Roadmap Concept
     agent: poor-dev.concept
     prompt: Start roadmap concept exploration
+    send: true
+  - label: Ask Question
+    agent: poor-dev.ask
+    prompt: Answer a question about the codebase
+    send: true
+  - label: Generate Report
+    agent: poor-dev.report
+    prompt: Generate a project report
     send: true
 ---
 
@@ -37,11 +45,17 @@ Analyze `$ARGUMENTS` and classify the user's intent through a 3-stage process.
 - **Feature signals**: "追加" "作成" "新しい" "実装" "対応" "〜したい" "〜できるように" "サポート" "導入" "add" "create" "new" "implement" "support" "introduce"
 - **Bugfix signals**: "エラー" "バグ" "壊れ" "動かない" "失敗" "クラッシュ" "不具合" "修正" "おかしい" "regression" "500" "例外" "タイムアウト" "error" "bug" "broken" "fail" "crash" "fix"
 - **Roadmap signals**: "ロードマップ" "企画" "構想" "コンセプト" "戦略" "方針" "ビジョン" "roadmap" "concept" "strategy" "vision" "planning" "計画策定" "方向性"
+- **Q&A signals**: "教えて" "とは" "なぜ" "どうやって" "どこ" "何" "仕組み" "説明して" "？" "what" "why" "how" "where" "explain"
+- **Documentation/Report signals**: "レポート" "報告" "ドキュメント" "文書化" "まとめ" "一覧" "概要" "document" "report" "summary" "overview"
+
+**Priority rule**: Feature / Bugfix / Roadmap signals take precedence over Q&A / Documentation signals. Example: "〜を実装するにはどうすれば？" → Feature (not Q&A), because "実装" is an action signal.
 
 **1b. Contextual Analysis** (when keywords are ambiguous):
 - Problem description pattern → bugfix ("〜が発生する" "〜になってしまう" "〜できない")
 - Desired state pattern → feature ("〜がほしい" "〜を追加" "〜に対応")
 - Planning/strategy pattern → roadmap ("〜の方針を決めたい" "〜の戦略を立てたい" "〜を企画する")
+- Question pattern → Q&A ("〜とは何か" "〜について教えて" "〜の仕組みは？" "〜はどうなっている？")
+- Documentation request pattern → Documentation ("〜をまとめて" "〜の一覧を作って" "〜のレポートを生成")
 - Improvement/change pattern → ambiguous ("〜を改善" "〜を変更" "〜を最適化")
 
 **1c. Confidence Rating**: High (clearly one type) / Medium (leans one way) / Low (cannot determine)
@@ -59,8 +73,14 @@ If confidence is Medium or below, ask the user to clarify:
   4. "質問・ドキュメント作成（パイプライン不要）"
   5. "もう少し詳しく説明する"
 - If "もう少し詳しく" → receive additional explanation and re-classify from Step 1
+- If option 4 selected, ask follow-up to distinguish:
+  - Options:
+    1. "質問応答 (ask)" — コードベースや仕様への質問に回答
+    2. "ドキュメント生成 (report)" — プロジェクトレポート・ドキュメントを作成
 
-### Step 3: Branch & Directory Creation (common to both flows)
+**Non-pipeline shortcut**: If classified as **Q&A** or **Documentation**, skip Step 3 and jump directly to Step 4D / 4E. These flows do not require branch or directory creation.
+
+### Step 3: Branch & Directory Creation (pipeline flows only)
 
 Use the same approach as `poor-dev.specify` Steps 1-2:
 
@@ -165,11 +185,16 @@ If classified as **roadmap**:
 1. Report classification result: "Classified as roadmap: <summary>"
 2. Suggest next step: "Next: `/poor-dev.concept` to start concept exploration"
 
-### Step 4D: Non-Pipeline Routing
+### Step 4D: Q&A Routing
 
-If classified as **質問・ドキュメント作成**:
+If classified as **Q&A**:
 
-Report to the user:
-- "このリクエストはパイプライン管理が不要です。以下のコマンドをお使いください:"
-- 質問応答: `/poor-dev.ask`
-- レポート生成: `/poor-dev.report`
+1. Report classification result: "Classified as Q&A: <summary>"
+2. Suggest next step: "Next: `/poor-dev.ask` to answer the question"
+
+### Step 4E: Documentation Routing
+
+If classified as **documentation**:
+
+1. Report classification result: "Classified as documentation: <summary>"
+2. Suggest next step: "Next: `/poor-dev.report` to generate the report"
