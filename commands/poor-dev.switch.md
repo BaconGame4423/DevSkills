@@ -37,75 +37,38 @@ $ARGUMENTS
 
 ### Step 1: Flow Selection
 
-If `$ARGUMENTS` contains `--flow-type <type>`, use that type directly and treat the remaining text as the description.
+If `$ARGUMENTS` contains `--flow-type <type>`, use that directly.
 
-Otherwise, ask the user to choose a flow:
+Otherwise, ask user (AskUserQuestion):
+- "どのフローを開始しますか？"
+- Options:
+  1. "探索 (discovery)" — まず作って学ぶ / 既存コードを整理して再構築
+  2. "機能開発 (feature)" — 仕様→計画→実装→レビューの11ステップ
+  3. "バグ修正 (bugfix)" — 調査→実装→レビューの5ステップ
+  4. "ロードマップ (roadmap)" — コンセプト→ゴール→マイルストーン→ロードマップの4ステップ
 
-- **Claude Code**: Use `AskUserQuestion` tool with:
-  - question: "どのフローを開始しますか？"
-  - options:
-    1. "探索 (discovery)" -- まず作って学ぶ / 既存コードを整理して再構築
-    2. "機能開発 (feature)" -- 仕様→計画→実装→レビューの11ステップ
-    3. "バグ修正 (bugfix)" -- 調査→実装→レビューの5ステップ
-    4. "ロードマップ (roadmap)" -- コンセプト→ゴール→マイルストーン→ロードマップの4ステップ
-- **OpenCode**: Use `question` tool with the same content.
+Also available via `--flow-type`: ask, report.
 
-Note: "質問応答 (ask)" and "レポート (report)" are also available if `$ARGUMENTS` contains `--flow-type ask` or `--flow-type report`.
+### Step 2: Non-Pipeline / Discovery Shortcuts
 
-### Step 2: Non-Pipeline Flows
-
-If the user chose **ask** or **report**:
-- Directly invoke `/poor-dev.ask` or `/poor-dev.report` with `$ARGUMENTS`
-- End. Do not proceed to Step 3.
-
-### Step 2b: Discovery Flow
-
-If the user chose **discovery**:
-- Directly invoke `/poor-dev.discovery` with `$ARGUMENTS`
-- End. Do not proceed to Step 3. Discovery handles its own branch/directory creation.
+- **ask/report**: Invoke `/poor-dev.ask` or `/poor-dev.report` directly. End.
+- **discovery**: Invoke `/poor-dev.discovery` directly. End. (Handles own branch.)
 
 ### Step 3: Get Description
 
-For pipeline flows (feature, bugfix, roadmap):
-
-If `$ARGUMENTS` already contains a description (non-empty after removing `--flow-type`), use it.
-
-Otherwise, ask the user:
-- **Claude Code**: Use `AskUserQuestion` tool with:
-  - question: "選択したフローの説明を入力してください"
-  - (free text input -- the user provides their description)
-- **OpenCode**: Use `question` tool.
+For pipeline flows (feature, bugfix, roadmap): use description from `$ARGUMENTS` or ask user.
 
 ### Step 4: Branch & Directory Creation
 
-1. Generate a concise short name (2-4 words) from the description
-2. Check existing branches and determine next available number:
-   ```bash
-   git fetch --all --prune
-   ```
-   - Remote branches: `git ls-remote --heads origin`
-   - Local branches: `git branch`
-   - Specs directories: `specs/`
-3. Create branch and directory:
-   ```bash
-   git checkout -b NNN-short-name
-   mkdir -p specs/NNN-short-name
-   ```
+Generate short name (2-4 words). Find highest branch number N. Use N+1.
+```bash
+git fetch --all --prune
+git checkout -b NNN-short-name
+mkdir -p specs/NNN-short-name
+```
 
-### Step 5: State Initialization
+### Step 5: Route by Flow Type
 
-Based on the chosen flow type:
-
-**Feature**:
-Report: Direct flow selection as feature. Next: `/poor-dev.specify`
-
-**Bugfix**:
-- Copy bug report template and fill initial info
-- Create bug report in `$FEATURE_DIR/bug-report.md`
-- Report flow selection as bugfix. Next: `/poor-dev.bugfix`
-
-**Roadmap**:
-Report flow selection as roadmap. Next: `/poor-dev.concept`
-
-**Discovery**:
-Report flow selection as discovery. Next: `/poor-dev.discovery`
+- **Feature**: Report selection. Next: `/poor-dev.specify`
+- **Bugfix**: Create `$FEATURE_DIR/bug-report.md` with template. Next: `/poor-dev.bugfix`
+- **Roadmap**: Report selection. Next: `/poor-dev.concept`

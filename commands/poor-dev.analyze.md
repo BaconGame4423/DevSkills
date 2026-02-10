@@ -12,178 +12,90 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
-Identify inconsistencies, duplications, ambiguities, and underspecified items across the three core artifacts (`spec.md`, `plan.md`, `tasks.md`) before implementation. This command MUST run only after `/poor-dev.tasks` has successfully produced a complete `tasks.md`.
+Identify inconsistencies, duplications, ambiguities, and underspecified items across spec.md, plan.md, and tasks.md before implementation. Run only after `/poor-dev.tasks` has produced a complete tasks.md.
 
 ## Operating Constraints
 
-**STRICTLY READ-ONLY**: Do **not** modify any files. Output a structured analysis report. Offer an optional remediation plan (user must explicitly approve before any follow-up editing commands would be invoked manually).
+**STRICTLY READ-ONLY**: Do not modify any files. Output a structured analysis report. Offer optional remediation (user must explicitly approve before edits).
 
-**Constitution Authority**: The project constitution (`constitution.md`) is **non-negotiable** within this analysis scope. Constitution conflicts are automatically CRITICAL and require adjustment of the spec, plan, or tasks—not dilution, reinterpretation, or silent ignoring of the principle. If a principle itself needs to change, that must occur in a separate, explicit constitution update outside `/poor-dev.analyze`.
+**Constitution Authority**: `constitution.md` is non-negotiable. Constitution conflicts are automatically CRITICAL. If a principle needs change, that must occur in a separate constitution update outside `/poor-dev.analyze`.
 
 ## Execution Steps
 
-### 1. Initialize Analysis Context
+### 1. Setup
 
-Determine the feature directory from the current branch:
-   - Get current branch: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
-   - Extract numeric prefix
-   - Find matching directory: `FEATURE_DIR=$(ls -d specs/${PREFIX}-* 2>/dev/null | head -1)`
-   - Set derived paths and verify tasks.md exists
-   - If not found, show error — suggest running `/poor-dev.tasks` first
-
-Derive absolute paths:
-
+Resolve FEATURE_DIR from branch prefix → `specs/${PREFIX}-*`. Derive paths:
 - SPEC = FEATURE_DIR/spec.md
 - PLAN = FEATURE_DIR/plan.md
 - TASKS = FEATURE_DIR/tasks.md
 
-Abort with an error message if any required file is missing (instruct the user to run missing prerequisite command).
+Abort if any required file is missing (instruct user to run prerequisite command).
 
 ### 2. Load Artifacts (Progressive Disclosure)
 
-Load only the minimal necessary context from each artifact:
+Load only minimal necessary context:
 
-**From spec.md:**
-
-- Overview/Context
-- Functional Requirements
-- Non-Functional Requirements
-- User Stories
-- Edge Cases (if present)
-
-**From plan.md:**
-
-- Architecture/stack choices
-- Data Model references
-- Phases
-- Technical constraints
-
-**From tasks.md:**
-
-- Task IDs
-- Descriptions
-- Phase grouping
-- Parallel markers [P]
-- Referenced file paths
-
-**From constitution:**
-
-- Load `constitution.md` for principle validation
+- **spec.md**: Overview, Functional/Non-Functional Requirements, User Stories, Edge Cases
+- **plan.md**: Architecture/stack, Data Model, Phases, Technical constraints
+- **tasks.md**: Task IDs, Descriptions, Phase grouping, Parallel markers [P], File paths
+- **constitution.md**: Principle names and MUST/SHOULD statements
 
 ### 3. Build Semantic Models
 
-Create internal representations (do not include raw artifacts in output):
+Create internal representations (do not output raw artifacts):
 
-- **Requirements inventory**: Each functional + non-functional requirement with a stable key (derive slug based on imperative phrase; e.g., "User can upload file" → `user-can-upload-file`)
-- **User story/action inventory**: Discrete user actions with acceptance criteria
-- **Task coverage mapping**: Map each task to one or more requirements or stories (inference by keyword / explicit reference patterns like IDs or key phrases)
-- **Constitution rule set**: Extract principle names and MUST/SHOULD normative statements
+- **Requirements inventory**: Each requirement with stable key slug
+- **User story/action inventory**: Discrete actions with acceptance criteria
+- **Task coverage mapping**: Map tasks → requirements/stories
+- **Constitution rule set**: Normative statements
 
-### 4. Detection Passes (Token-Efficient Analysis)
+### 4. Detection Passes
 
-Focus on high-signal findings. Limit to 50 findings total; aggregate remainder in overflow summary.
+Focus on high-signal findings. Limit to 50 findings; aggregate overflow.
 
-#### A. Duplication Detection
-
-- Identify near-duplicate requirements
-- Mark lower-quality phrasing for consolidation
-
-#### B. Ambiguity Detection
-
-- Flag vague adjectives (fast, scalable, secure, intuitive, robust) lacking measurable criteria
-- Flag unresolved placeholders (TODO, TKTK, ???, `<placeholder>`, etc.)
-
-#### C. Underspecification
-
-- Requirements with verbs but missing object or measurable outcome
-- User stories missing acceptance criteria alignment
-- Tasks referencing files or components not defined in spec/plan
-
-#### D. Constitution Alignment
-
-- Any requirement or plan element conflicting with a MUST principle
-- Missing mandated sections or quality gates from constitution
-
-#### E. Coverage Gaps
-
-- Requirements with zero associated tasks
-- Tasks with no mapped requirement/story
-- Non-functional requirements not reflected in tasks (e.g., performance, security)
-
-#### F. Inconsistency
-
-- Terminology drift (same concept named differently across files)
-- Data entities referenced in plan but absent in spec (or vice versa)
-- Task ordering contradictions (e.g., integration tasks before foundational setup tasks without dependency note)
-- Conflicting requirements (e.g., one requires Next.js while other specifies Vue)
+| Pass | What to detect |
+|------|---------------|
+| A. Duplication | Near-duplicate requirements; mark lower-quality for consolidation |
+| B. Ambiguity | Vague adjectives without metrics; unresolved placeholders (TODO, ???) |
+| C. Underspecification | Requirements missing object/outcome; stories missing criteria; tasks referencing undefined components |
+| D. Constitution | Conflicts with MUST principles; missing mandated sections |
+| E. Coverage Gaps | Requirements with zero tasks; tasks with no mapped requirement; NFRs not in tasks |
+| F. Inconsistency | Terminology drift; missing cross-referenced entities; task ordering contradictions; conflicting requirements |
 
 ### 5. Severity Assignment
 
-Use this heuristic to prioritize findings:
+- **CRITICAL**: Constitution MUST violation, missing core artifact, zero-coverage blocking requirement
+- **HIGH**: Duplicate/conflicting requirement, ambiguous security/performance, untestable criterion
+- **MEDIUM**: Terminology drift, missing NFR coverage, underspecified edge case
+- **LOW**: Style/wording, minor redundancy
 
-- **CRITICAL**: Violates constitution MUST, missing core spec artifact, or requirement with zero coverage that blocks baseline functionality
-- **HIGH**: Duplicate or conflicting requirement, ambiguous security/performance attribute, untestable acceptance criterion
-- **MEDIUM**: Terminology drift, missing non-functional task coverage, underspecified edge case
-- **LOW**: Style/wording improvements, minor redundancy not affecting execution order
+### 6. Output Report
 
-### 6. Produce Compact Analysis Report
-
-Output a Markdown report (no file writes) with the following structure:
-
+```markdown
 ## Specification Analysis Report
 
 | ID | Category | Severity | Location(s) | Summary | Recommendation |
 |----|----------|----------|-------------|---------|----------------|
-| A1 | Duplication | HIGH | spec.md:L120-134 | Two similar requirements ... | Merge phrasing; keep clearer version |
 
-(Add one row per finding; generate stable IDs prefixed by category initial.)
-
-**Coverage Summary Table:**
-
+**Coverage Summary:**
 | Requirement Key | Has Task? | Task IDs | Notes |
 |-----------------|-----------|----------|-------|
 
 **Constitution Alignment Issues:** (if any)
-
 **Unmapped Tasks:** (if any)
 
-**Metrics:**
+**Metrics:** Total Requirements, Total Tasks, Coverage %, Ambiguity Count, Duplication Count, Critical Issues Count
+```
 
-- Total Requirements
-- Total Tasks
-- Coverage % (requirements with >=1 task)
-- Ambiguity Count
-- Duplication Count
-- Critical Issues Count
+### 7. Next Actions
 
-### 7. Provide Next Actions
-
-At end of report, output a concise Next Actions block:
-
-- If CRITICAL issues exist: Recommend resolving before `/poor-dev.implement`
-- If only LOW/MEDIUM: User may proceed, but provide improvement suggestions
-- Provide explicit command suggestions: e.g., "Run /poor-dev.specify with refinement", "Run /poor-dev.plan to adjust architecture", "Manually edit tasks.md to add coverage for 'performance-metrics'"
+- CRITICAL issues → resolve before `/poor-dev.implement`
+- LOW/MEDIUM only → may proceed with improvement suggestions
+- Include explicit command suggestions for remediation
 
 ### 8. Offer Remediation
 
-Ask the user: "Would you like me to suggest concrete remediation edits for the top N issues?" (Do NOT apply them automatically.)
-
-## Operating Principles
-
-### Context Efficiency
-
-- **Minimal high-signal tokens**: Focus on actionable findings, not exhaustive documentation
-- **Progressive disclosure**: Load artifacts incrementally; don't dump all content into analysis
-- **Token-efficient output**: Limit findings table to 50 rows; summarize overflow
-- **Deterministic results**: Rerunning without changes should produce consistent IDs and counts
-
-### Analysis Guidelines
-
-- **NEVER modify files** (this is read-only analysis)
-- **NEVER hallucinate missing sections** (if absent, report them accurately)
-- **Prioritize constitution violations** (these are always CRITICAL)
-- **Use examples over exhaustive rules** (cite specific instances, not generic patterns)
-- **Report zero issues gracefully** (emit success report with coverage statistics)
+Ask: "Would you like me to suggest concrete remediation edits for the top N issues?" (Do NOT apply automatically.)
 
 ## Context
 
