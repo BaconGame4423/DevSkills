@@ -52,8 +52,6 @@ You **MUST** consider user input before proceeding (if not empty).
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
-
 ## Summary
 
 [Extract from feature spec: primary requirement + technical approach from research]
@@ -88,12 +86,12 @@ You **MUST** consider user input before proceeding (if not empty).
 
 ```text
 specs/[###-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── plan.md              # This file (/poor-dev.plan command output)
+├── research.md          # Phase 0 output (/poor-dev.plan command)
+├── data-model.md        # Phase 1 output (/poor-dev.plan command)
+├── quickstart.md        # Phase 1 output (/poor-dev.plan command)
+├── contracts/           # Phase 1 output (/poor-dev.plan command)
+└── tasks.md             # Phase 2 output (/poor-dev.tasks command - NOT created by /poor-dev.plan)
 ```
 
 ### Source Code (repository root)

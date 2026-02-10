@@ -84,7 +84,7 @@ r:
 Aggregated:
 ```yaml
 type: plan
-target: .specify/plan.md
+target: plan.md
 n: 3
 i:
   H:
@@ -102,7 +102,7 @@ act: FIX
 Final (0 issues):
 ```yaml
 type: plan
-target: .specify/plan.md
+target: plan.md
 v: GO
 n: 7
 log:
@@ -136,9 +136,9 @@ After persona reviews, run `swarm_adversarial_review`.
 ## Usage Examples
 
 ```bash
-/poor-dev.planreview .specify/plan.md
-/poor-dev.tasksreview .specify/tasks.md
-/poor-dev.architecturereview .specify/data-model.md
+/poor-dev.planreview specs/NNN-feature/plan.md
+/poor-dev.tasksreview specs/NNN-feature/tasks.md
+/poor-dev.architecturereview specs/NNN-feature/data-model.md
 /poor-dev.qualityreview
 /poor-dev.phasereview phase0
 ```

@@ -182,7 +182,7 @@ Present the scale assessment to the user for confirmation (**Claude Code**: `Ask
 
 ### 5c. Small Scale → Simplified Path
 
-Continue directly to implement via Pipeline Continuation.
+Proceed directly to `/poor-dev.implement` for the fix implementation.
 
 ### 5d. Large Scale → Full Pipeline
 
