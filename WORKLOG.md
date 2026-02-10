@@ -1,5 +1,46 @@
 # 作業記録
 
+## 2026-02-10: constitution.md の旧 /review コマンド参照を poor-dev.* 書式に修正
+
+### 背景
+
+前回の speckit 残存参照一掃（`1d96519`）で SpecKit 用語は修正済みだったが、constitution.md 内の旧 `/review <type>` コマンド書式（10箇所）が見落とされていた。現在のコマンド体系では `/poor-dev.*review` が正しい。
+
+### 作業内容
+
+#### constitution.md の10箇所を修正
+
+**フロー説明中（5箇所）**
+
+| フェーズ | 修正前 | 修正後 |
+|---------|--------|--------|
+| フェーズ3 | `/review plan plan.md` | `/poor-dev.planreview plan.md` |
+| フェーズ5 | `/review tasks tasks.md` | `/poor-dev.tasksreview tasks.md` |
+| フェーズ6 | `/review architecture data-model.md` | `/poor-dev.architecturereview data-model.md` |
+| フェーズ9 | `/review quality` | `/poor-dev.qualityreview` |
+| フェーズ10 | `/review phase [フェーズ名]` | `/poor-dev.phasereview [フェーズ名]` |
+
+**クイックリファレンステーブル中（5箇所）**
+
+| 行 | 修正前 | 修正後 |
+|----|--------|--------|
+| プランレビュー | `/review plan` | `/poor-dev.planreview` |
+| タスクレビュー | `/review tasks` | `/poor-dev.tasksreview` |
+| 設計レビュー | `/review architecture` | `/poor-dev.architecturereview` |
+| 品質レビュー | `/review quality` | `/poor-dev.qualityreview` |
+| フェーズ完了 | `/review phase` | `/poor-dev.phasereview` |
+
+### 検証結果
+
+- constitution.md 内の旧 `/review ` パターン: **0件**
+- WORKLOG.md 以外での `speckit` / `.specify/` / 旧 review 参照: **0件**
+
+### コミット
+
+- `8f67ccc` fix: constitution.md の旧 /review コマンド参照を poor-dev.* 書式に修正
+
+---
+
 ## 2026-02-10: speckit 時代の残存参照を一掃し poor-dev.* に統一
 
 ### 背景
