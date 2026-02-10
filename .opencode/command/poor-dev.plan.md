@@ -24,9 +24,17 @@ You **MUST** consider user input before proceeding (if not empty).
    - If no phase specified or phase is `all`: Create complete plan (default behavior)
    - If specific phase specified: Create only that phase's plan file
 
-2. **Setup**: Run `.poor-dev/scripts/bash/setup-plan.sh --json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+2. **Setup**: Determine the feature directory from the current branch:
+   1. Get current branch: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
+   2. Extract numeric prefix from branch name (e.g., `003-user-auth` → `003`)
+   3. Find matching specs directory: `FEATURE_DIR=$(ls -d specs/${PREFIX}-* 2>/dev/null | head -1)`
+   4. Set derived paths:
+      - `FEATURE_SPEC=$FEATURE_DIR/spec.md`
+      - `IMPL_PLAN=$FEATURE_DIR/plan.md`
+      - `SPECS_DIR=$FEATURE_DIR`
+   5. If branch doesn't match feature pattern (`NNN-*`), show error
 
-3. **Load context**: Read FEATURE_SPEC and `.poor-dev/memory/constitution.md`. Load IMPL_PLAN template (already copied).
+3. **Load context**: Read FEATURE_SPEC and `constitution.md`. Load IMPL_PLAN template (below).
 
 4. **Execute plan workflow**: Based on phase selection:
    - **Complete plan (no phase specified or `all`)**: Execute all phases (Phase 0 + Phase 1)
@@ -35,6 +43,115 @@ You **MUST** consider user input before proceeding (if not empty).
    - Follow structure in IMPL_PLAN template to generate appropriate artifacts
 
 5. **Stop and report**: Command ends after planning. Report branch, IMPL_PLAN path, and generated artifacts.
+
+## IMPL_PLAN Template
+
+````markdown
+# Implementation Plan: [FEATURE]
+
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
+
+## Summary
+
+[Extract from feature spec: primary requirement + technical approach from research]
+
+## Technical Context
+
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [single/web/mobile - determines source structures]
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+[Gates determined based on constitution file]
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+```
+
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
+
+```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
+```
+
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
+
+## Complexity Tracking
+
+> **Fill ONLY if Constitution Check has violations that must be justified**
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+````
 
 ## Phase-Specific Planning
 
@@ -78,14 +195,7 @@ Execute both Phase 0 and Phase 1:
    - Use standard REST/GraphQL patterns
    - Output OpenAPI/GraphQL schema to `/contracts/`
 
-3. **Agent context update**:
-   - Run `.poor-dev/scripts/bash/update-agent-context.sh opencode`
-   - These scripts detect which AI agent is in use
-   - Update appropriate agent-specific context file
-   - Add only new technology from current plan
-   - Preserve manual additions between markers
-
-**Output**: data-model.md, /contracts/*, quickstart.md, agent-specific file
+**Output**: data-model.md, /contracts/*, quickstart.md
 
 ### When Phase 0 Specified
 
@@ -99,7 +209,7 @@ Execute only Phase 1: Design & Contracts
 
 **Prerequisites**: `research.md` must exist (skip if missing with warning)
 
-**Output**: data-model.md, /contracts/*, quickstart.md, agent-specific file
+**Output**: data-model.md, /contracts/*, quickstart.md
 
 ## Phase-Specific File Naming
 
@@ -128,45 +238,3 @@ When creating plan files for specific phases, use the following naming conventio
 - ERROR on gate failures or unresolved clarifications
 - When phase is specified, only generate artifacts for that phase
 - Phase 1 requires research.md to exist; skip with warning if missing
-
-## Pipeline Continuation
-
-**This section executes ONLY after all skill work is complete (step 5 reporting done).**
-
-1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Preemptive summary** (3-5 lines): Compose a summary including:
-   - Generated/modified artifact paths (plan.md, research.md, data-model.md, contracts/, quickstart.md)
-   - Key technical decisions made during planning
-   - Phase(s) executed (phase0, phase1, or all)
-
-3. **Update state**:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" plan completed --summary "<summary>"
-   ```
-
-4. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: plan completed. Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - **OpenCode**: Use `question` tool with same content.
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update that step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
-
-6. **Error fallback**:
-   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
-   - If state update fails → warn but do not affect main skill output
