@@ -1,12 +1,30 @@
 ---
-description: Route review commands to appropriate orchestrators with sub-agent architecture
+description: Intake user input and route to the appropriate flow: feature, bugfix, roadmap, discovery, Q&A, or documentation.
 handoffs:
-  - label: 修正実装
-    agent: poor-dev.implement
-    prompt: レビュー指摘事項を修正して実装を続けてください
-  - label: 計画再調整
-    agent: poor-dev.plan
-    prompt: プランレビューのフィードバックに基づいて計画を修正してください
+  - label: Feature Specification
+    agent: poor-dev.specify
+    prompt: Create a specification for this feature request
+    send: true
+  - label: Bug Fix Investigation
+    agent: poor-dev.bugfix
+    prompt: Investigate and fix this bug report
+    send: true
+  - label: Roadmap Concept
+    agent: poor-dev.concept
+    prompt: Start roadmap concept exploration
+    send: true
+  - label: Discovery Flow
+    agent: poor-dev.discovery
+    prompt: Start discovery flow for exploration and prototyping
+    send: true
+  - label: Ask Question
+    agent: poor-dev.ask
+    prompt: Answer a question about the codebase
+    send: true
+  - label: Generate Report
+    agent: poor-dev.report
+    prompt: Generate a project report
+    send: true
 ---
 
 ## User Input
@@ -15,130 +33,135 @@ handoffs:
 $ARGUMENTS
 ```
 
-## Command Format
+You **MUST** consider the user input before proceeding (if not empty).
 
-`/poor-dev <type> <target>`
+## Outline
 
-## Architecture
+The text after the command **is** the user's request. Do not ask them to repeat it unless empty.
 
-Each review type uses an **orchestrator** that:
-1. Spawns 4 persona sub-agents in parallel (read-only)
-2. Aggregates results
-3. Spawns a fixer sub-agent if issues found
-4. Loops until 0 issues remain
+### Step 1: Input Classification
 
-Persona definitions: `.opencode/agents/` (OpenCode) / `.claude/agents/` (Claude Code)
-Orchestrators: `.opencode/command/poor-dev.<type>review.md`
+Analyze `$ARGUMENTS` through a 3-stage process.
 
-## Review Types
+**1a. Intent Detection**: Classify by what the user wants to accomplish:
+- **Feature**: user wants to add, create, or implement new functionality
+- **Bugfix**: user reports an error, crash, broken behavior, or regression
+- **Roadmap**: user wants to plan strategy, define vision, or explore concepts at project level
+- **Discovery**: user wants to prototype, explore ideas, rebuild existing code, or "just try something"
+- **Q&A**: user asks a question about the codebase or architecture
+- **Documentation**: user requests a report, summary, or document generation
 
-| Type | Command | Personas | Target |
-|------|---------|----------|--------|
-| `plan` | `/poor-dev.planreview` | PM, RISK, VAL, CRIT | plan.md |
-| `tasks` | `/poor-dev.tasksreview` | TECHLEAD, SENIOR, DEVOPS, JUNIOR | tasks.md |
-| `architecture` | `/poor-dev.architecturereview` | ARCH, SEC, PERF, SRE | plan.md / data-model.md |
-| `quality` | `/poor-dev.qualityreview` | QA, TESTDESIGN, CODE, SEC + adversarial | implementation code |
-| `phase` | `/poor-dev.phasereview` | QA, REGRESSION, DOCS, UX | phase artifacts |
+**Priority rule**: Feature / Bugfix / Roadmap / Discovery signals take precedence over Q&A / Documentation. Example: "How do I implement X?" → Feature (not Q&A), because the intent is implementation.
 
-## Individual Persona Commands
+**1b. Contextual Analysis** (when intent is ambiguous):
+- Problem description ("X happens", "X doesn't work") → bugfix
+- Desired state ("I want X", "add X") → feature
+- Planning/strategy ("plan for X", "strategy") → roadmap
+- Exploration ("try X", "prototype", "rebuild", "vibe coding") → discovery
+- Question ("what is X", "how does X work") → Q&A
+- Report request ("summarize X", "list all X") → documentation
+- Improvement/change ("optimize X", "improve X") → ambiguous
 
-Each persona can also be invoked directly:
+**1c. Confidence**: High / Medium / Low
 
-**Plan**: `/poor-dev.planreview-pm`, `-risk`, `-value`, `-critical`
-**Tasks**: `/poor-dev.tasksreview-techlead`, `-senior`, `-devops`, `-junior`
-**Architecture**: `/poor-dev.architecturereview-architect`, `-security`, `-performance`, `-sre`
-**Quality**: `/poor-dev.qualityreview-qa`, `-testdesign`, `-code`, `-security`
-**Phase**: `/poor-dev.phasereview-qa`, `-regression`, `-docs`, `-ux`
+### Step 2: Clarify if Ambiguous
 
-## Review Loop Flow
+If confidence is Medium or below, ask user to choose:
+1. "機能リクエスト（新機能・拡張）"
+2. "バグ報告（既存機能の不具合・異常動作）"
+3. "ロードマップ・戦略策定（プロジェクト企画段階）"
+4. "探索・プロトタイプ（まず作って学ぶ / 既存コードを整理して再構築）"
+5. "質問・ドキュメント作成（パイプライン不要）"
+6. "もう少し詳しく説明する"
 
-```
-STEP 1: 4x Review sub-agents (parallel, READ-ONLY)
-   ↓ wait for all to complete
-STEP 2: Aggregate (orchestrator counts issues by C/H/M/L)
-   ↓
-STEP 3: Branch
-   ├─ Issues > 0 → STEP 4
-   └─ Issues = 0 → DONE + handoff
-   ↓
-STEP 4: 1x Fix sub-agent (sequential, WRITE)
-   ↓ wait for completion
-   → Back to STEP 1 (new sub-agents, fresh context)
-```
+If "もう少し詳しく" → re-classify. If option 5 → follow-up: ask/report.
 
-**Safety**: Review sub-agents are read-only (no Write/Edit/Bash). Only the fixer agent has write access.
+**Non-pipeline shortcut**: Q&A / Documentation → skip Step 3, go to Step 4D/4E.
+**Discovery shortcut**: → skip Step 3, go to Step 4F (branch handled by `/poor-dev.discovery`).
 
-## Output Format (compact English YAML)
+### Step 3: Branch & Directory Creation (pipeline flows only)
 
-Per-persona:
-```yaml
-p: PM
-v: GO|CONDITIONAL|NO-GO
-i:
-  - C: description
-  - H: description
-r:
-  - recommendation
-```
+1. Generate short name (2-4 words): action-noun for features, `fix-` prefix for bugs. Preserve technical terms.
+2. Create feature branch:
+   ```bash
+   git fetch --all --prune
+   ```
+   Find highest number N across remote branches, local branches, specs directories. Use N+1.
+   ```bash
+   git checkout -b NNN-short-name
+   mkdir -p specs/NNN-short-name
+   ```
 
-Aggregated:
-```yaml
-type: plan
-target: plan.md
-n: 3
-i:
-  H:
-    - issue description (PERSONA)
-  M:
-    - issue description (PERSONA)
-ps:
-  PM: GO
-  RISK: CONDITIONAL
-  VAL: GO
-  CRIT: GO
-act: FIX
-```
+### Step 4: Routing
 
-Final (0 issues):
-```yaml
-type: plan
-target: plan.md
-v: GO
-n: 7
-log:
-  - {n: 1, issues: 6, fixed: "summary"}
-  - {n: 7, issues: 0}
-next: /poor-dev.tasks
-```
+**4A Feature**: Report "Classified as feature: <summary>". Next: `/poor-dev.specify`
 
-## Quality Gates (quality review only)
+**4B Bugfix**:
+1. Check `bug-patterns.md` for similar past patterns. If found, inform user.
+2. Create `$FEATURE_DIR/bug-report.md`:
 
-Run before persona reviews:
-1. Type check (`tsc --noEmit` / `mypy` / `cargo check` / `go vet`)
-2. Linting (`eslint` / `ruff lint` / `cargo clippy` / `golangci-lint`)
-3. Format check (`prettier --check` / `black --check` / `cargo fmt --check` / `gofmt`)
-4. Tests (`npm test` / `pytest` / `cargo test` / `go test`)
+   ```markdown
+   # Bug Report: [BUG SHORT NAME]
 
-## Adversarial Review (quality review only)
+   **Branch**: `[###-fix-bug-name]`
+   **Created**: [DATE]
+   **Status**: Investigating
+   **Input**: "$ARGUMENTS"
 
-After persona reviews, run `swarm_adversarial_review`.
-- APPROVED → no additional issues
-- NEEDS_CHANGES → add to issue list
-- HALLUCINATING → ignore
-- 3-strike rule applies
+   ## Description
+   [summary]
 
-## Constitution Compliance
+   ## Expected Behavior
+   [expected]
 
-- **Section III**: Adversarial review and 3-strike rule
-- **Section VIII**: Quality gates before merge
-- **Section IX**: Store learnings in Hivemind
+   ## Actual Behavior
+   [actual, with error messages if available]
 
-## Usage Examples
+   ## Steps to Reproduce
+   1. [Step 1]
 
-```bash
-/poor-dev.planreview specs/NNN-feature/plan.md
-/poor-dev.tasksreview specs/NNN-feature/tasks.md
-/poor-dev.architecturereview specs/NNN-feature/data-model.md
-/poor-dev.qualityreview
-/poor-dev.phasereview phase0
-```
+   ## Frequency
+   [always / intermittent / specific conditions]
+
+   ## Environment
+   - **OS**: [e.g., Ubuntu 22.04]
+   - **Language/Runtime**: [e.g., Node.js 20.x]
+   - **Key Dependencies**: [e.g., React 18.2]
+
+   ## Since When
+   [onset timing, relation to recent changes]
+
+   ## Reproduction Results
+   **Status**: [Not Attempted / Reproduced / Could Not Reproduce]
+   ```
+
+   Fill what can be extracted from `$ARGUMENTS`. Leave unknowns as placeholders.
+3. Report "Classified as bugfix: <summary>". Next: `/poor-dev.bugfix`
+
+**4C Roadmap**: Report "Classified as roadmap: <summary>". Next: `/poor-dev.concept`
+
+**4D Q&A**: Report "Classified as Q&A: <summary>". Next: `/poor-dev.ask`
+
+**4E Documentation**: Report "Classified as documentation: <summary>". Next: `/poor-dev.report`
+
+**4F Discovery**: Report "Classified as discovery: <summary>". Next: `/poor-dev.discovery`
+Discovery handles its own branch/directory creation.
+
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)

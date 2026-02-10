@@ -26,7 +26,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Prerequisites
 
 1. **Setup**: Resolve FEATURE_DIR from branch prefix → `specs/${PREFIX}-*`. Error if missing.
-2. Verify `$FEATURE_DIR/bug-report.md` exists. If not: ERROR — "Run `/poor-dev.intake` first."
+2. Verify `$FEATURE_DIR/bug-report.md` exists. If not: ERROR — "Run `/poor-dev` first."
 
 ## Stage 1: Bug Report Completion
 
@@ -114,6 +114,25 @@ Ask user to confirm scale assessment.
 
 ### 5c. Small → `/poor-dev.implement`
 ### 5d. Large → `/poor-dev.plan`
+
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
 
 ## Stage 6: Reclassification Escape
 
