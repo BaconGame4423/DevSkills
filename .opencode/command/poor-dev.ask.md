@@ -19,7 +19,7 @@ The text the user typed after the command **is** their question. Assume you alwa
 Read the following project files to build understanding:
 
 1. `README.md` — project overview
-2. `.poor-dev/memory/constitution.md` — project principles
+2. `constitution.md` — project principles
 3. `AGENT.md` — workflow documentation (if exists)
 4. Scan `specs/` for available spec directories:
    - Read `specs/*/spec.md` — feature specifications

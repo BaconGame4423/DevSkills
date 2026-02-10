@@ -22,7 +22,7 @@ If `$ARGUMENTS` specifies a report type, use it. Otherwise, ask the user to choo
     1. "プロジェクト概要" — README 的な全体概要レポート
     2. "アーキテクチャ" — コンポーネント構成・依存関係・データフロー
     3. "仕様一覧" — 全 spec.md のサマリーと状態一覧
-    4. "進捗レポート" — 全フィーチャーの workflow-state 進捗集計
+    4. "進捗レポート" — 全フィーチャーの成果物ベース進捗集計
 - **OpenCode**: Use `question` tool with the same content.
 
 ### Step 2: Gather Context
@@ -30,23 +30,20 @@ If `$ARGUMENTS` specifies a report type, use it. Otherwise, ask the user to choo
 Based on the report type, read relevant files:
 
 **プロジェクト概要**:
-- `README.md`, `AGENT.md`, `.poor-dev/memory/constitution.md`
+- `README.md`, `AGENT.md`, `constitution.md`
 - `package.json` or equivalent project config
 - Scan top-level directory structure
 
 **アーキテクチャ**:
-- `.poor-dev/scripts/bash/*.sh` — pipeline scripts
 - `.opencode/command/poor-dev.*.md` — command definitions
-- `.poor-dev/templates/` — template files
-- `bin/poor-dev` — CLI entry point
+- `.opencode/agents/` — agent definitions
 
 **仕様一覧**:
 - `specs/*/spec.md` — all feature specs
-- `specs/*/workflow-state.yaml` — pipeline states
 
 **進捗レポート**:
-- `specs/*/workflow-state.yaml` — all pipeline states
-- Aggregate: completed/in_progress/pending/failed counts per feature
+- Check `specs/*/` directories for available artifacts (spec.md, plan.md, tasks.md, checklists/)
+- Aggregate: presence/absence of each artifact per feature to determine progress
 
 ### Step 3: Generate Report
 
