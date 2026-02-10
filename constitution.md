@@ -157,7 +157,7 @@
 
 ### 開発ツール
 - OpenCode CLI - エージェントフレームワークとコマンド実行
-- SpecKit - 仕様化と計画方法論
+- poor-dev コマンド - 仕様化と計画方法論
 - Swarm Mail - マルチエージェント調整
 - Hivemind - 知識管理と意味論検索
 - CASS - 既存ソリューション発見のためのコードAI検索システム
@@ -169,9 +169,9 @@
 
 ## 開発ワークフロー
 
-### 標準開発フロー（SpecKit + Review）
+### 標準開発フロー（poor-dev コマンド）
 
-DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フローを使用します。詳細は[AGENT.md](/home/bacon/DevSkills/AGENT.md)を参照してください。
+PoorDevSkillsは poor-dev コマンド群による構造化された開発フローを使用します。詳細は[AGENT.md](/home/bacon/DevSkills/AGENT.md)を参照してください。
 
 #### フェーズ1: 仕様化
 1. `/poor-dev.specify` を使用して優先順位付けされたユーザーストーリーを持つ機能仕様を作成する
