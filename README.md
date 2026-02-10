@@ -39,6 +39,9 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 | コマンド | 用途 | 出力 |
 |---------|------|------|
 | `/poor-dev.intake` | 入力の受付（全フロー自動分類） | ルーティング判定 |
+| `/poor-dev.discovery` | 探索フロー開始（プロトタイプ / 既存コード整理） | discovery-memo.md |
+| `/poor-dev.rebuildcheck` | リビルド判定（4シグナル分析） | 分析レポート + CONTINUE/REBUILD 判定 |
+| `/poor-dev.harvest` | 知見収穫 + 再構築準備 | learnings.md, constitution.md, spec.md |
 | `/poor-dev.specify` | 機能仕様の作成 | spec.md |
 | `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
 | `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
@@ -95,6 +98,22 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 | 7 | 実装 | `/poor-dev.implement` | tasks.md に従いタスクを順次実装 |
 | 8 | 品質レビュー | `/poor-dev.qualityreview` | 品質ゲート（型チェック・リント・テスト）実行後、コード品質を4ペルソナ+敵対的レビューで検証 |
 | 9 | 完了レビュー | `/poor-dev.phasereview` | 完了基準・リグレッション・ドキュメントを最終確認し、デプロイ可能判定 |
+
+### 探索フロー（スクラップ＆ビルド）
+
+`/poor-dev.intake` が探索・プロトタイプと判定した場合、以下のフローに切り替わります。
+「まず作って、壊して、知見をもとに再構築する」サイクルです。
+
+| # | ステップ | コマンド | 内容 |
+|---|---------|---------|------|
+| 0 | 受付 | `/poor-dev.intake` | 入力を分類し探索フローにルーティング |
+| 1 | 探索開始 | `/poor-dev.discovery` | 既存コード検出で自動分岐。discovery-memo.md 生成、CLAUDE.md にリビルドトリガー設定 |
+| 2 | プロトタイプ | （自由コーディング） | 保守性を気にせず動くものを最優先で作る |
+| 3 | リビルド判定 | `/poor-dev.rebuildcheck` | 4シグナル分析（変更局所性・修正振り子・コンテキスト肥大化・ホットスポット） |
+| 4 | 知見収穫 | `/poor-dev.harvest` | learnings.md + constitution.md + spec.md を生成 |
+| 5 | 標準フローへ | `/poor-dev.plan` | 以降は機能開発フロー（計画→タスク→実装→レビュー）に合流 |
+
+> ゼロから始める場合と既存コードがある場合の両方に対応。discovery が自動判別します。
 
 ### バグ修正フロー
 

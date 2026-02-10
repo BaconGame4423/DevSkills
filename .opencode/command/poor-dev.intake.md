@@ -1,5 +1,5 @@
 ---
-description: Intake user input and route to the appropriate flow: feature, bugfix, roadmap, Q&A, or documentation.
+description: Intake user input and route to the appropriate flow: feature, bugfix, roadmap, discovery, Q&A, or documentation.
 handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
@@ -12,6 +12,10 @@ handoffs:
   - label: Roadmap Concept
     agent: poor-dev.concept
     prompt: Start roadmap concept exploration
+    send: true
+  - label: Discovery Flow
+    agent: poor-dev.discovery
+    prompt: Start discovery flow for exploration and prototyping
     send: true
   - label: Ask Question
     agent: poor-dev.ask
@@ -45,15 +49,17 @@ Analyze `$ARGUMENTS` and classify the user's intent through a 3-stage process.
 - **Feature signals**: "追加" "作成" "新しい" "実装" "対応" "〜したい" "〜できるように" "サポート" "導入" "add" "create" "new" "implement" "support" "introduce"
 - **Bugfix signals**: "エラー" "バグ" "壊れ" "動かない" "失敗" "クラッシュ" "不具合" "修正" "おかしい" "regression" "500" "例外" "タイムアウト" "error" "bug" "broken" "fail" "crash" "fix"
 - **Roadmap signals**: "ロードマップ" "企画" "構想" "コンセプト" "戦略" "方針" "ビジョン" "roadmap" "concept" "strategy" "vision" "planning" "計画策定" "方向性"
+- **Discovery signals**: "探索" "プロトタイプ" "試作" "とりあえず作る" "バイブ" "試してみる" "スクラップ" "作り直し" "整理したい" "リビルド" "一から作り直す" "discovery" "prototype" "vibe" "explore" "scrap" "rebuild"
 - **Q&A signals**: "教えて" "とは" "なぜ" "どうやって" "どこ" "何" "仕組み" "説明して" "？" "what" "why" "how" "where" "explain"
 - **Documentation/Report signals**: "レポート" "報告" "ドキュメント" "文書化" "まとめ" "一覧" "概要" "document" "report" "summary" "overview"
 
-**Priority rule**: Feature / Bugfix / Roadmap signals take precedence over Q&A / Documentation signals. Example: "〜を実装するにはどうすれば？" → Feature (not Q&A), because "実装" is an action signal.
+**Priority rule**: Feature / Bugfix / Roadmap / Discovery signals take precedence over Q&A / Documentation signals. Example: "〜を実装するにはどうすれば？" → Feature (not Q&A), because "実装" is an action signal.
 
 **1b. Contextual Analysis** (when keywords are ambiguous):
 - Problem description pattern → bugfix ("〜が発生する" "〜になってしまう" "〜できない")
 - Desired state pattern → feature ("〜がほしい" "〜を追加" "〜に対応")
 - Planning/strategy pattern → roadmap ("〜の方針を決めたい" "〜の戦略を立てたい" "〜を企画する")
+- Exploration pattern → discovery ("まだ固まっていない" "とりあえず動くもの" "試してみたい" "既存コードを整理" "作り直したい" "バイブコーディングで作った")
 - Question pattern → Q&A ("〜とは何か" "〜について教えて" "〜の仕組みは？" "〜はどうなっている？")
 - Documentation request pattern → Documentation ("〜をまとめて" "〜の一覧を作って" "〜のレポートを生成")
 - Improvement/change pattern → ambiguous ("〜を改善" "〜を変更" "〜を最適化")
@@ -70,15 +76,19 @@ If confidence is Medium or below, ask the user to clarify:
   1. "機能リクエスト（新機能・拡張）"
   2. "バグ報告（既存機能の不具合・異常動作）"
   3. "ロードマップ・戦略策定（プロジェクト企画段階）"
-  4. "質問・ドキュメント作成（パイプライン不要）"
-  5. "もう少し詳しく説明する"
+  4. "探索・プロトタイプ（まず作って学ぶ / 既存コードを整理して再構築）"
+  5. "質問・ドキュメント作成（パイプライン不要）"
+  6. "もう少し詳しく説明する"
 - If "もう少し詳しく" → receive additional explanation and re-classify from Step 1
-- If option 4 selected, ask follow-up to distinguish:
+- If option 4 selected (探索) → route to discovery (Step 4F)
+- If option 5 selected, ask follow-up to distinguish:
   - Options:
     1. "質問応答 (ask)" — コードベースや仕様への質問に回答
     2. "ドキュメント生成 (report)" — プロジェクトレポート・ドキュメントを作成
 
 **Non-pipeline shortcut**: If classified as **Q&A** or **Documentation**, skip Step 3 and jump directly to Step 4D / 4E. These flows do not require branch or directory creation.
+
+**Discovery shortcut**: If classified as **discovery**, skip Step 3 and jump directly to Step 4F. Branch/directory creation is handled by `/poor-dev.discovery` itself.
 
 ### Step 3: Branch & Directory Creation (pipeline flows only)
 
@@ -198,3 +208,12 @@ If classified as **documentation**:
 
 1. Report classification result: "Classified as documentation: <summary>"
 2. Suggest next step: "Next: `/poor-dev.report` to generate the report"
+
+### Step 4F: Discovery Routing
+
+If classified as **discovery**:
+
+1. Report classification result: "Classified as discovery: <summary>"
+2. Suggest next step: "Next: `/poor-dev.discovery` to start exploration flow"
+
+Note: Discovery flow handles its own branch/directory creation and existing code detection internally.

@@ -13,6 +13,10 @@ handoffs:
     agent: poor-dev.concept
     prompt: Start roadmap concept exploration
     send: true
+  - label: Discovery Flow
+    agent: poor-dev.discovery
+    prompt: Start discovery flow for exploration and prototyping
+    send: true
   - label: Ask Question
     agent: poor-dev.ask
     prompt: Answer a question about the codebase
@@ -40,17 +44,25 @@ Otherwise, ask the user to choose a flow:
 - **Claude Code**: Use `AskUserQuestion` tool with:
   - question: "どのフローを開始しますか？"
   - options:
-    1. "機能開発 (feature)" -- 仕様→計画→実装→レビューの11ステップ
-    2. "バグ修正 (bugfix)" -- 調査→実装→レビューの5ステップ
-    3. "ロードマップ (roadmap)" -- コンセプト→ゴール→マイルストーン→ロードマップの4ステップ
-    4. "質問応答 (ask)" -- パイプラインなしの単発質問
+    1. "探索 (discovery)" -- まず作って学ぶ / 既存コードを整理して再構築
+    2. "機能開発 (feature)" -- 仕様→計画→実装→レビューの11ステップ
+    3. "バグ修正 (bugfix)" -- 調査→実装→レビューの5ステップ
+    4. "ロードマップ (roadmap)" -- コンセプト→ゴール→マイルストーン→ロードマップの4ステップ
 - **OpenCode**: Use `question` tool with the same content.
+
+Note: "質問応答 (ask)" and "レポート (report)" are also available if `$ARGUMENTS` contains `--flow-type ask` or `--flow-type report`.
 
 ### Step 2: Non-Pipeline Flows
 
 If the user chose **ask** or **report**:
 - Directly invoke `/poor-dev.ask` or `/poor-dev.report` with `$ARGUMENTS`
 - End. Do not proceed to Step 3.
+
+### Step 2b: Discovery Flow
+
+If the user chose **discovery**:
+- Directly invoke `/poor-dev.discovery` with `$ARGUMENTS`
+- End. Do not proceed to Step 3. Discovery handles its own branch/directory creation.
 
 ### Step 3: Get Description
 
@@ -94,3 +106,6 @@ Report: Direct flow selection as feature. Next: `/poor-dev.specify`
 
 **Roadmap**:
 Report flow selection as roadmap. Next: `/poor-dev.concept`
+
+**Discovery**:
+Report flow selection as discovery. Next: `/poor-dev.discovery`
