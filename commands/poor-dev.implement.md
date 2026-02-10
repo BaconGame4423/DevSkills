@@ -165,3 +165,22 @@ Update living documents in `docs/`:
    - Upcoming section (from concept.md/goals.md/milestones.md if present)
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/poor-dev.tasks` first to regenerate the task list.
+
+## Commit & Push Confirmation
+
+After all steps above complete, use AskUserQuestion to ask:
+
+**Question**: "変更をコミット＆プッシュしますか？"
+**Options**:
+1. "Commit & Push" — 変更をコミットしてリモートにプッシュする
+2. "Commit only" — コミットのみ（プッシュしない）
+3. "Skip" — コミットせずに終了する
+
+**If user selects "Commit & Push" or "Commit only"**:
+1. `git add -A`
+2. Generate a commit message following the project convention (`feat: 日本語タイトル` or appropriate type). Summarize the implementation work done in this session.
+3. `git commit -m "<message>"`
+4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`
+5. Report the commit hash and pushed branch (if applicable).
+
+**If user selects "Skip"**: Report completion summary and stop.

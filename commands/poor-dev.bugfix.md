@@ -137,3 +137,22 @@ Update living documents in `docs/`:
 ## Stage 6: Reclassification Escape
 
 If during Stages 1-4 this is clearly a missing feature: ask "これはバグではなく未実装機能のようです。機能リクエストとして再分類しますか？" If approved → route to `poor-dev.specify`.
+
+## Commit & Push Confirmation
+
+After all steps above complete, use AskUserQuestion to ask:
+
+**Question**: "変更をコミット＆プッシュしますか？"
+**Options**:
+1. "Commit & Push" — 変更をコミットしてリモートにプッシュする
+2. "Commit only" — コミットのみ（プッシュしない）
+3. "Skip" — コミットせずに終了する
+
+**If user selects "Commit & Push" or "Commit only"**:
+1. `git add -A`
+2. Generate a commit message following the project convention (`fix: 日本語タイトル`). Summarize the bugfix work done in this session.
+3. `git commit -m "<message>"`
+4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`
+5. Report the commit hash and pushed branch (if applicable).
+
+**If user selects "Skip"**: Report completion summary and stop.
