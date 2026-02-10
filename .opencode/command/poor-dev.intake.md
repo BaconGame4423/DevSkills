@@ -85,103 +85,85 @@ Use the same approach as `poor-dev.specify` Steps 1-2:
 
    c. Determine the next available number (highest N + 1)
 
-   d. Run the script:
+   d. Create the branch and directory:
       ```bash
-      .poor-dev/scripts/bash/create-new-feature.sh --json --number N --short-name "name" "description"
-      ```
-
-   e. Initialize pipeline state:
-      ```bash
-      .poor-dev/scripts/bash/pipeline-state.sh init "$FEATURE_DIR"
+      git checkout -b NNN-short-name
+      mkdir -p specs/NNN-short-name
       ```
 
    **IMPORTANT**:
    - Check all three sources (remote branches, local branches, specs directories) to find the highest number
-   - You must only ever run this script once per feature
-   - The JSON output will contain BRANCH_NAME and SPEC_FILE paths
+   - You must only ever create one branch per feature
    - For single quotes in args, use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible)
 
 ### Step 4A: Feature Routing
 
 If classified as **feature**:
 
-1. Set type:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" feature
-   ```
-
-2. Update state:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as feature: <summary>"
-   ```
-
-3. Continue to Pipeline Continuation (below) which will route to `/poor-dev.specify`
+1. Report classification result: "Classified as feature: <summary>"
+2. Suggest next step: "Next: `/poor-dev.specify` to create the specification"
 
 ### Step 4B: Bugfix Routing
 
 If classified as **bugfix**:
 
-1. Set type:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" bugfix
-   ```
-
-2. **Bug pattern lookup**: Read `.poor-dev/memory/bug-patterns.md` and compare the input text against existing patterns.
+1. **Bug pattern lookup**: Read `bug-patterns.md` and compare the input text against existing patterns.
    - If a similar pattern exists, inform the user: "過去に類似のバグがありました: [Pattern summary]. 参考にしてください。"
 
-3. Switch to bugfix pipeline:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"bugfix","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
+2. Copy bug report template and fill initial info:
+   - Create `$FEATURE_DIR/bug-report.md` from the following template:
+
+   ```markdown
+   # Bug Report: [BUG SHORT NAME]
+
+   **Branch**: `[###-fix-bug-name]`
+   **Created**: [DATE]
+   **Status**: Investigating
+   **Input**: "$ARGUMENTS"
+
+   ## Description
+   [バグの概要]
+
+   ## Expected Behavior
+   [期待される動作]
+
+   ## Actual Behavior
+   [実際の動作。エラーメッセージがあれば記載]
+
+   ## Steps to Reproduce
+   1. [Step 1]
+   2. [Step 2]
+   3. [Step 3]
+
+   ## Frequency
+   [常時 / 間欠的 / 特定条件下のみ]
+
+   ## Environment
+   - **OS**: [e.g., Ubuntu 22.04, macOS 14.2]
+   - **Language/Runtime**: [e.g., Node.js 20.x, Python 3.12]
+   - **Key Dependencies**: [e.g., React 18.2, FastAPI 0.104]
+   - **Hardware**: [if relevant]
+
+   ## Since When
+   [いつから発生しているか。最近の変更との関連]
+
+   ## Reproduction Results
+   **Status**: [Not Attempted / Reproduced / Could Not Reproduce]
+   [再現試行の詳細・ログ・テスト出力]
    ```
 
-4. Copy bug report template and fill initial info:
-   - Read `.poor-dev/templates/bug-report-template.md`
-   - Create `$FEATURE_DIR/bug-report.md` from the template
    - Fill in what can be extracted from `$ARGUMENTS`: branch name, date, description, any error messages or symptoms mentioned
    - Leave unknown sections with their placeholder markers
 
-5. Update context paths in workflow-state.yaml:
-   ```bash
-   yq -i ".context.bug_report_file = \"$FEATURE_DIR/bug-report.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   yq -i ".context.investigation_file = \"$FEATURE_DIR/investigation.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   yq -i ".context.fix_plan_file = \"$FEATURE_DIR/fix-plan.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   ```
-
-6. Update state:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as bugfix: <summary>"
-   ```
-
-7. Continue to Pipeline Continuation (below) which will route to `/poor-dev.bugfix`
+3. Report classification result: "Classified as bugfix: <summary>"
+4. Suggest next step: "Next: `/poor-dev.bugfix` to investigate and fix"
 
 ### Step 4C: Roadmap Routing
 
 If classified as **roadmap**:
 
-1. Set type:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" roadmap
-   ```
-
-2. Switch to roadmap pipeline:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
-   ```
-
-3. Update context paths in workflow-state.yaml:
-   ```bash
-   yq -i ".context.concept_file = \"$FEATURE_DIR/concept.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   yq -i ".context.goals_file = \"$FEATURE_DIR/goals.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   yq -i ".context.milestones_file = \"$FEATURE_DIR/milestones.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   yq -i ".context.roadmap_file = \"$FEATURE_DIR/roadmap.md\"" "$FEATURE_DIR/workflow-state.yaml"
-   ```
-
-4. Update state:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as roadmap: <summary>"
-   ```
-
-5. Continue to Pipeline Continuation (below) which will route to `/poor-dev.concept`
+1. Report classification result: "Classified as roadmap: <summary>"
+2. Suggest next step: "Next: `/poor-dev.concept` to start concept exploration"
 
 ### Step 4D: Non-Pipeline Routing
 
@@ -189,47 +171,5 @@ If classified as **質問・ドキュメント作成**:
 
 Report to the user:
 - "このリクエストはパイプライン管理が不要です。以下のコマンドをお使いください:"
-- 質問応答: `/poor-dev.ask` or `poor-dev ask "質問"`
-- レポート生成: `/poor-dev.report` or `poor-dev report`
-- Pipeline state is NOT updated (intake did not complete a pipeline flow).
-- Do NOT proceed to Pipeline Continuation.
-
-## Pipeline Continuation
-
-**This section executes ONLY after all skill work is complete (Step 4A or 4B done).**
-
-1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion as normal. Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Preemptive summary** (3-5 lines): Compose a summary including:
-   - Classification result (feature or bugfix) and confidence
-   - Generated branch name and directory
-   - Key decisions made
-   - Bug pattern matches (if bugfix)
-
-3. **State is already updated** in Step 4A/4B.
-
-4. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: intake completed. Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - **OpenCode**: Use `question` tool with same content.
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update that step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
-
-6. **Error fallback**:
-   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
-   - If state update fails → warn but do not affect main skill output
+- 質問応答: `/poor-dev.ask`
+- レポート生成: `/poor-dev.report`
