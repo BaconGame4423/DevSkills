@@ -274,7 +274,7 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
    **ポーリングループ** (FALLBACK_MODE 以外):
    ```
-   ELAPSED = 0, IDLE = 0, LAST_SIZE = 0
+   ELAPSED = 0, IDLE = 0, LAST_SIZE = 0, DISPLAYED_PROGRESS = 0
 
    while true:
      (1) TaskOutput(task_id, block=false, timeout=1000)
@@ -284,6 +284,15 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
          → CURRENT_SIZE > LAST_SIZE の場合:
             IDLE = 0 (リセット — 出力が増加中)
             LAST_SIZE = CURRENT_SIZE
+
+            (2b) 進捗マーカー抽出:
+              - output_file から `[PROGRESS: ...]` パターンを検索
+              - opencode --format json の場合: NDJSON の各行から
+                result/text フィールドを抽出して検索
+              - 全マーカーを抽出し、DISPLAYED_PROGRESS 以降の
+                新規マーカーのみユーザーにリレー表示
+              - DISPLAYED_PROGRESS を更新して二重表示を防止
+
          → CURRENT_SIZE == LAST_SIZE の場合:
             IDLE += POLL_INTERVAL
 
@@ -363,7 +372,7 @@ specify は他の Production Steps と異なり、読み取り専用で実行し
 4. **Append context block**: Section A Step 4 と同じ
 5. **Resolve model**: Section A Step 5 と同じ
 6. **Dispatch** (読み取り専用 + アイドルベース適応ポーリング):
-   Section A step 6 と同じポーリング方式で dispatch。CLI ごとの差異:
+   Section A step 6 と同じポーリング方式（進捗マーカー抽出 (2b) を含む）で dispatch。CLI ごとの差異:
    - opencode: `opencode run --model ${RESOLVED_MODEL} --format json "$(cat /tmp/poor-dev-step.txt)"`
    - claude: `cat /tmp/poor-dev-step.txt | claude -p --model ${RESOLVED_MODEL} --no-session-persistence --output-format text --disallowedTools "Edit,Write,Bash,NotebookEdit"`
    - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=<assembled prompt>)` (ポーリングループなし)
@@ -500,7 +509,9 @@ You are running as a sub-agent in a pipeline. Follow these rules:
 - Do NOT use EnterPlanMode or ExitPlanMode.
 - Focus on producing the required output artifacts (files).
 - If blocked, output [ERROR: description] and stop.
-- Exception: You MUST output [REVIEW-PROGRESS: ...] markers between iterations.
+- Exception: You MUST output progress markers during execution:
+  - Review steps: `[REVIEW-PROGRESS: ...]` markers between iterations
+  - Production steps: `[PROGRESS: step-name phase/status description]` markers at key milestones
 - End with: files created/modified, any unresolved items.
 ```
 

@@ -144,6 +144,16 @@ Prerequisites: research.md complete.
 - **Phase 0 only**: `research.md`
 - **Phase 1 only**: `data-model.md`, `contracts/`, `quickstart.md`
 
+## Progress Markers
+
+Output progress markers at key milestones:
+- `[PROGRESS: plan reading-spec]` — spec.md 読み取り開始
+- `[PROGRESS: plan constitution-check]` — Constitution Check 実行中
+- `[PROGRESS: plan phase0-research]` — Phase 0 リサーチ開始
+- `[PROGRESS: plan phase0-complete]` — Phase 0 完了、research.md 作成
+- `[PROGRESS: plan phase1-design]` — Phase 1 設計開始
+- `[PROGRESS: plan phase1-complete]` — Phase 1 完了、全成果物作成
+
 ## Key Rules
 
 - Use absolute paths
