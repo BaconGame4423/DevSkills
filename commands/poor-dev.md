@@ -382,6 +382,7 @@ specify は他の Production Steps と異なり、読み取り専用で実行し
     - 各マーカーについて AskUserQuestion（オプション表形式で質問を中継）
     - 回答で spec-draft.md 内の該当マーカーを置換
 11. **ユーザー承認**:
+    - spec-draft.md の全文をマークダウンコードブロックでユーザーに表示する
     - AskUserQuestion:
       - "承認する" → `cp spec-draft.md spec.md && rm spec-draft.md`、パイプライン続行
       - "修正指示付きで棄却" → ユーザーの自由記述を spec-draft.md 末尾に `## Feedback` として追記 → パイプライン停止
