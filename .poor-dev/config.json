@@ -1,0 +1,10 @@
+{
+  "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" },
+  "overrides": {},
+  "gates": {},
+  "polling": {
+    "interval": 1,
+    "idle_timeout": 120,
+    "max_timeout": 600
+  }
+}

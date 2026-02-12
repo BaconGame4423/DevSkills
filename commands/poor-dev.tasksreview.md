@@ -58,6 +58,12 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 **STEP 2**: Aggregate 4 YAML results. Count issues by severity (C/H/M/L).
   Additionally check: no circular dependencies, critical path identified, parallelization opportunities noted, user story coverage complete.
 
+**STEP 2.5 Progress Report**:
+After aggregation, output a structured progress marker on its own line:
+  `[REVIEW-PROGRESS: tasksreview #${N}: ${ISSUE_COUNT} issues (C:${c} H:${h} M:${m} L:${l}) → ${ACTION}]`
+Where N = iteration number, ACTION = "fixing..." (issues > 0) or "GO" (issues == 0).
+This marker MUST be output in all execution modes (interactive and Non-Interactive).
+
 **STEP 3**: Issues remain → STEP 4. Zero issues → done, output final result.
 
 **STEP 4**: Spawn `review-fixer` (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic as STEP 1). After fix → back to STEP 1.

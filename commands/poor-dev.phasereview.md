@@ -58,6 +58,13 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 **STEP 2**: Aggregate 4 YAML results. Count issues by severity (C/H/M/L).
   Additionally verify Definition of Done: all tasks completed, quality gates passed, all tests passing, code review done, adversarial review passed, docs updated, no regressions, security reviewed.
 
+**STEP 2.5 Progress Report**:
+After aggregation, output structured progress markers on their own lines:
+  `[REVIEW-PROGRESS: phasereview #${N}: ${ISSUE_COUNT} issues (C:${c} H:${h} M:${m} L:${l}) → ${ACTION}]`
+  `[REVIEW-PROGRESS: phasereview #${N}: DoD ${DONE}/${TOTAL}]`
+Where N = iteration number, ACTION = "fixing..." (issues > 0) or "GO" (issues == 0), DONE = passed DoD items, TOTAL = total DoD items.
+These markers MUST be output in all execution modes (interactive and Non-Interactive).
+
 **STEP 3**: Issues remain → STEP 4. Zero issues → done, output final result.
 
 **STEP 4**: Spawn `review-fixer` (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic as STEP 1). After fix → back to STEP 1.

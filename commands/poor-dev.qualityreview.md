@@ -33,6 +33,10 @@ Run automated quality gates before persona review:
 
 If gates fail, record failures as C or H severity and proceed to fix loop.
 
+After running gates, output a progress marker on its own line:
+  `[REVIEW-PROGRESS: qualityreview [gates]: ${PASS}/${TOTAL} passed]`
+This marker MUST be output in all execution modes (interactive and Non-Interactive).
+
 ### STAGE 0.5: Config Resolution
 
 1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
@@ -75,6 +79,13 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 **STEP 2**: Run adversarial review, then aggregate all results. Count issues by severity (C/H/M/L).
   Adversarial judgments: APPROVED | NEEDS_CHANGES (add to issues) | HALLUCINATING (ignore).
   **3-strike rule**: Track adversarial rejections. After 3 strikes → abort and report failure.
+
+**STEP 2.5 Progress Report**:
+After aggregation, output structured progress markers on their own lines:
+  `[REVIEW-PROGRESS: qualityreview #${N}: ${ISSUE_COUNT} issues (C:${c} H:${h} M:${m} L:${l}) → ${ACTION}]`
+  `[REVIEW-PROGRESS: qualityreview #${N}: adversarial ${JUDGMENT} (strike ${S}/3)]`
+Where N = iteration number, ACTION = "fixing..." (issues > 0) or "GO" (issues == 0), JUDGMENT = APPROVED/NEEDS_CHANGES/HALLUCINATING, S = current strike count.
+These markers MUST be output in all execution modes (interactive and Non-Interactive).
 
 **STEP 3**: Issues remain → STEP 4. Zero issues AND adversarial APPROVED/HALLUCINATING → done. 3 strikes → abort.
 
