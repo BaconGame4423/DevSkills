@@ -62,16 +62,16 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [ ] T012 [P] Create suggestion parser utility in lib/suggestion-parser.mjs with YAML parsing and validation
 - [ ] T013 [P] Create suggestion validator utility in lib/suggestion-validator.mjs with maintainability/security scoring
 - [ ] T014 [P] Create backup manager utility in lib/backup-manager.mjs with automatic backup on write
-- [ ] T015 [P] Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
-- [ ] T016 [P] Create cache validator utility in lib/cache-validator.mjs with monthly validation
+- [ ] T015 Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
+- [ ] T016 Create cache validator utility in lib/cache-validator.mjs with monthly validation
 - [ ] T017 Define maintainability scoring algorithm in lib/suggestion-validator.mjs (commit recency, issue resolution, contributor activity, documentation quality)
 - [ ] T018 Define security scoring algorithm in lib/suggestion-validator.mjs (CVEs, audit status, dependency health, code quality)
 - [ ] T019 Implement threshold filtering logic in lib/suggestion-validator.mjs (maintainability >= 50 AND security >= 50)
 - [ ] T020 Implement warning marker logic in lib/suggestion-validator.mjs ([RISK] for mixed signals, [CAUTION] for borderline scores)
 - [ ] T021 Implement backup creation function in lib/backup-manager.mjs with timestamp-based backup files
 - [ ] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
-- [ ] T023 [P] Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
-- [ ] T024 [P] Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
+- [ ] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
+- [ ] T024 Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
 - [ ] T025 Implement YAML schema validation in lib/suggestion-parser.mjs for ExplorationSession, Suggestion, SuggestionDecision entities
 - [ ] T026 Create exploration session state manager in lib/suggestion-parser.mjs with state transition validation
 - [ ] T027 Create suggestion decision recorder in lib/suggestion-parser.mjs with traceability
@@ -95,7 +95,7 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [ ] T029 [US1] Implement config resolution logic in commands/poor-dev.suggest.md (overrides.suggest → overrides.default → built-in) (success: config loaded correctly from priority order)
 - [ ] T030 [US1] Implement spec.md reading and validation in commands/poor-dev.suggest.md (success: spec.md parsed without errors)
 - [ ] T031 [US1] Implement exploration session initialization in commands/poor-dev.suggest.md with UUID generation (success: exploration-session.yaml created with valid UUID)
-- [ ] T032 [US1] Implement progress marker system in commands/poor-dev.suggest.md ([PROGRESS: step-name description]) (success: progress markers display during execution)
+- [ ] T032 [US1] Implement progress marker system in commands/poor-dev.suggest.md with format [PROGRESS: step-name] (success: progress markers display during execution)
 - [ ] T033 [US1] Implement error marker system in commands/poor-dev.suggest.md ([ERROR: description]) (success: error messages display on failure)
 - [ ] T034 [US1] Implement suggestion display formatting in commands/poor-dev.suggest.md with score visualization (maintainability_score, security_score as colored badges or progress bars) (success: suggestions displayed with colored score indicators)
 - [ ] T035 [US1] Implement suggestion comparison view in commands/poor-dev.suggest.md with rationale display (show all suggestions side-by-side for comparison) (success: comparison view shows all suggestions)
@@ -390,9 +390,6 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 4 (US2: Exploration) → Ph
 
 ### Parallel Execution Opportunities
 
-**Phase 2 - Foundational** (Parallelizable):
-- T012-T027: Foundational utilities can be implemented in parallel (different files)
-
 **Phase 12 - Testing** (Parallelizable):
 - T116-T131: Test suites can be implemented in parallel
 
@@ -493,7 +490,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 4 (US2: Exploration) → Ph
 
 **Total Tasks**: 145
 **Tasks by Phase**:
-- Phase 1 (Setup): 11 tasks
+- Phase 1 (Setup): 15 tasks
 - Phase 2 (Foundational): 16 tasks
 - Phase 3 (US1): 12 tasks
 - Phase 4 (US2): 15 tasks
@@ -502,12 +499,12 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 4 (US2: Exploration) → Ph
 - Phase 7 (Fallback): 8 tasks
 - Phase 8 (Pipeline Integration): 6 tasks
 - Phase 9 (Backup & Recovery): 8 tasks
-- Phase 10 (Cache Management): 11 tasks
+- Phase 10 (Cache Management): 8 tasks
 - Phase 11 (Windows Support): 4 tasks
 - Phase 12 (Testing): 16 tasks
 - Phase 13 (Polish): 14 tasks
 
-**Parallel Opportunities Identified**: 2 phases with parallelizable tasks
+**Parallel Opportunities Identified**: 1 phase with parallelizable tasks
 **Suggested MVP Scope**: Phase 1-7 (Days 1-7) + Phase 8-9 (Day 7)
 **Independent Test Criteria**: Defined for each user story
 **Go/No-Go Criteria**: scripts/verify-dependencies.sh exits with code 0 on Day 0
