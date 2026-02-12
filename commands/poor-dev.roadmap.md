@@ -147,3 +147,19 @@ Present a summary to the user:
 - Generated artifacts: concept.md, goals.md, milestones.md, roadmap.md
 - Key decisions and assumptions
 - Suggested next steps (e.g., move to feature development for specific milestones)
+
+### Branch Merge & Cleanup
+
+Roadmap 策定完了後、以下を実行する。
+
+1. `BRANCH=$(git rev-parse --abbrev-ref HEAD)` — 現在のブランチ取得
+2. `$BRANCH` が `main` または `master` → **スキップ**
+3. 未コミットの変更を確認: `git status --porcelain`
+   - 変更あり → `git add -A && git commit -m "docs: ロードマップ策定完了"`
+4. `git checkout main`
+5. `git pull origin main --ff-only` — 失敗時はユーザーに報告して中断
+6. `git merge $BRANCH --no-edit` — コンフリクト時はユーザーに報告して中断
+7. `git push origin main`
+8. `git branch -d $BRANCH`
+9. リモートブランチ存在確認後、存在すれば `git push origin --delete $BRANCH`
+10. 出力: `"✅ ブランチ '$BRANCH' を main にマージし、削除しました。"`
