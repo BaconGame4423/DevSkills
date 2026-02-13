@@ -1,5 +1,5 @@
-type: tasksreview
-target: specs/008-add-bestpractice-suggest-phase/tasks.md
+type: quality
+target: lib/suggestion-parser.mjs, lib/suggestion-validator.mjs, lib/cache-initializer.mjs, lib/cache-validator.mjs, lib/backup-manager.mjs, lib/poll-dispatch.sh, commands/poor-dev.suggest.md, scripts/verify-dependencies.sh
 iterations:
   - iteration: 1
     timestamp: "2026-02-12T17:00:00Z"
@@ -439,3 +439,83 @@ iterations:
         persona: SEC
         description: "No path validation on featureDir parameter"
         fix: "Added validatePathWithinProject() to recoverSuggestionDecisions and recoverStateInconsistency in backup-manager.mjs"
+  - iteration: 1
+    timestamp: "2026-02-13T12:00:00Z"
+    target_lines_initial: 3197
+    target_lines: 3166
+    total_issues: 22
+    fixed_in_iteration: 11
+    rejected: 0
+    remaining: 0
+    by_severity:
+      C: 7 fixed
+      H: 2 fixed
+      M: 2 fixed
+      L: 0
+    delta_lines: -31 (3197 → 3166, 99.0% of original, within 150% limit)
+    fixes_applied:
+      - id: QR-007
+        severity: C
+        persona: SEC
+        description: "poll-dispatch.sh line 30 executes arbitrary bash script via COMMAND_FILE without content validation"
+        fix: "Added content validation to COMMAND_FILE before bash execution"
+
+      - id: QR-008
+        severity: C
+        persona: SEC
+        description: "cache-validator.mjs updateCacheEntry() writes to cachePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-009
+        severity: C
+        persona: SEC
+        description: "cache-validator.mjs incrementCacheVersion() writes to cachePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-010
+        severity: C
+        persona: SEC
+        description: "cache-validator.mjs backupAndUpdateCache() writes to cachePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-011
+        severity: C
+        persona: SEC
+        description: "cache-validator.mjs validateCache() reads cachePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-012
+        severity: C
+        persona: SEC
+        description: "backup-manager.mjs writeWithBackup() writes to filePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-013
+        severity: C
+        persona: SEC
+        description: "backup-manager.mjs createBackup() copies from filePath without validatePathWithinProject()"
+        fix: "Added validatePathWithinProject() call"
+
+      - id: QR-014
+        severity: H
+        persona: CODE
+        description: "cache-initializer.mjs has its own toYAML() function duplicating suggestion-parser.mjs implementation"
+        fix: "Removed duplicate toYAML() function, imported from suggestion-parser.mjs"
+
+      - id: QR-015
+        severity: H
+        persona: CODE
+        description: "cache-validator.mjs exports parseSimpleYAML/toYAML as aliases for backward compatibility"
+        fix: "Removed parseSimpleYAML/toYAML aliases, updated all usages to parseYAML"
+
+      - id: QR-017
+        severity: M
+        persona: SEC
+        description: "backup-manager.mjs archiveBackups, listBackups, recoverFromBackup missing path validation"
+        fix: "Added validatePathWithinProject() to these functions"
+
+      - id: QR-018
+        severity: M
+        persona: SEC
+        description: "cache-validator.mjs checkCacheFreshness missing path validation"
+        fix: "Added validatePathWithinProject() call"

@@ -1,17 +1,20 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   checkCacheFreshness,
   tagStaleLibraries,
-  incrementCacheVersion
+  incrementCacheVersion,
+  checkGitHubActivity,
+  checkOSVVulnerabilities,
+  updateCacheEntry,
+  backupAndUpdateCache
 } from '../lib/cache-validator.mjs';
 
 describe('checkCacheFreshness', () => {
   it('should detect old cache as stale', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -32,7 +35,7 @@ describe('checkCacheFreshness', () => {
   });
 
   it('should detect recent cache as fresh', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -53,7 +56,7 @@ describe('checkCacheFreshness', () => {
   });
 
   it('should handle missing cache file', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'nonexistent.yaml');
 
     try {
@@ -68,7 +71,7 @@ describe('checkCacheFreshness', () => {
   });
 
   it('should handle missing last_updated field', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -86,7 +89,7 @@ describe('checkCacheFreshness', () => {
   });
 
   it('should calculate age in months correctly', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -185,7 +188,7 @@ describe('tagStaleLibraries', () => {
 
 describe('incrementCacheVersion', () => {
   it('should bump patch version', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -206,7 +209,7 @@ describe('incrementCacheVersion', () => {
   });
 
   it('should handle missing cache file', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'nonexistent.yaml');
 
     try {
@@ -220,7 +223,7 @@ describe('incrementCacheVersion', () => {
   });
 
   it('should update last_updated timestamp', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -238,7 +241,7 @@ describe('incrementCacheVersion', () => {
   });
 
   it('should handle version with missing patch number', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -255,7 +258,7 @@ describe('incrementCacheVersion', () => {
   });
 
   it('should handle default version if missing', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'cache-test-'));
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
     const cacheFile = join(tempDir, 'cache.yaml');
 
     try {
@@ -267,6 +270,216 @@ describe('incrementCacheVersion', () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.old_version, '1.0.0');
       assert.strictEqual(result.new_version, '1.0.1');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('checkGitHubActivity', () => {
+  it('should handle invalid GitHub URL', async () => {
+    const result = await checkGitHubActivity('https://example.com/repo');
+
+    assert.ok(result.error);
+    assert.ok(result.error.includes('Invalid'));
+  });
+
+  it('should handle valid GitHub URL format', async () => {
+    const result = await checkGitHubActivity('https://github.com/test/test');
+
+    // Will fail with network error if GitHub is unreachable, but URL format should be valid
+    assert.ok('error' in result || 'last_commit_date' in result);
+  });
+
+  it('should handle GitHub URL with .git suffix', async () => {
+    const result = await checkGitHubActivity('https://github.com/test/test.git');
+
+    // Should not fail with URL validation error
+    assert.ok(!result.error?.includes('Invalid'));
+  });
+});
+
+describe('checkOSVVulnerabilities', () => {
+  it('should accept valid ecosystem', async () => {
+    const result = await checkOSVVulnerabilities('express', 'npm');
+
+    // Will fail with network error if OSV is unreachable, but validation should pass
+    assert.ok('error' in result || 'has_vulnerabilities' in result);
+  });
+
+  it('should handle valid response with vulnerabilities', async () => {
+    const result = await checkOSVVulnerabilities('package-name', 'npm');
+
+    if (!result.error) {
+      assert.ok('has_vulnerabilities' in result);
+      assert.ok('vulnerability_count' in result);
+      assert.ok(Array.isArray(result.vulnerabilities));
+    }
+  });
+
+  it('should handle API errors gracefully', async () => {
+    // Using invalid ecosystem should return error
+    const result = await checkOSVVulnerabilities('pkg', 'invalid-ecosystem');
+
+    assert.ok(result.error);
+  });
+});
+
+describe('updateCacheEntry', () => {
+  it('should update library entry in cache', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\nlast_updated: 2024-01-01T00:00:00.000Z\ncategories:\n  test:\n    - name: lib1\n      version: 1.0.0\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const result = updateCacheEntry(cacheFile, 'test', 'lib1', { maintainability_score: 95 });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.category, 'test');
+      assert.strictEqual(result.library, 'lib1');
+
+      const updatedContent = await readFile(cacheFile, 'utf8');
+      assert.ok(updatedContent.includes('maintainability_score: 95'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should handle missing cache file', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'nonexistent.yaml');
+
+    try {
+      const result = updateCacheEntry(cacheFile, 'test', 'lib1', {});
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error.includes('not found'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should handle missing category', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\ncategories:\n  test:\n    - name: lib1\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const result = updateCacheEntry(cacheFile, 'nonexistent', 'lib1', {});
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error.includes('Category not found'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should handle missing library', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\ncategories:\n  test:\n    - name: lib1\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const result = updateCacheEntry(cacheFile, 'test', 'nonexistent', {});
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error.includes('Library not found'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('backupAndUpdateCache', () => {
+  it('should backup before updating', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\ncategories:\n  test: []\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const updates = (cache) => {
+        cache.version = '2.0.0';
+        return cache;
+      };
+
+      const result = await backupAndUpdateCache(cacheFile, updates);
+
+      assert.strictEqual(result.success, true);
+      assert.ok(result.backup_created);
+      assert.ok(result.updated_at);
+
+      const updatedContent = await readFile(cacheFile, 'utf8');
+      assert.ok(updatedContent.includes('version: 2.0.0'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should handle non-function updates parameter', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\ncategories:\n  test: []\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const result = await backupAndUpdateCache(cacheFile, { invalid: 'updates' });
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error.includes('must be a function'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should rollback on corruption', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const cacheContent = `version: 1.0.0\ncategories:\n  test: []\n`;
+      await writeFile(cacheFile, cacheContent, 'utf8');
+
+      const updates = () => {
+        return null; // This will cause corruption when serialized
+      };
+
+      const result = await backupAndUpdateCache(cacheFile, updates);
+
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error.includes('corrupted'));
+
+      // Should have rolled back
+      const restoredContent = await readFile(cacheFile, 'utf8');
+      assert.ok(restoredContent.includes('version: 1.0.0'));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should work with new cache file', async () => {
+    const tempDir = await mkdtemp(join(process.cwd(), '.tmp-test-'));
+    const cacheFile = join(tempDir, 'cache.yaml');
+
+    try {
+      const updates = (cache) => {
+        cache.version = '1.0.0';
+        cache.categories = { test: [] };
+        return cache;
+      };
+
+      const result = await backupAndUpdateCache(cacheFile, updates);
+
+      assert.strictEqual(result.success, true);
+      assert.ok(!result.backup_created); // No backup for new file
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

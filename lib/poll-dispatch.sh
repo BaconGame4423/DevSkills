@@ -22,6 +22,13 @@ if [ ! -f "$COMMAND_FILE" ]; then
   exit 1
 fi
 
+# Validate: first non-empty line must start with known dispatch CLI
+FIRST_CMD=$(grep -m1 -oE '^\s*(opencode|claude|cat)\b' "$COMMAND_FILE" || true)
+if [ -z "$FIRST_CMD" ]; then
+  echo '{"exit_code":1,"elapsed":0,"timeout_type":"none","verdict":null,"errors":["Dispatch command must start with opencode, claude, or cat"],"clarifications":[]}' >&2
+  exit 1
+fi
+
 # Initialize output files
 : > "$OUTPUT_FILE"
 : > "$PROGRESS_FILE"

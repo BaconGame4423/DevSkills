@@ -35,8 +35,12 @@ fi
 # Test GitHub API connectivity
 echo ""
 echo "Testing GitHub API connectivity..."
-GITHUB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.github.com/rate_limit)
-if [ "$GITHUB_STATUS" = "200" ]; then
+GITHUB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.github.com/rate_limit 2>/dev/null || echo "000")
+CURL_EXIT_GITHUB=$?
+if [ $CURL_EXIT_GITHUB -ne 0 ]; then
+    echo -e "${RED}✗${NC} GitHub API request failed (curl exit code: $CURL_EXIT_GITHUB)"
+    OVERALL_STATUS=1
+elif [ "$GITHUB_STATUS" = "200" ]; then
     echo -e "${GREEN}✓${NC} GitHub API is accessible (HTTP $GITHUB_STATUS)"
 else
     echo -e "${RED}✗${NC} GitHub API returned HTTP $GITHUB_STATUS"
@@ -46,8 +50,12 @@ fi
 # Test OSV API connectivity
 echo ""
 echo "Testing OSV API connectivity..."
-OSV_STATUS=$(curl -s -X POST -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d '{"query":"test"}' https://api.osv.dev/v1/query)
-if [ "$OSV_STATUS" = "200" ] || [ "$OSV_STATUS" = "400" ]; then
+OSV_STATUS=$(curl -s -X POST -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d '{"query":"test"}' https://api.osv.dev/v1/query 2>/dev/null || echo "000")
+CURL_EXIT_OSV=$?
+if [ $CURL_EXIT_OSV -ne 0 ]; then
+    echo -e "${RED}✗${NC} OSV API request failed (curl exit code: $CURL_EXIT_OSV)"
+    OVERALL_STATUS=1
+elif [ "$OSV_STATUS" = "200" ] || [ "$OSV_STATUS" = "400" ]; then
     echo -e "${GREEN}✓${NC} OSV API is accessible (HTTP $OSV_STATUS, 400 is expected for test query)"
 else
     echo -e "${RED}✗${NC} OSV API returned HTTP $OSV_STATUS"
@@ -57,8 +65,12 @@ fi
 # Test npm registry connectivity
 echo ""
 echo "Testing npm registry connectivity..."
-NPM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://registry.npmjs.org/express)
-if [ "$NPM_STATUS" = "200" ]; then
+NPM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://registry.npmjs.org/express 2>/dev/null || echo "000")
+CURL_EXIT_NPM=$?
+if [ $CURL_EXIT_NPM -ne 0 ]; then
+    echo -e "${RED}✗${NC} npm registry request failed (curl exit code: $CURL_EXIT_NPM)"
+    OVERALL_STATUS=1
+elif [ "$NPM_STATUS" = "200" ]; then
     echo -e "${GREEN}✓${NC} npm registry is accessible (HTTP $NPM_STATUS)"
 else
     echo -e "${RED}✗${NC} npm registry returned HTTP $NPM_STATUS"

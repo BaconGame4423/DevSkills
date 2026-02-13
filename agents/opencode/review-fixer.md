@@ -24,6 +24,13 @@ You are a review fixer. You receive a list of issues found during review and fix
 - Prefer editing/replacing over adding. Adding requires equivalent removal.
 - Report delta_lines in output.
 
+## Protected Files
+
+Before editing any file, read `.poor-dev/config.json` → `protected_files` array.
+Matching files are READ-ONLY during review. Report but do NOT edit.
+If a fix requires modifying a protected file, output instead:
+  `[PROTECTED: filename — issue description]`
+
 ## Instructions
 1. Read the issue list provided
 2. Read the target files

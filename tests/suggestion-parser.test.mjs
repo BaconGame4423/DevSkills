@@ -46,6 +46,85 @@ describe('parseYAML', () => {
     assert.strictEqual(result.name, 'test');
     assert.strictEqual(result.value, 42);
   });
+
+  it('should handle multiline strings with pipe (|)', () => {
+    const yaml = `description: |\n  This is a\n  multiline string\n  with pipe`;
+    const result = parseYAML(yaml);
+
+    assert.ok(result.description);
+    assert.ok(typeof result.description === 'object');
+  });
+
+  it('should handle multiline strings with greater-than (>)', () => {
+    const yaml = `description: >\n  This is a\n  folded string`;
+    const result = parseYAML(yaml);
+
+    assert.ok(result.description);
+    assert.ok(typeof result.description === 'object');
+  });
+
+  it('should handle quoted values with special characters', () => {
+    const yaml = `name: "test:value"\npath: '/path/to/file'\ncombined: "a:b/c"`;
+    const result = parseYAML(yaml);
+
+    assert.strictEqual(result.name, 'test:value');
+    assert.strictEqual(result.path, '/path/to/file');
+    assert.strictEqual(result.combined, 'a:b/c');
+  });
+
+  it('should handle quoted values with hash and colon', () => {
+    const yaml = `comment: "# This is a comment"\nurl: "https://example.com/path:123"`;
+    const result = parseYAML(yaml);
+
+    assert.strictEqual(result.comment, '# This is a comment');
+    assert.strictEqual(result.url, 'https://example.com/path:123');
+  });
+
+  it('should handle nested objects with indentation', () => {
+    const yaml = `outer:\n  inner:\n    value: 42\n    name: test`;
+    const result = parseYAML(yaml);
+
+    assert.ok(result.outer);
+    assert.ok(result.outer.inner);
+    assert.strictEqual(result.outer.inner.value, 42);
+    assert.strictEqual(result.outer.inner.name, 'test');
+  });
+
+  it('should handle malformed YAML gracefully', () => {
+    const yaml = `invalid:: yaml: : : syntax`;
+    // Should not throw, but may return partial results
+    const result = parseYAML(yaml);
+
+    assert.ok(typeof result === 'object');
+  });
+
+  it('should handle empty string input', () => {
+    const yaml = '';
+    const result = parseYAML(yaml);
+
+    assert.ok(typeof result === 'object');
+    assert.strictEqual(Object.keys(result).length, 0);
+  });
+
+  it('should handle boolean values correctly', () => {
+    const yaml = `flag1: true\nflag2: false\nflag3: True\nflag4: False`;
+    const result = parseYAML(yaml);
+
+    assert.strictEqual(result.flag1, true);
+    assert.strictEqual(result.flag2, false);
+    assert.strictEqual(result.flag3, true);
+    assert.strictEqual(result.flag4, false);
+  });
+
+  it('should handle numeric values including zero', () => {
+    const yaml = `positive: 42\nnegative: -10\nzero: 0\nfloat: 3.14`;
+    const result = parseYAML(yaml);
+
+    assert.strictEqual(result.positive, 42);
+    assert.strictEqual(result.negative, -10);
+    assert.strictEqual(result.zero, 0);
+    assert.strictEqual(result.float, 3.14);
+  });
 });
 
 describe('toYAML', () => {

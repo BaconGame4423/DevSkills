@@ -158,8 +158,8 @@ describe('cache-initializer', () => {
     try {
       const script = await readFile(join(process.cwd(), 'lib', 'cache-initializer.mjs'), 'utf8');
 
-      // Verify YAML formatting function exists
-      assert.ok(script.includes('function toYAML'));
+      // Verify YAML formatting is used (imported from suggestion-parser)
+      assert.ok(script.includes('toYAML'));
       assert.ok(script.includes('toYAML(PRESEEDED_DATA)'));
     } finally {
       await rm(tempDir, { recursive: true, force: true });

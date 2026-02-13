@@ -276,9 +276,12 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    ```
    OUTPUT_FILE = /tmp/poor-dev-output-${STEP}.txt
    PROGRESS_FILE = /tmp/poor-dev-progress-${STEP}.txt
+   POLL_COPY = /tmp/poor-dev-poll-$$.sh
+
+   cp lib/poll-dispatch.sh "$POLL_COPY"
 
    Bash(run_in_background: true):
-     lib/poll-dispatch.sh /tmp/poor-dev-cmd.sh ${OUTPUT_FILE} ${PROGRESS_FILE} ${IDLE_TIMEOUT} ${MAX_TIMEOUT}
+     "$POLL_COPY" /tmp/poor-dev-cmd.sh ${OUTPUT_FILE} ${PROGRESS_FILE} ${IDLE_TIMEOUT} ${MAX_TIMEOUT}
    → task_id を取得
    ```
 
