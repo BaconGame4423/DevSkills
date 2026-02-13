@@ -72,9 +72,9 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [X] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
 - [ ] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
 - [X] T024 Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
-- [ ] T025 Implement YAML schema validation in lib/suggestion-parser.mjs for ExplorationSession, Suggestion, SuggestionDecision entities
-- [ ] T026 Create exploration session state manager in lib/suggestion-parser.mjs with state transition validation
-- [ ] T027 Create suggestion decision recorder in lib/suggestion-parser.mjs with traceability
+- [X] T025 Implement YAML schema validation in lib/suggestion-parser.mjs for ExplorationSession, Suggestion, SuggestionDecision entities
+- [X] T026 Create exploration session state manager in lib/suggestion-parser.mjs with state transition validation
+- [X] T027 Create suggestion decision recorder in lib/suggestion-parser.mjs with traceability
 
 ---
 
