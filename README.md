@@ -2,7 +2,7 @@
 
 > AI-powered development slash command framework -- 安価モデルでもプロダクション品質を実現するスラッシュコマンド集
 
-- **20 の AI ペルソナによる多角的自動レビュー+修正ループ**
+- **21 の AI ペルソナによる多角的自動レビュー+修正ループ**
 - **Claude Code / OpenCode マルチランタイム対応**
 
 GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を進める個人開発者のためのツールセットです。
@@ -200,9 +200,16 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 **安全機構**:
 - **権限分離**: レビュアはコードを変更できず、修正者はレビュー判定を変更できない（読み取り専用 / 書き込み専用の分離）
 - **レビューログ蓄積**: review-log.yaml で指摘履歴を管理し、修正済み問題の再指摘を防ぎ自然収束を保証
+- **レビューログウィンドウ**: 最新 2 イテレーションの全詳細 + 古い fixed issue のサマリーのみ送信（トークン削減 + 回帰検知の両立）
 - **スコープ境界**: 全ペルソナに spec.md 外の新機能提案を禁止するルールを適用
 - **サイズガード**: 修正エージェントにファイル肥大化の制約（120%上限）を適用
-- **自動停止**: 修正ループが 10 回を超えると自動停止して人間に判断を委ねる
+- **自動停止**: 修正ループが深度に応じた上限を超えると自動停止して人間に判断を委ねる
+
+**効率化機構**:
+- **リスクベース深度**: 変更規模に応じてレビュー深度を自動調整（deep/standard/light）。小規模変更は 2 ペルソナ・最大 3 イテレーションで完了
+- **早期終了**: 3/4 ペルソナが GO（C/H=0）を返した時点で残りをキャンセルし GO 判定。逆に 2/4 が NO-GO なら即座に FIX 移行
+- **投機的実行**: specify → suggest を並列化し、仕様確定後すぐに suggest 結果を利用可能に
+- **並列実装**: `[P:group]` マーカー付きタスクを DAG ベースで並列 dispatch（同一ブランチ / worktree / フェーズ分割の 3 戦略）
 
 ---
 
@@ -308,25 +315,29 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 
 PoorDevSkills は **Claude Code** と **OpenCode** の両方から利用でき、レビューごとに CLI とモデルを使い分けられます。
 
-### 推奨ワークフロー
+### モデルティアシステム
 
-| フェーズ | CLI | モデル | 理由 |
-|---------|-----|--------|------|
-| planreview (4 ペルソナ) | OpenCode | GLM4.7 | 安価。一次レビューとして十分 |
-| tasksreview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
-| architecturereview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
-| qualityreview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
-| **phasereview** (4 ペルソナ) | **Claude** | **haiku** | 最終ゲートキーパー。品質保証 |
-| **fixer** (修正エージェント) | **Claude** | **sonnet** | コード修正。正確さが必要 |
+Plan-and-Execute モデルに基づき、各ステップに最適なモデルを自動選択します。
+
+| ティア | 用途 | 対象ステップ | 推奨モデル |
+|--------|------|-------------|-----------|
+| T1 (Strategic) | 計画・設計判断 | plan | Claude Sonnet |
+| T2 (Tactical) | 実装・レビュー | specify, planreview, tasks, implement 等 | MiniMax M2.5 / GLM4.7 |
+| T3 (Routine) | 定型・探索 | suggest | MiniMax M2.5-Lightning / GLM4.7 |
+
+**解決優先度**: `overrides.<agent>` → `overrides.<category>` → `step_tiers` → `tiers` → `default`
 
 ### 設定方法
 
 ```bash
-/poor-dev.config show                          # 現在の設定 + 利用可能モデル一覧
+/poor-dev.config show                          # 現在の設定 + ティア一覧
 /poor-dev.config default opencode zai-coding-plan/glm-4.7  # デフォルト設定
-/poor-dev.config set phasereview claude haiku   # カテゴリ上書き
+/poor-dev.config tier T2 opencode minimax-m2.5  # ティア定義
+/poor-dev.config step-tier plan T1              # ステップにティア割当
 /poor-dev.config set fixer claude sonnet        # 個別エージェント上書き
-/poor-dev.config unset qualityreview            # 上書きを削除（デフォルトに戻る）
+/poor-dev.config depth auto                     # レビュー深度（auto/deep/standard/light）
+/poor-dev.config speculation on                 # 投機的実行の有効化
+/poor-dev.config parallel auto                  # 並列実装の戦略設定
 /poor-dev.config reset                          # 推奨デフォルトにリセット
 ```
 

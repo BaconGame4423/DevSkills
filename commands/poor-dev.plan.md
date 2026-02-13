@@ -129,14 +129,33 @@ ios/ or android/
 
 **Output**: research.md
 
-**Phase 1: Design & Contracts**
+**Phase 1: Design & Contracts (Contract-First 並列実装の基盤)**
 
 Prerequisites: research.md complete.
 
 1. Extract entities from spec → `data-model.md` (fields, relationships, validation, state transitions).
-2. Generate API contracts from functional requirements → `/contracts/` (OpenAPI/GraphQL).
+2. Generate API contracts from functional requirements → `contracts/` directory:
+   - **TypeScript projects** → `.ts` interface files
+   - **REST API** → OpenAPI 3.x YAML
+   - **GraphQL** → `.graphql` schema files
+   - **gRPC** → `.proto` files
+   - **Mock definitions** → test stubs and sample data
+3. Define **parallel boundaries** in plan Architecture section:
+   ```markdown
+   ## Contracts & Interfaces (並列実装の基盤)
 
-**Output**: data-model.md, /contracts/*, quickstart.md
+   ### 境界定義
+   - Component A (files: src/server/**) ←→ Component B (files: src/client/**)
+   - Interface: contracts/api.yaml
+   - Parallel: Yes (non-overlapping file spaces)
+
+   ### 並列化可否判定基準
+   - ファイル空間が非重複（異なるディレクトリ / 異なるファイル群）
+   - コントラクト（interface / API schema）で接続点が定義済み
+   - 一方がモックで他方の動作をシミュレート可能
+   ```
+
+**Output**: data-model.md, contracts/*, quickstart.md
 
 ## File Naming
 

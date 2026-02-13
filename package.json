@@ -1,6 +1,6 @@
 {
   "name": "poor-dev",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "AI-powered development workflow slash commands for OpenCode & Claude Code",
   "bin": {

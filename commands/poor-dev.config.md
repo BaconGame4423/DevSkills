@@ -23,6 +23,33 @@ Path: `.poor-dev/config.json` (project-root, survives `npx poor-dev update`)
   "overrides": {
     "fixer": { "cli": "claude", "model": "sonnet" },
     "phasereview": { "cli": "claude", "model": "haiku" }
+  },
+  "tiers": {
+    "T1": { "cli": "claude", "model": "sonnet" },
+    "T2": { "cli": "opencode", "model": "minimax-m2.5" },
+    "T3": { "cli": "opencode", "model": "minimax-m2.5-lightning" }
+  },
+  "step_tiers": {
+    "specify": "T2",
+    "suggest": "T3",
+    "plan": "T1",
+    "planreview": "T2",
+    "tasks": "T2",
+    "tasksreview": "T2",
+    "implement": "T2",
+    "architecturereview": "T2",
+    "qualityreview": "T2",
+    "phasereview": "T2"
+  },
+  "review_depth": "auto",
+  "speculation": {
+    "enabled": true,
+    "pairs": { "specify": "suggest" }
+  },
+  "parallel": {
+    "enabled": true,
+    "strategy": "auto",
+    "max_concurrent": 3
   }
 }
 ```
@@ -33,11 +60,41 @@ Categories: `planreview`, `tasksreview`, `architecturereview`, `qualityreview`, 
 
 Agents: `planreview-pm`, `planreview-risk`, `planreview-value`, `planreview-critical`, `tasksreview-techlead`, `tasksreview-senior`, `tasksreview-devops`, `tasksreview-junior`, `architecturereview-architect`, `architecturereview-security`, `architecturereview-performance`, `architecturereview-sre`, `qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`, `phasereview-qa`, `phasereview-regression`, `phasereview-docs`, `phasereview-ux`, `review-fixer`
 
+Steps (for `step_tiers`): `specify`, `suggest`, `plan`, `planreview`, `tasks`, `tasksreview`, `implement`, `architecturereview`, `qualityreview`, `phasereview`
+
+Tier names: `T1`, `T2`, `T3` (or custom names defined in `tiers`)
+
 CLIs: `claude`, `opencode`
 
 Claude models (fixed): `haiku`, `sonnet`, `opus`
 
 OpenCode models: dynamic — run `opencode models 2>/dev/null` to list.
+
+### Model Resolution Order
+
+When dispatching a step, models are resolved in this priority:
+1. `overrides.<agent>` (e.g., `overrides.planreview-pm`)
+2. `overrides.<category>` (e.g., `overrides.planreview`)
+3. `step_tiers.<step>` → `tiers[tier]` (e.g., `step_tiers.plan` → `T1` → `tiers.T1`)
+4. `default`
+5. Hardcoded fallback: `{ "cli": "claude", "model": "sonnet" }`
+
+Error handling:
+- Unknown tier name in `step_tiers` → WARNING + fallback to `default`
+- Tier model unavailable → `fallback_model` → FALLBACK_MODE (Task subagent)
+
+### Review Depth
+
+`review_depth` controls how many personas and iterations run per review:
+
+| Value | Personas | Max Iterations | When |
+|-------|----------|----------------|------|
+| `"deep"` | 4 | 10 | Large/risky changes |
+| `"standard"` | 4 | 5 | Medium changes |
+| `"light"` | 2 (most important) | 3 | Small/safe changes |
+| `"auto"` | Computed from change metrics | — | Default |
+
+Auto scoring: `lines_changed` + `files_changed` + `auth/crypto` + `new_deps` → deep/standard/light.
 
 ---
 
@@ -51,6 +108,13 @@ Parse `$ARGUMENTS` and execute the matching subcommand:
 | `default <cli> <model>` | → Set Default |
 | `set <key> <cli> <model>` | → Set Override |
 | `unset <key>` | → Unset Override |
+| `tier <name> <cli> <model>` | → Set Tier |
+| `tier-unset <name>` | → Remove Tier |
+| `step-tier <step> <tier>` | → Set Step Tier |
+| `step-tier-unset <step>` | → Remove Step Tier |
+| `depth <auto\|deep\|standard\|light>` | → Set Review Depth |
+| `speculation <on\|off>` | → Toggle Speculation |
+| `parallel <on\|off\|auto\|same-branch\|worktree\|phase-split>` | → Set Parallel Strategy |
 | `reset` | → Reset to Default Config |
 | anything else | → Show help with valid syntax |
 
@@ -66,12 +130,23 @@ Parse `$ARGUMENTS` and execute the matching subcommand:
 ```
 Default: <cli> / <model>
 
-Category/Agent     CLI        Model                    Source
+Tiers:
+  T1: claude / sonnet
+  T2: opencode / minimax-m2.5
+  T3: opencode / minimax-m2.5-lightning
+
+Step         Tier  CLI        Model                    Source
 ---------------------------------------------------------------
-planreview         opencode   zai-coding-plan/glm-4.7  (default)
-tasksreview        opencode   zai-coding-plan/glm-4.7  (default)
+specify      T2    opencode   minimax-m2.5             (step_tier)
+suggest      T3    opencode   minimax-m2.5-lightning   (step_tier)
+plan         T1    claude     sonnet                   (step_tier)
+planreview   T2    opencode   minimax-m2.5             (step_tier)
 ...
-fixer              claude     sonnet                    (override)
+fixer        —     claude     sonnet                   (override)
+
+Review depth: auto
+Speculation: enabled (specify → suggest)
+Parallel: enabled (strategy: auto, max: 3)
 
 Available models (OpenCode):
   <output from opencode models>
@@ -80,7 +155,7 @@ Available models (Claude Code):
   haiku, sonnet, opus
 ```
 
-Show resolution: for each category, check overrides first, then default.
+Show resolution: for each step/category, resolve using priority chain: overrides → step_tiers → default.
 
 ---
 
@@ -112,6 +187,71 @@ Show resolution: for each category, check overrides first, then default.
 2. Read `.poor-dev/config.json`.
 3. Remove `overrides.<key>`.
 4. Write back. Show confirmation + what the key now resolves to (default).
+
+---
+
+## Subcommand: `tier <name> <cli> <model>`
+
+1. Validate `<name>` is a valid tier name (e.g., `T1`, `T2`, `T3`, or custom).
+2. Validate `<cli>` and `<model>` (same as `default`).
+3. Read `.poor-dev/config.json` (create with defaults if missing).
+4. Set `tiers.<name>` = `{ "cli": "<cli>", "model": "<model>" }`.
+5. Write back. Show confirmation + which steps use this tier.
+
+---
+
+## Subcommand: `tier-unset <name>`
+
+1. Validate `<name>` exists in `tiers`. Error if not found.
+2. Read `.poor-dev/config.json`.
+3. Remove `tiers.<name>`.
+4. Write back. Show confirmation + warn if any `step_tiers` reference this tier.
+
+---
+
+## Subcommand: `step-tier <step> <tier>`
+
+1. Validate `<step>` is a valid step name (see Valid Keys → Steps). Error if not.
+2. Validate `<tier>` exists in `tiers`. Error if not (show available tiers).
+3. Read `.poor-dev/config.json` (create with defaults if missing).
+4. Set `step_tiers.<step>` = `"<tier>"`.
+5. Write back. Show confirmation + resolved cli/model.
+
+---
+
+## Subcommand: `step-tier-unset <step>`
+
+1. Validate `<step>` exists in `step_tiers`. Error if not found.
+2. Read `.poor-dev/config.json`.
+3. Remove `step_tiers.<step>`.
+4. Write back. Show confirmation + what the step now resolves to.
+
+---
+
+## Subcommand: `depth <auto|deep|standard|light>`
+
+1. Validate value is one of: `auto`, `deep`, `standard`, `light`.
+2. Read `.poor-dev/config.json` (create with defaults if missing).
+3. Set `review_depth` = `"<value>"`.
+4. Write back. Show confirmation.
+
+---
+
+## Subcommand: `speculation <on|off>`
+
+1. Read `.poor-dev/config.json` (create with defaults if missing).
+2. Set `speculation.enabled` = `true` (on) or `false` (off).
+3. Write back. Show confirmation + current pairs if enabled.
+
+---
+
+## Subcommand: `parallel <on|off|auto|same-branch|worktree|phase-split>`
+
+1. Read `.poor-dev/config.json` (create with defaults if missing).
+2. If `on` → set `parallel.enabled` = true, `parallel.strategy` = "auto".
+3. If `off` → set `parallel.enabled` = false.
+4. If `auto|same-branch|worktree|phase-split` → set `parallel.enabled` = true, `parallel.strategy` = value.
+5. Write back. Show confirmation.
 
 ---
 

@@ -44,25 +44,37 @@ OUTPUT_STARTED=false
 TIMEOUT_TYPE="none"
 MARKER_COUNT=0
 
+# Use inotifywait for event-driven monitoring if available, else fall back to sleep
+HAS_INOTIFYWAIT=false
+if command -v inotifywait >/dev/null 2>&1; then
+  HAS_INOTIFYWAIT=true
+fi
+
 while kill -0 "$PID" 2>/dev/null; do
-  sleep 1
+  # Event-driven or sleep-based wait
+  if [ "$HAS_INOTIFYWAIT" = true ]; then
+    inotifywait -t "$((IDLE_TIMEOUT < 5 ? IDLE_TIMEOUT : 5))" -e modify "$OUTPUT_FILE" 2>/dev/null || true
+  else
+    sleep 1
+  fi
   ELAPSED=$((ELAPSED + 1))
 
   CURRENT_SIZE=$(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo 0)
   if [ "$CURRENT_SIZE" -gt "$LAST_SIZE" ]; then
     OUTPUT_STARTED=true
     IDLE=0
-    LAST_SIZE=$CURRENT_SIZE
 
-    # Extract new progress markers and append to progress_file
-    ALL_MARKERS=$(grep -oP '\[(PROGRESS|REVIEW-PROGRESS): [^\]]*\]' "$OUTPUT_FILE" 2>/dev/null || true)
-    if [ -n "$ALL_MARKERS" ]; then
-      NEW_COUNT=$(echo "$ALL_MARKERS" | wc -l)
-      if [ "$NEW_COUNT" -gt "$MARKER_COUNT" ]; then
-        echo "$ALL_MARKERS" | tail -n +"$((MARKER_COUNT + 1))" >> "$PROGRESS_FILE"
-        MARKER_COUNT=$NEW_COUNT
+    # Incremental scan: only read new bytes for markers
+    NEW_CONTENT=$(tail -c +$((LAST_SIZE + 1)) "$OUTPUT_FILE" 2>/dev/null || true)
+    if [ -n "$NEW_CONTENT" ]; then
+      NEW_MARKERS=$(echo "$NEW_CONTENT" | grep -oP '\[(PROGRESS|REVIEW-PROGRESS): [^\]]*\]' || true)
+      if [ -n "$NEW_MARKERS" ]; then
+        echo "$NEW_MARKERS" >> "$PROGRESS_FILE"
+        MARKER_COUNT=$((MARKER_COUNT + $(echo "$NEW_MARKERS" | wc -l)))
       fi
     fi
+
+    LAST_SIZE=$CURRENT_SIZE
   else
     IDLE=$((IDLE + 1))
   fi

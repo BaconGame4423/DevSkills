@@ -111,14 +111,55 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Kubernetes/k8s**: `*.secret.yaml`, `secrets/`, `.kube/`, `kubeconfig*`, `*.key`, `*.crt`
 
 5. Parse tasks.md structure and extract:
-   - **Task phases**: Setup, Tests, Core, Integration, Polish
-   - **Task dependencies**: Sequential vs parallel execution rules
-   - **Task details**: ID, description, file paths, parallel markers [P]
-   - **Execution flow**: Order and dependency requirements
+   - **Task phases**: Setup, Contracts, Foundational, User Stories, Integration, Polish
+   - **Task dependencies**: `depends:` metadata + sequential vs parallel rules
+   - **Task details**: ID, description, file paths, parallel markers `[P]`/`[P:group]`, `files:` metadata
+   - **DAG construction**: Build dependency graph from `depends:` + Phase ordering
+   - **Parallel groups**: Identify `[P:group]` tasks within each Phase
 
-6. Execute implementation following the task plan:
+6. Execute implementation following the DAG-based task plan:
+
+   **6a. Sequential phases** (no [P] tasks): Execute tasks in order within the phase.
+
+   **6b. Parallel phases** (contains [P] tasks):
+   Read `.poor-dev/config.json` → `parallel` settings.
+
+   **Strategy selection**:
+   ```
+   if parallel.enabled == false → sequential execution
+   elif parallel.strategy == "auto":
+     if all [P] tasks in phase have non-overlapping files: → Strategy A
+     else → Strategy C
+   elif parallel.strategy == "same-branch" → Strategy A
+   elif parallel.strategy == "worktree" → Strategy B
+   elif parallel.strategy == "phase-split" → Strategy C
+   ```
+
+   **Strategy A (Same-branch parallel)**: Default for non-overlapping files.
+   - Group [P] tasks by `[P:group]` name
+   - For each group: dispatch sub-agents in parallel (max: `parallel.max_concurrent`)
+   - Each sub-agent prompt includes: "担当: [T0XX] のみ。files: <scope> のみ変更可能"
+   - All sub-agents wait → merge results → next phase
+
+   **Strategy B (Git worktree)**: For overlapping files.
+   - Create worktree per [P] task: `git worktree add -b ${BRANCH}-impl-${task_id} ../worktree-${task_id} ${BRANCH}`
+   - Dispatch sub-agents to each worktree
+   - Merge back: `git merge --no-ff`
+   - Conflict → review-fixer resolves; 3 failures → sequential fallback
+   - Cleanup: `git worktree remove`
+
+   **Strategy C (Phase-split)**: Safest fallback.
+   - Execute Phase sequentially
+   - Only [P] tasks within a single Phase run in parallel
+   - Phase boundaries are always sequential barriers
+
+   **6c. Error recovery**:
+   - 1 sub-agent fails → commit successful tasks, re-dispatch failed task only
+   - Protected file modification → post-implement check restores (existing L415-421)
+   - All timeout → pipeline-state.json error, sequential retry on resume
+
    - **Phase-by-phase execution**: Complete each phase before moving to the next
-   - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
+   - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] per strategy above
    - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks
    - **File-based coordination**: Tasks affecting the same files must run sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding

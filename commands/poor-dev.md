@@ -284,7 +284,16 @@ If required artifact is missing → `[ERROR: Missing ${artifact} for ${STEP}. Ru
 For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
 - If STEP == "specify": → Section A2 (Specify Step Read-Only Override) を実行
+  - **Speculative execution** (2.1): speculation.enabled == true かつ speculation.pairs.specify == "suggest" の場合:
+    - specify dispatch 直後（完了を待たずに）、suggest も投機的に開始:
+      ```
+      spec_suggest_task = dispatch_background("suggest", context=spec-draft-preview)
+      ```
+    - specify 完了後:
+      - spec-draft.md が承認済み（spec.md にコピー済み）→ 投機 suggest の結果を採用
+      - spec が修正された → 投機 suggest をキャンセルし、通常の suggest を再 dispatch
 - If STEP == "plan": Check `${FEATURE_DIR}/suggestions.yaml` exists (verify suggest phase completed). If missing, warn but continue (suggestions are optional).
+- If STEP == "implement": → Section D (Parallel Implementation) を実行
 - Otherwise: → Section A (通常 Production Steps) / B / C を実行
 
 ##### A. Production Steps (plan, tasks, implement, harvest, bugfix)
@@ -296,21 +305,65 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    b. **Section removal**: "Gate Check" セクション、"Dashboard Update" セクションを除去。
    c. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
 3. **Prepend**: NON_INTERACTIVE_HEADER (see 5.4)
-4. **Append context block**:
+4. **Append context block** (step-filtered):
    ```
    ## Pipeline Context
    - FEATURE_DIR: ${FEATURE_DIR}
    - BRANCH: ${BRANCH}
-   - Feature description: ${ARGUMENTS}
+   - Feature description: ${FEATURE_SUMMARY}
    - target_file: ${TARGET_FILE}
    - Previous step output: (3-line summary of previous step result)
+
+   ## Artifacts (filtered for ${STEP})
+   ${FILTERED_ARTIFACTS}
    ```
+
+   **Feature description optimization**: 初回 dispatch（specify）は `${ARGUMENTS}` 全文を送る。以降は初回の出力から 1 行サマリーを生成し `${FEATURE_SUMMARY}` として使う。
+
+   **Step-specific context filter** (5.1):
+   | Step | Include | Exclude |
+   |------|---------|---------|
+   | specify | user input only | plan.md, tasks.md |
+   | suggest | spec.md (summary only) | plan.md, tasks.md, constitution |
+   | plan | spec.md, research.md, suggestions.yaml, constitution(filtered) | tasks.md |
+   | planreview | plan.md, spec.md (requirements section only) | research.md, constitution |
+   | tasks | plan.md (Architecture + Phases sections only), spec.md, constitution(filtered) | research.md |
+   | tasksreview | tasks.md, spec.md (requirements only), plan.md (summary only) | research.md |
+   | implement | tasks.md, plan.md (tech stack + file structure only), contracts/ | research.md, constitution |
+   | review 系 | target file + spec.md (requirements only) + review-log.yaml (windowed) | other artifacts |
+
+   **Large artifact section extraction** (5.3):
+   ```
+   if file_size(artifact) > 10KB:
+     extract only relevant sections (Summary, Technical Context, Architecture, Requirements)
+   else:
+     include full file
+   ```
+
    **target_file resolution** (variant-based):
    | Variant | planreview target_file |
    |---------|----------------------|
    | (default) | plan.md |
    | bugfix-small | fix-plan.md |
-5. **Resolve model**: Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {}, "polling": { "interval": 1, "idle_timeout": 120, "max_timeout": 600 } }`. Check `overrides.${STEP}` → `default`. Extract cli + model.
+5. **Resolve model** (tiered resolution):
+
+   Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults.
+
+   **Resolution chain** (first match wins):
+   ```
+   1. overrides.${STEP}                    → { cli, model }
+   2. overrides.${CATEGORY}                → { cli, model }  (CATEGORY = step の親: e.g., planreview-pm → planreview)
+   3. step_tiers.${STEP} → tier name       → tiers[tier]     → { cli, model }
+      - tier name が tiers に未定義 → WARNING log, fallthrough
+   4. default                              → { cli, model }
+   5. hardcoded fallback                   → { cli: "claude", model: "sonnet" }
+   ```
+
+   **Constitution filtering** (constitution.md セクション抽出):
+   - constitution.md の `<!-- section: X -->` マーカーに基づき、STEP に関連するセクションのみ抽出
+   - マッピング: specify→spec, plan→plan, tasks→tasks, implement→implement, suggest→(skip), review系→(skip)
+   - `common` セクションは常に含む
+   - マーカーがない/フィルタ対象外 → constitution 全文を含む（後方互換）
 6. **Dispatch** (シェルスクリプトベースポーリング):
 
    **起動**: プロンプトは /tmp/poor-dev-step.txt に書き出し済み。
@@ -342,20 +395,21 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    → task_id を取得
    ```
 
-   **軽量ポーリング** (進捗リレー付き):
+   **ブロッキング待機** (進捗リレー付き、ポーリング最適化済み):
    ```
    DISPLAYED = 0
 
    while true:
-     TaskOutput(task_id, block=false, timeout=5000)
+     TaskOutput(task_id, block=true, timeout=30000)
        → completed/failed → break
+       → timeout (30秒経過) → 進捗チェックへ
 
      Read(PROGRESS_FILE)
        → DISPLAYED 以降の新規マーカーのみユーザーにリレー表示
        → DISPLAYED を更新
    ```
-   ※ TaskOutput の timeout=5000 が実質的な sleep 代替（5秒間ブロック）
-   ※ progress_file は数行のマーカーのみ。1サイクルあたり: ~20B (status) + ~数行 (マーカー)
+   ※ TaskOutput(block=true, timeout=30000) で最大 30 秒ブロック → 完了待ちの場合そのまま抜ける
+   ※ ツール呼び出し回数: ~120 回/10分 → ~20 回/10分（80% 削減）
 
    **完了時**: TaskOutput → JSON サマリー (~200B) を取得
 
@@ -405,12 +459,45 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 9. **Update pipeline-state.json**: Add STEP to `completed`, set `current` to next step
 10. **Progress report**: "Step N/M: ${STEP} complete"
 
-**implement special handling**: Dispatch implement per-phase (see D6):
-- Parse tasks.md for phase headers (`## Phase N:`)
-- For each phase: dispatch implement with `--phase N` context
-- Each phase runs with `run_in_background: true`
-- Poll tasks.md for `[X]` markers to track progress
-- Report per-phase completion
+##### D. Parallel Implementation (implement ステップ専用)
+
+implement は tasks.md の Phase 構造と `[P]` マーカーに基づき並列 dispatch を行う。
+
+**D1. tasks.md 解析**:
+- Phase ヘッダー (`## Phase N:`) を検出
+- 各タスクの `[P]` / `[P:group]` マーカーと `files:` メタデータを抽出
+- DAG 構造（depends: 関係）を構築
+
+**D2. 戦略選択** (`config.parallel` に基づく):
+```
+if parallel.enabled == false → 全 Phase を順次実行（既存動作）
+elif parallel.strategy == "auto":
+  if all [P] tasks have non-overlapping files → Strategy A (same-branch)
+  else → Strategy C (phase-split)
+elif parallel.strategy == "same-branch" → Strategy A
+elif parallel.strategy == "worktree" → Strategy B
+elif parallel.strategy == "phase-split" → Strategy C
+```
+
+**D3. Phase 別 dispatch**:
+- Phase ごとに dispatch（通常の implement sub-agent 呼び出し）
+- `[P]` タスクを含む Phase は並列 dispatch:
+  - 各 [P] タスクを個別プロンプトに分割
+  - 各プロンプトに「担当: [I1] のみ。files: src/server/** のみ変更可能」を明記
+  - 全 sub-agent を並列で dispatch（run_in_background=true）
+  - 全完了待ち → 次の Phase へ
+- `[P]` なしの Phase は通常の順次 dispatch
+
+**D4. 障害復旧**:
+- 1 sub-agent 失敗 → 成功分はコミット済み、失敗タスクのみ再 dispatch
+- ファイル衝突（戦略 B）→ review-fixer に解決委譲、3 回失敗 → 順次フォールバック
+- 全タイムアウト → pipeline-state.json に error 記録、次回 resume 時に順次再試行
+
+**D5. 進捗追跡**:
+- tasks.md の `[X]` マーカーと各 sub-agent の PROGRESS_FILE を監視
+- Phase 完了ごとに進捗報告
+
+**Post-implement source protection check** は既存のまま維持（全並列タスク完了後に実行）。
 
 **Post-implement source protection check** (implement ステップ完了後に必ず実行):
 1. `git diff --name-only HEAD` で変更ファイル一覧を取得
@@ -484,6 +571,9 @@ persona spawn → aggregation → fixer → loop until convergence.
 
 ブラックボックス dispatch + シェルスクリプトベースポーリング + JSON サマリーによる verdict 抽出。
 
+**Review depth** (3.2): config.review_depth に基づきレビューの深度を動的調整。
+各レビューオーケストレーター内部で depth が判定される（poor-dev.md 側では dispatch するだけ）。
+
 1. **Read command**: Read `commands/poor-dev.${STEP}.md`
 2. **Strip sections**:
    a. **Frontmatter removal**: ファイル先頭の YAML frontmatter ブロック（最初の `---` から次の `---` まで）を完全に除去する。
@@ -491,7 +581,7 @@ persona spawn → aggregation → fixer → loop until convergence.
    b. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
 3. **Prepend**: NON_INTERACTIVE_HEADER
 4. **Append context block**: FEATURE_DIR, BRANCH, target_file (resolved by variant — see Section A step 4 table; e.g., plan.md for planreview, fix-plan.md for bugfix-small planreview)
-5. **Resolve model**: Same config resolution as production steps, using CATEGORY=`${STEP}`
+5. **Resolve model**: Same tiered config resolution as production steps (Section A step 5), using CATEGORY=`${STEP}`
 6. **Dispatch**: Section A step 6 と同じシェルスクリプトベースポーリング。
    進捗マーカー（`[REVIEW-PROGRESS: ...]`）は poll-dispatch.sh が自動抽出し progress_file に書き出す。
    オーケストレーターは progress_file を Read して新規マーカーのみリレー表示する。
@@ -549,21 +639,13 @@ Steps that produce a marker determining the continuation pipeline. Dispatched vi
 Prepended to all dispatched command prompts:
 
 ```markdown
-## Execution Mode: Non-Interactive
-
-You are running as a sub-agent in a pipeline. Follow these rules:
-- Do NOT use AskUserQuestion. Include questions as [NEEDS CLARIFICATION: question] markers.
-- Do NOT execute Gate Check or Dashboard Update sections.
-- Do NOT suggest handoff commands.
-- Do NOT use EnterPlanMode or ExitPlanMode.
-- Focus on producing the required output artifacts (files).
-- If blocked, output [ERROR: description] and stop.
-- Exception: You MUST output progress markers during execution:
-  - Review steps: `[REVIEW-PROGRESS: ...]` markers between iterations
-  - Production steps: `[PROGRESS: step-name phase/status description]` markers at key milestones
-- Do NOT modify files outside of FEATURE_DIR (specs/NNN-*/) and the project source being implemented.
-- NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
-- End with: files created/modified, any unresolved items.
+## Mode: NON_INTERACTIVE (pipeline sub-agent)
+- No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
+- No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
+- Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
+- If blocked → [ERROR: description] and stop
+- File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+- End with: files created/modified, unresolved items
 ```
 
 #### 5.4b READONLY_HEADER
