@@ -33,21 +33,21 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 1 Tasks
 
-- [ ] T001 Create commands directory structure for suggestion command in commands/poor-dev.suggest.md
-- [ ] T002 Create agents/opencode directory for GLM4.7 exploration agent
-- [ ] T003 Create lib/ directory for suggestion utilities (parser, validator, cache)
-- [ ] T004 Create .poor-dev directory structure for configuration and caching
-- [ ] T005 Verify jq installation on development environment (run `jq --version` and verify output)
-- [ ] T006 Verify GLM4.7 model access and availability (run `gh model list` and verify zai-coding-plan/glm-4.7 is available)
-- [ ] T007 Test GitHub API connectivity (https://api.github.com/rate_limit) (success: API returns 200 OK)
-- [ ] T008 Test OSV API connectivity (https://api.osv.dev/v1/query) (success: API returns 200 OK)
-- [ ] T009 Test npm registry connectivity (https://registry.npmjs.org/express) (success: API returns 200 OK)
-- [ ] T010 Check GITHUB_TOKEN environment variable for increased rate limit
-- [ ] T011 Create dependency verification script in scripts/verify-dependencies.sh (check jq version, GLM4.7 access, API connectivity, GITHUB_TOKEN, exit with status 0 on success)
-- [ ] T101 Implement cache path detection in lib/cache-initializer.mjs (.poor-dev/cache/exploration-cache.yaml)
-- [ ] T102 Implement pre-seeded data structure in lib/cache-initializer.mjs (categories: authentication, database, api, logging, testing)
-- [ ] T103 Implement cache initialization in lib/cache-initializer.mjs (create cache if not exists)
-- [ ] T054 Test WebFetch tool availability in GLM4.7 sub-agent mode (verify WebFetch is accessible when dispatching GLM4.7 tasks)
+- [X] T001 Create commands directory structure for suggestion command in commands/poor-dev.suggest.md
+- [X] T002 Create agents/opencode directory for GLM4.7 exploration agent
+- [X] T003 Create lib/ directory for suggestion utilities (parser, validator, cache)
+- [X] T004 Create .poor-dev directory structure for configuration and caching
+- [X] T005 Verify jq installation on development environment (run `jq --version` and verify output)
+- [X] T006 Verify GLM4.7 model access and availability (run `gh model list` and verify zai-coding-plan/glm-4.7 is available)
+- [X] T007 Test GitHub API connectivity (https://api.github.com/rate_limit) (success: API returns 200 OK)
+- [X] T008 Test OSV API connectivity (https://api.osv.dev/v1/query) (success: API returns 200 OK)
+- [X] T009 Test npm registry connectivity (https://registry.npmjs.org/express) (success: API returns 200 OK)
+- [X] T010 Check GITHUB_TOKEN environment variable for increased rate limit
+- [X] T011 Create dependency verification script in scripts/verify-dependencies.sh (check jq version, GLM4.7 access, API connectivity, GITHUB_TOKEN, exit with status 0 on success)
+- [X] T101 Implement cache path detection in lib/cache-initializer.mjs (.poor-dev/cache/exploration-cache.yaml)
+- [X] T102 Implement pre-seeded data structure in lib/cache-initializer.mjs (categories: authentication, database, api, logging, testing)
+- [X] T103 Implement cache initialization in lib/cache-initializer.mjs (create cache if not exists)
+- [X] T054 Test WebFetch tool availability in GLM4.7 sub-agent mode (verify WebFetch is accessible when dispatching GLM4.7 tasks)
 
 ---
 
@@ -59,19 +59,19 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 2 Tasks
 
-- [ ] T012 [P] Create suggestion parser utility in lib/suggestion-parser.mjs with YAML parsing and validation
-- [ ] T013 [P] Create suggestion validator utility in lib/suggestion-validator.mjs with maintainability/security scoring
-- [ ] T014 [P] Create backup manager utility in lib/backup-manager.mjs with automatic backup on write
+- [X] T012 [P] Create suggestion parser utility in lib/suggestion-parser.mjs with YAML parsing and validation
+- [X] T013 [P] Create suggestion validator utility in lib/suggestion-validator.mjs with maintainability/security scoring
+- [X] T014 [P] Create backup manager utility in lib/backup-manager.mjs with automatic backup on write
 - [ ] T015 Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
-- [ ] T016 Create cache validator utility in lib/cache-validator.mjs with monthly validation
+- [X] T016 Create cache validator utility in lib/cache-validator.mjs with monthly validation
 - [ ] T017 Define maintainability scoring algorithm in lib/suggestion-validator.mjs (commit recency, issue resolution, contributor activity, documentation quality)
 - [ ] T018 Define security scoring algorithm in lib/suggestion-validator.mjs (CVEs, audit status, dependency health, code quality)
 - [ ] T019 Implement threshold filtering logic in lib/suggestion-validator.mjs (maintainability >= 50 AND security >= 50)
 - [ ] T020 Implement warning marker logic in lib/suggestion-validator.mjs ([RISK] for mixed signals, [CAUTION] for borderline scores)
-- [ ] T021 Implement backup creation function in lib/backup-manager.mjs with timestamp-based backup files
-- [ ] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
+- [X] T021 Implement backup creation function in lib/backup-manager.mjs with timestamp-based backup files
+- [X] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
 - [ ] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
-- [ ] T024 Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
+- [X] T024 Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
 - [ ] T025 Implement YAML schema validation in lib/suggestion-parser.mjs for ExplorationSession, Suggestion, SuggestionDecision entities
 - [ ] T026 Create exploration session state manager in lib/suggestion-parser.mjs with state transition validation
 - [ ] T027 Create suggestion decision recorder in lib/suggestion-parser.mjs with traceability
@@ -493,7 +493,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 4 (US2: Exploration) → Ph
 - Phase 1 (Setup): 15 tasks
 - Phase 2 (Foundational): 16 tasks
 - Phase 3 (US1): 12 tasks
-- Phase 4 (US2): 15 tasks
+- Phase 4 (US2): 14 tasks
 - Phase 5 (US3): 16 tasks
 - Phase 6 (US4): 8 tasks
 - Phase 7 (Fallback): 8 tasks
