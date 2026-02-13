@@ -91,18 +91,18 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 3 Tasks
 
-- [ ] T028 [US1] Create suggestion phase command file in commands/poor-dev.suggest.md with command interface (success: command accessible via poor-dev suggest)
-- [ ] T029 [US1] Implement config resolution logic in commands/poor-dev.suggest.md (overrides.suggest → overrides.default → built-in) (success: config loaded correctly from priority order)
-- [ ] T030 [US1] Implement spec.md reading and validation in commands/poor-dev.suggest.md (success: spec.md parsed without errors)
-- [ ] T031 [US1] Implement exploration session initialization in commands/poor-dev.suggest.md with UUID generation (success: exploration-session.yaml created with valid UUID)
-- [ ] T032 [US1] Implement progress marker system in commands/poor-dev.suggest.md with format [PROGRESS: step-name] (success: progress markers display during execution)
-- [ ] T033 [US1] Implement error marker system in commands/poor-dev.suggest.md ([ERROR: description]) (success: error messages display on failure)
-- [ ] T034 [US1] Implement suggestion display formatting in commands/poor-dev.suggest.md with score visualization (maintainability_score, security_score as colored badges or progress bars) (success: suggestions displayed with colored score indicators)
-- [ ] T035 [US1] Implement suggestion comparison view in commands/poor-dev.suggest.md with rationale display (show all suggestions side-by-side for comparison) (success: comparison view shows all suggestions)
-- [ ] T036 [US1] Create exploration-session.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
-- [ ] T037 [US1] Create suggestions.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
-- [ ] T038 [US1] Create suggestion-decisions.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
-- [ ] T039 [US1] Implement file write operation in commands/poor-dev.suggest.md with automatic backup (success: backup created before write)
+- [X] T028 [US1] Create suggestion phase command file in commands/poor-dev.suggest.md with command interface (success: command accessible via poor-dev suggest)
+- [X] T029 [US1] Implement config resolution logic in commands/poor-dev.suggest.md (overrides.suggest → overrides.default → built-in) (success: config loaded correctly from priority order)
+- [X] T030 [US1] Implement spec.md reading and validation in commands/poor-dev.suggest.md (success: spec.md parsed without errors)
+- [X] T031 [US1] Implement exploration session initialization in commands/poor-dev.suggest.md with UUID generation (success: exploration-session.yaml created with valid UUID)
+- [X] T032 [US1] Implement progress marker system in commands/poor-dev.suggest.md with format [PROGRESS: step-name] (success: progress markers display during execution)
+- [X] T033 [US1] Implement error marker system in commands/poor-dev.suggest.md ([ERROR: description]) (success: error messages display on failure)
+- [X] T034 [US1] Implement suggestion display formatting in commands/poor-dev.suggest.md with score visualization (maintainability_score, security_score as colored badges or progress bars) (success: suggestions displayed with colored score indicators)
+- [X] T035 [US1] Implement suggestion comparison view in commands/poor-dev.suggest.md with rationale display (show all suggestions side-by-side for comparison) (success: comparison view shows all suggestions)
+- [X] T036 [US1] Create exploration-session.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
+- [X] T037 [US1] Create suggestions.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
+- [X] T038 [US1] Create suggestion-decisions.yaml output template in commands/poor-dev.suggest.md (success: template includes required fields)
+- [X] T039 [US1] Implement file write operation in commands/poor-dev.suggest.md with automatic backup (success: backup created before write)
 
 ---
 
@@ -119,20 +119,20 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 4 Tasks
 
-- [ ] T040 [US2] Create GLM4.7 exploration agent definition in agents/opencode/suggestion-exploration.md with subagent mode
-- [ ] T041 [US2] Define exploration prompt template in agents/opencode/suggestion-exploration.md with NON_INTERACTIVE_HEADER
-- [ ] T042 [US2] Define research process in agents/opencode/suggestion-exploration.md (WebFetch for docs, GitHub repos, community sources)
-- [ ] T043 [US2] Define output format specification in agents/opencode/suggestion-exploration.md (YAML structure)
-- [ ] T044 [US2] Define maintainability scoring guidance in agents/opencode/suggestion-exploration.md (0-100 scale, band descriptions)
-- [ ] T045 [US2] Define security scoring guidance in agents/opencode/suggestion-exploration.md (0-100 scale, band descriptions)
-- [ ] T046 [US2] Define threshold filtering rules in agents/opencode/suggestion-exploration.md (exclude < 50)
-- [ ] T047 [US2] Set 5-minute timeout constraint in agents/opencode/suggestion-exploration.md
-- [ ] T048 [US2] Implement GLM4.7 Task dispatch in commands/poor-dev.suggest.md with model parameter (zai-coding-plan/glm-4.7, use Bash tool with gh CLI)
-- [ ] T049 [US2] Implement cross-CLI dispatch fallback in commands/poor-dev.suggest.md for non-opencode targets
-- [ ] T050 [US2] Implement adaptive polling mechanism in commands/poor-dev.suggest.md with idle timeout and max timeout
-- [ ] T051 [US2] Implement polling interval configuration in commands/poor-dev.suggest.md (config.polling.interval: 30s default, idle_timeout: 300s, max_timeout: 900s)
-- [ ] T052 [US2] Implement exploration status tracking in commands/poor-dev.suggest.md (pending → in_progress → completed/failed)
-- [ ] T053 [US2] Implement timeout handling in commands/poor-dev.suggest.md with graceful degradation
+- [X] T040 [US2] Create GLM4.7 exploration agent definition in agents/opencode/suggestion-exploration.md with subagent mode
+- [X] T041 [US2] Define exploration prompt template in agents/opencode/suggestion-exploration.md with NON_INTERACTIVE_HEADER
+- [X] T042 [US2] Define research process in agents/opencode/suggestion-exploration.md (WebFetch for docs, GitHub repos, community sources)
+- [X] T043 [US2] Define output format specification in agents/opencode/suggestion-exploration.md (YAML structure)
+- [X] T044 [US2] Define maintainability scoring guidance in agents/opencode/suggestion-exploration.md (0-100 scale, band descriptions)
+- [X] T045 [US2] Define security scoring guidance in agents/opencode/suggestion-exploration.md (0-100 scale, band descriptions)
+- [X] T046 [US2] Define threshold filtering rules in agents/opencode/suggestion-exploration.md (exclude < 50)
+- [X] T047 [US2] Set 5-minute timeout constraint in agents/opencode/suggestion-exploration.md
+- [X] T048 [US2] Implement GLM4.7 Task dispatch in commands/poor-dev.suggest.md with model parameter (zai-coding-plan/glm-4.7, use Bash tool with gh CLI)
+- [X] T049 [US2] Implement cross-CLI dispatch fallback in commands/poor-dev.suggest.md for non-opencode targets
+- [X] T050 [US2] Implement adaptive polling mechanism in commands/poor-dev.suggest.md with idle timeout and max timeout
+- [X] T051 [US2] Implement polling interval configuration in commands/poor-dev.suggest.md (config.polling.interval: 30s default, idle_timeout: 300s, max_timeout: 900s)
+- [X] T052 [US2] Implement exploration status tracking in commands/poor-dev.suggest.md (pending → in_progress → completed/failed)
+- [X] T053 [US2] Implement timeout handling in commands/poor-dev.suggest.md with graceful degradation
 
 ---
 
@@ -150,22 +150,22 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 5 Tasks
 
-- [ ] T055 [US3] Implement maintainability scoring in lib/suggestion-validator.mjs with GitHub REST API integration (GET /repos/{owner}/{repo}/stats/commit_activity)
-- [ ] T056 [US3] Implement commit recency scoring in lib/suggestion-validator.mjs (last commit date check)
-- [ ] T057 [US3] Implement issue resolution rate scoring in lib/suggestion-validator.mjs (resolved/total issues)
-- [ ] T058 [US3] Implement contributor activity scoring in lib/suggestion-validator.mjs (active contributors in 6 months)
-- [ ] T059 [US3] Implement documentation quality scoring in lib/suggestion-validator.mjs (README, docs, examples)
-- [ ] T060 [US3] Implement security scoring in lib/suggestion-validator.mjs with OSV REST API integration (POST /v1/query for CVE lookup)
-- [ ] T061 [US3] Implement known vulnerabilities check in lib/suggestion-validator.mjs (CVE lookup via OSV API)
-- [ ] T062 [US3] Implement security audit status scoring in lib/suggestion-validator.mjs (audit recency check)
-- [ ] T063 [US3] Implement dependency health scoring in lib/suggestion-validator.mjs (outdated dependencies)
-- [ ] T064 [US3] Implement code quality indicators scoring in lib/suggestion-validator.mjs (test coverage, linter)
-- [ ] T065 [US3] Apply inclusion threshold filtering in commands/poor-dev.suggest.md (maintainability >= 50 AND security >= 50)
-- [ ] T066 [US3] Apply exclusion rules in commands/poor-dev.suggest.md (critical CVEs, scores < 50)
-- [ ] T067 [US3] Apply warning markers in commands/poor-dev.suggest.md ([RISK] for mixed signals, [CAUTION] for borderline)
-- [ ] T068 [US3] Implement API rate limiting strategy in lib/suggestion-validator.mjs (queuing, exponential backoff, circuit breaker)
-- [ ] T069 [US3] Implement GITHUB_TOKEN support in lib/suggestion-validator.mjs for increased rate limit
-- [ ] T070 [US3] Implement validation caching in lib/suggestion-validator.mjs (24-hour cache TTL)
+- [X] T055 [US3] Implement maintainability scoring in lib/suggestion-validator.mjs with GitHub REST API integration (GET /repos/{owner}/{repo}/stats/commit_activity)
+- [X] T056 [US3] Implement commit recency scoring in lib/suggestion-validator.mjs (last commit date check)
+- [X] T057 [US3] Implement issue resolution rate scoring in lib/suggestion-validator.mjs (resolved/total issues)
+- [X] T058 [US3] Implement contributor activity scoring in lib/suggestion-validator.mjs (active contributors in 6 months)
+- [X] T059 [US3] Implement documentation quality scoring in lib/suggestion-validator.mjs (README, docs, examples)
+- [X] T060 [US3] Implement security scoring in lib/suggestion-validator.mjs with OSV REST API integration (POST /v1/query for CVE lookup)
+- [X] T061 [US3] Implement known vulnerabilities check in lib/suggestion-validator.mjs (CVE lookup via OSV API)
+- [X] T062 [US3] Implement security audit status scoring in lib/suggestion-validator.mjs (audit recency check)
+- [X] T063 [US3] Implement dependency health scoring in lib/suggestion-validator.mjs (outdated dependencies)
+- [X] T064 [US3] Implement code quality indicators scoring in lib/suggestion-validator.mjs (test coverage, linter)
+- [X] T065 [US3] Apply inclusion threshold filtering in commands/poor-dev.suggest.md (maintainability >= 50 AND security >= 50)
+- [X] T066 [US3] Apply exclusion rules in commands/poor-dev.suggest.md (critical CVEs, scores < 50)
+- [X] T067 [US3] Apply warning markers in commands/poor-dev.suggest.md ([RISK] for mixed signals, [CAUTION] for borderline)
+- [X] T068 [US3] Implement API rate limiting strategy in lib/suggestion-validator.mjs (queuing, exponential backoff, circuit breaker)
+- [X] T069 [US3] Implement GITHUB_TOKEN support in lib/suggestion-validator.mjs for increased rate limit
+- [X] T070 [US3] Implement validation caching in lib/suggestion-validator.mjs (24-hour cache TTL)
 
 ---
 
@@ -182,14 +182,14 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 6 Tasks
 
-- [ ] T071 [US4] Implement suggestion review interface in commands/poor-dev.suggest.md with structured display
-- [ ] T072 [US4] Implement suggestion detail view in commands/poor-dev.suggest.md with full context
-- [ ] T073 [US4] Implement accept/reject prompt in commands/poor-dev.suggest.md with QuestionTools bypass
-- [ ] T074 [US4] Implement decision collection in commands/poor-dev.suggest.md with [NEEDS CLARIFICATION] markers for orchestrator
-- [ ] T075 [US4] Implement suggestion decision recording in commands/poor-dev.suggest.md (suggestion-decisions.yaml)
-- [ ] T076 [US4] Implement decision summary generation in commands/poor-dev.suggest.md (accepted, rejected, pending counts)
-- [ ] T077 [US4] Implement manual suggestion addition option in commands/poor-dev.suggest.md
-- [ ] T078 [US4] Implement rejection with reason tracking in commands/poor-dev.suggest.md
+- [X] T071 [US4] Implement suggestion review interface in commands/poor-dev.suggest.md with structured display
+- [X] T072 [US4] Implement suggestion detail view in commands/poor-dev.suggest.md with full context
+- [X] T073 [US4] Implement accept/reject prompt in commands/poor-dev.suggest.md with QuestionTools bypass
+- [X] T074 [US4] Implement decision collection in commands/poor-dev.suggest.md with [NEEDS CLARIFICATION] markers for orchestrator
+- [X] T075 [US4] Implement suggestion decision recording in commands/poor-dev.suggest.md (suggestion-decisions.yaml)
+- [X] T076 [US4] Implement decision summary generation in commands/poor-dev.suggest.md (accepted, rejected, pending counts)
+- [X] T077 [US4] Implement manual suggestion addition option in commands/poor-dev.suggest.md
+- [X] T078 [US4] Implement rejection with reason tracking in commands/poor-dev.suggest.md
 
 ---
 
@@ -206,14 +206,14 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 7 Tasks
 
-- [ ] T079 Implement Tier 1 cache fallback in commands/poor-dev.suggest.md (check exploration-cache.yaml)
-- [ ] T080 Implement cache relevance matching in commands/poor-dev.suggest.md (keyword matching on feature description)
-- [ ] T081 Implement Tier 2 manual fallback in commands/poor-dev.suggest.md (user prompt for manual input)
-- [ ] T082 Implement Tier 3 continue fallback in commands/poor-dev.suggest.md (empty suggestions.yaml)
-- [ ] T083 Implement failure logging in commands/poor-dev.suggest.md (exploration-failures.log)
-- [ ] T084 Implement corruption detection in lib/backup-manager.mjs (schema validation on write)
-- [ ] T085 Implement suggestion-decisions corruption recovery in lib/backup-manager.mjs (re-display suggestions)
-- [ ] T086 Implement state inconsistency recovery in lib/backup-manager.mjs (reconstruct session from suggestions.yaml)
+- [X] T079 Implement Tier 1 cache fallback in commands/poor-dev.suggest.md (check exploration-cache.yaml)
+- [X] T080 Implement cache relevance matching in commands/poor-dev.suggest.md (keyword matching on feature description)
+- [X] T081 Implement Tier 2 manual fallback in commands/poor-dev.suggest.md (user prompt for manual input)
+- [X] T082 Implement Tier 3 continue fallback in commands/poor-dev.suggest.md (empty suggestions.yaml)
+- [X] T083 Implement failure logging in commands/poor-dev.suggest.md (exploration-failures.log)
+- [X] T084 Implement corruption detection in lib/backup-manager.mjs (schema validation on write)
+- [X] T085 Implement suggestion-decisions corruption recovery in lib/backup-manager.mjs (re-display suggestions)
+- [X] T086 Implement state inconsistency recovery in lib/backup-manager.mjs (reconstruct session from suggestions.yaml)
 
 ---
 
@@ -230,12 +230,12 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 8 Tasks
 
-- [ ] T087 Update commands/poor-dev.md to add suggest step to pipeline after specify
-- [ ] T088 Update commands/poor-dev.md to verify suggestion artifacts exist before plan phase
-- [ ] T089 Update commands/poor-dev.specify.md to indicate suggestion phase is next step
-- [ ] T090 Update .poor-dev/config.json to add overrides.suggest.model configuration
-- [ ] T091 Update .poor-dev/config.json to add polling configuration (interval, idle_timeout, max_timeout)
-- [ ] T092 Test full pipeline execution (specify → suggest → plan) with integration test
+- [X] T087 Update commands/poor-dev.md to add suggest step to pipeline after specify
+- [X] T088 Update commands/poor-dev.md to verify suggestion artifacts exist before plan phase
+- [X] T089 Update commands/poor-dev.specify.md to indicate suggestion phase is next step
+- [X] T090 Update .poor-dev/config.json to add overrides.suggest.model configuration
+- [X] T091 Update .poor-dev/config.json to add polling configuration (interval, idle_timeout, max_timeout)
+- [X] T092 Test full pipeline execution (specify → suggest → plan) with integration test
 
 ---
 
@@ -253,14 +253,14 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 9 Tasks
 
-- [ ] T093 Implement backup directory creation in lib/backup-manager.mjs (${FEATURE_DIR}/.backups/)
-- [ ] T094 Implement backup file naming in lib/backup-manager.mjs (timestamp-based)
-- [ ] T095 Implement backup on write in lib/backup-manager.mjs (call before file write)
-- [ ] T096 Implement backup listing in lib/backup-manager.mjs (list last 5 backups)
-- [ ] T097 Implement recovery function in lib/backup-manager.mjs (restore from latest backup)
-- [ ] T098 Implement backup retention policy in lib/backup-manager.mjs (delete backups older than 7 days)
-- [ ] T099 Implement backup archiving in lib/backup-manager.mjs (archive to .completed-backups/ on pipeline completion)
-- [ ] T100 Implement emergency recovery command in commands/poor-dev.suggest.md (poor-dev recover-suggestions)
+- [X] T093 Implement backup directory creation in lib/backup-manager.mjs (${FEATURE_DIR}/.backups/)
+- [X] T094 Implement backup file naming in lib/backup-manager.mjs (timestamp-based)
+- [X] T095 Implement backup on write in lib/backup-manager.mjs (call before file write)
+- [X] T096 Implement backup listing in lib/backup-manager.mjs (list last 5 backups)
+- [X] T097 Implement recovery function in lib/backup-manager.mjs (restore from latest backup)
+- [X] T098 Implement backup retention policy in lib/backup-manager.mjs (delete backups older than 7 days)
+- [X] T099 Implement backup archiving in lib/backup-manager.mjs (archive to .completed-backups/ on pipeline completion)
+- [X] T100 Implement emergency recovery command in commands/poor-dev.suggest.md (poor-dev recover-suggestions)
 
 ---
 
@@ -277,14 +277,14 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 10 Tasks
 
-- [ ] T104 Implement cache last_updated tracking in lib/cache-initializer.mjs
-- [ ] T105 Implement cache freshness check in lib/cache-validator.mjs (check if cache is >= 1 month old)
-- [ ] T106 Implement cache validation in lib/cache-validator.mjs (validate all libraries via GitHub/OSV APIs)
-- [ ] T107 Implement stale library tagging in lib/cache-validator.mjs ([STALE] tag with warning)
-- [ ] T108 Implement cache update in lib/cache-validator.mjs (write updated libraries with validation_status)
-- [ ] T109 Implement cache versioning in lib/cache-validator.mjs (increment cache_version on update)
-- [ ] T110 Implement cache rollback in lib/cache-validator.mjs (backup before update, rollback on corruption)
-- [ ] T111 Implement manual cache refresh command in commands/poor-dev.suggest.md (poor-dev refresh-suggestion-cache)
+- [X] T104 Implement cache last_updated tracking in lib/cache-initializer.mjs
+- [X] T105 Implement cache freshness check in lib/cache-validator.mjs (check if cache is >= 1 month old)
+- [X] T106 Implement cache validation in lib/cache-validator.mjs (validate all libraries via GitHub/OSV APIs)
+- [X] T107 Implement stale library tagging in lib/cache-validator.mjs ([STALE] tag with warning)
+- [X] T108 Implement cache update in lib/cache-validator.mjs (write updated libraries with validation_status)
+- [X] T109 Implement cache versioning in lib/cache-validator.mjs (increment cache_version on update)
+- [X] T110 Implement cache rollback in lib/cache-validator.mjs (backup before update, rollback on corruption)
+- [X] T111 Implement manual cache refresh command in commands/poor-dev.suggest.md (poor-dev refresh-suggestion-cache)
 
 ---
 
