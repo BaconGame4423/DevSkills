@@ -288,3 +288,154 @@ iterations:
         persona: All
         description: "T025 has incorrect [P] marker - same file as T026/T027 which don't have [P]"
         fix: "Removed [P] marker from T025 - it references lib/suggestion-parser.mjs same as T026/T027, cannot be parallelized"
+
+  - iteration: 7
+    timestamp: "2026-02-12T23:00:00Z"
+    target_lines: 522
+    total_issues: 7
+    fixed_in_iteration: 3
+    rejected: 4
+    remaining: 0
+    by_severity:
+      C: 3 fixed, 2 rejected
+      H: 0 fixed, 2 rejected
+      M: 0
+      L: 0
+    delta_lines: 0 (522 → 522, 98.5% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: SENIOR
+        description: "Cache initialization (T101-T103) not on critical path - should be in Phase 1"
+        fix: "Moved cache initialization tasks (T101-T103) from Phase 10 to Phase 1 after T011"
+
+      - id: TR-003
+        severity: C
+        persona: JUNIOR
+        description: "Go/No-Go Criteria incomplete - should reference Day 0 exit code 0"
+        fix: "Updated Go/No-Go Criteria to reference 'scripts/verify-dependencies.sh exits with code 0 on Day 0'"
+
+      - id: TR-004
+        severity: C
+        persona: JUNIOR
+        description: "Tasks T007-T009 lack success criteria in parentheses"
+        fix: "Added success criteria in parentheses to T007-T009: '(success: API returns 200 OK)'"
+
+  - iteration: 8
+    timestamp: "2026-02-13T00:00:00Z"
+    target_lines: 519
+    total_issues: 13
+    fixed_in_iteration: 6
+    rejected: 1
+    remaining: 0
+    by_severity:
+      C: 6 fixed, 6 rejected
+      H: 0 fixed, 1 rejected
+      M: 0
+      L: 0
+    delta_lines: -3 (522 → 519, 97.9% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: Senior/Junior
+        description: "Phase 1 task count incorrect in Summary (11 vs 14)"
+        fix: "Phase 1 task count corrected from 11 to 15 (T001-T011 + T101-T103 + T054)"
+
+      - id: TR-002
+        severity: C
+        persona: Senior/Junior
+        description: "Phase 10 task count incorrect in Summary (11 vs 8)"
+        fix: "Phase 10 task count corrected from 11 to 8 (T104-T111)"
+
+      - id: TR-003
+        severity: C
+        persona: Senior
+        description: "T023, T024 have [P] markers violating parallelizable rule"
+        fix: "Removed [P] markers from T023, T024 (same files as T015/T016)"
+
+      - id: TR-004
+        severity: C
+        persona: TechLead
+        description: "T015, T016 have [P] markers but same file as other tasks"
+        fix: "Removed [P] markers from T015, T016 (same files as T023/T024)"
+
+      - id: TR-005
+        severity: C
+        persona: TechLead
+        description: "T032 progress marker format is template syntax"
+        fix: "Updated T032 progress marker format from template to actual format 'with [PROGRESS: step-name]'"
+
+      - id: TR-006
+        severity: C
+        persona: TechLead/Senior
+        description: "Parallel execution claim for Phase 2 inaccurate"
+        fix: "Removed inaccurate parallel execution claim for Phase 2, updated 'Parallel Opportunities Identified' from 2 to 1"
+
+  - iteration: 9
+    timestamp: "2026-02-12T18:04:00Z"
+    target_lines: 519
+    total_issues: 6
+    fixed_in_iteration: 1
+    rejected: 5
+    remaining: 0
+    by_severity:
+      C: 1 fixed, 1 rejected
+      H: 0 fixed, 4 rejected
+      M: 0
+      L: 0
+    delta_lines: 0 (519 → 519, 97.9% of original, within 150% limit)
+    notes: "Process idle timeout after 22+ minutes at fix step. 3/4 personas voted GO. Manual fix applied."
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 4 task count incorrect in Summary - lists 15 but actual T040-T053 is 14"
+        fix: "Updated Phase 4 task count from 15 to 14 in Summary section (total 145 remains correct)"
+
+  - iteration: 10
+    timestamp: "2026-02-13T10:00:00Z"
+    target: "lib/backup-manager.mjs, lib/suggestion-validator.mjs, lib/cache-validator.mjs"
+    review_type: architecture
+    total_issues: 6
+    fixed_in_iteration: 6
+    rejected: 0
+    remaining: 0
+    by_severity:
+      C: 4 fixed
+      H: 2 fixed
+    fixes_applied:
+      - id: AR-001
+        severity: C
+        persona: SEC+ARCH
+        description: "eval() in backup-manager.mjs:373 - code injection vulnerability"
+        fix: "Replaced eval() with safe parseYAML from suggestion-parser.mjs"
+
+      - id: AR-002
+        severity: C
+        persona: SEC
+        description: "No input validation on API parameters (owner/repo, ecosystem)"
+        fix: "Added regex validation for owner/repo, ecosystem whitelist, and packageName validation in suggestion-validator.mjs"
+
+      - id: AR-003
+        severity: C
+        persona: SEC
+        description: "GITHUB_TOKEN could leak in error messages"
+        fix: "Added maskSensitiveData() to sanitize all error throws and console.error calls in suggestion-validator.mjs"
+
+      - id: AR-004
+        severity: C
+        persona: PERF+SRE
+        description: "No timeout on fetch() calls - risk of hanging requests"
+        fix: "Added fetchWithTimeout() with 10s AbortController timeout to all fetch calls in suggestion-validator.mjs and cache-validator.mjs"
+
+      - id: AR-005
+        severity: H
+        persona: ARCH
+        description: "Duplicate YAML parser in cache-validator.mjs"
+        fix: "Removed local parseSimpleYAML/toYAML/parseValue, imported parseYAML and toYAML from suggestion-parser.mjs"
+
+      - id: AR-006
+        severity: H
+        persona: SEC
+        description: "No path validation on featureDir parameter"
+        fix: "Added validatePathWithinProject() to recoverSuggestionDecisions and recoverStateInconsistency in backup-manager.mjs"
