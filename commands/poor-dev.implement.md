@@ -130,7 +130,12 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
 
-8. Progress tracking and error handling:
+8. **Progress Markers**: Output progress markers at key milestones:
+   - `[PROGRESS: implement phase N starting]` — フェーズ N 開始
+   - `[PROGRESS: implement task N.M complete]` — タスク完了
+   - `[PROGRESS: implement phase N complete]` — フェーズ N 完了
+
+9. Progress tracking and error handling:
    - Report progress after each completed task
    - Halt execution if any non-parallel task fails
    - For parallel tasks [P], continue with successful tasks, report failed ones
@@ -138,7 +143,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
-9. Completion validation:
+10. Completion validation:
    - Verify all required tasks are completed
    - Check that implemented features match the original specification
    - Validate that tests pass and coverage meets requirements
@@ -177,7 +182,7 @@ After all steps above complete, use AskUserQuestion to ask:
 3. "Skip" — コミットせずに終了する
 
 **If user selects "Commit & Push" or "Commit only"**:
-1. `git add -A`
+1. `git add -A -- . ':!agents/' ':!commands/' ':!lib/poll-dispatch.sh' ':!.poor-dev/' ':!.opencode/command/' ':!.opencode/agents/' ':!.claude/agents/' ':!.claude/commands/'`
 2. Generate a commit message following the project convention (`feat: 日本語タイトル` or appropriate type). Summarize the implementation work done in this session.
 3. `git commit -m "<message>"`
 4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`

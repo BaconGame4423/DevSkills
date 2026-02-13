@@ -1,10 +1,20 @@
 {
   "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" },
-  "overrides": {},
+  "overrides": {
+    "suggest": {
+      "cli": "opencode",
+      "model": "zai-coding-plan/glm-4.7"
+    }
+  },
   "gates": {},
   "polling": {
     "interval": 1,
     "idle_timeout": 120,
     "max_timeout": 600
-  }
+  },
+  "protected_files": [
+    "lib/poll-dispatch.sh",
+    ".poor-dev/**"
+  ],
+  "fallback_model": "claude-sonnet-4-5-20250929"
 }

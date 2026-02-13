@@ -132,6 +132,15 @@ Every task MUST strictly follow this format:
    - Foundational/blocking tasks → Foundational phase (Phase 2)
    - Story-specific setup → within that story's phase
 
+### Progress Markers
+
+Output progress markers at key milestones:
+- `[PROGRESS: tasks reading-plan]` — plan.md 読み取り開始
+- `[PROGRESS: tasks generating N phases]` — フェーズ構造生成中
+- `[PROGRESS: tasks phase N/M complete]` — フェーズ N のタスク生成完了
+- `[PROGRESS: tasks validation]` — 依存関係検証中
+- `[PROGRESS: tasks complete]` — tasks.md 作成完了
+
 ### Phase Structure
 
 - **Phase 1**: Setup (project initialization)
