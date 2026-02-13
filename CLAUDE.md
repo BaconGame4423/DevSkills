@@ -20,3 +20,17 @@
   - テンプレートの内容修正（構造変更なし）
   - バグ修正で外部仕様が変わらない場合
 - README.md の構造（セクション順・見出しレベル）は既存を維持する
+
+## バージョン管理
+
+- リリース時の手順:
+  1. `npm run version:patch` / `version:minor` / `version:major` でバージョン更新
+  2. CHANGELOG.md の [Unreleased] を新バージョンに移動し日付追加
+  3. コミット: `chore: バージョン X.Y.Z リリース`
+  4. `git tag vX.Y.Z` でタグ付け
+- バージョン番号は package.json が Single Source of Truth
+- .poor-dev-version はターゲットプロジェクト側のファイル。ソースリポジトリにはコミットしない
+- バンプ基準:
+  - patch: バグ修正、内部リファクタリング
+  - minor: コマンド追加、エージェント追加、機能追加
+  - major: 破壊的変更（コマンド体系変更、ディレクトリ構造変更）
