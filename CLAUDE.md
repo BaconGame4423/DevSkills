@@ -38,5 +38,5 @@
 ## ベンチマーク
 
 - ベンチマーク基盤の詳細は [docs/benchmarks.md](docs/benchmarks.md) を参照
-- `benchmarks/` ディレクトリは配布パッケージに含まれない（開発専用）
-- ベンチマーク実行結果ディレクトリ（`*_all/`, `*_sub/` 等）はコミットしない
+- `benchmarks/` ソースファイルは npm パッケージに含まれる（CLI: `poor-dev benchmark`）
+- ベンチマーク実行結果ディレクトリも git で追跡する

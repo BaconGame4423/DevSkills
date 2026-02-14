@@ -126,11 +126,20 @@ fi
 echo ""
 echo "--- Timing Estimation ---"
 
-# Try to get timing from file modification times
+# Try to get timing from git or file modification times
 if [ -d "$DIR_PATH/.git" ]; then
     first_ts=$(git -C "$DIR_PATH" log --all --reverse --format='%at' 2>/dev/null | head -1)
 else
-    first_ts=""
+    # Fallback: use oldest output file modification time
+    earliest_mod=""
+    for f in "$DIR_PATH"/*.html "$DIR_PATH"/*.js "$DIR_PATH"/*.css "$DIR_PATH"/*.ts "$DIR_PATH"/*.py; do
+        [ -f "$f" ] || continue
+        mod=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null)
+        if [ -z "$earliest_mod" ] || [ "$mod" -lt "$earliest_mod" ]; then
+            earliest_mod=$mod
+        fi
+    done
+    first_ts="${earliest_mod:-}"
 fi
 
 # Get latest modification time of output files

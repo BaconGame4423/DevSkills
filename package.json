@@ -11,7 +11,11 @@
     "lib/",
     "commands/",
     "agents/",
-    "templates/"
+    "templates/",
+    "benchmarks/*.sh",
+    "benchmarks/*.json",
+    "benchmarks/_scaffold/",
+    "benchmarks/reviews/"
   ],
   "keywords": [
     "ai",

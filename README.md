@@ -276,6 +276,15 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
 | `/poor-dev.config` | ハイブリッドモデル設定（CLI/モデルのカテゴリ別設定） |
 
+### ベンチマーク
+
+| コマンド | 用途 |
+|---------|------|
+| `poor-dev benchmark setup` | ベンチマークディレクトリのセットアップ |
+| `poor-dev benchmark update` | ベンチマークスキルファイルの更新 |
+| `poor-dev benchmark metrics <dir>` | 指定ディレクトリのメトリクス収集 |
+| `poor-dev benchmark compare` | COMPARISON.md の生成 |
+
 ---
 
 ## レビューペルソナ詳細

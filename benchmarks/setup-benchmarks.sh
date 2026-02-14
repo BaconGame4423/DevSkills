@@ -123,8 +123,8 @@ sync_scaffold() {
 update_skill() {
   local target="$1" orch_cli="$2" dir_name="$3"
 
-  if [[ ! -d "$target/.git" ]]; then
-    echo "  SKIP: $dir_name/ は git リポジトリではありません（先に通常セットアップを実行してください）"
+  if [[ ! -d "$target/.git" && ! -f "$target/.poor-dev/config.json" ]]; then
+    echo "  SKIP: $dir_name/ はセットアップされていません（先に setup を実行してください）"
     return 1
   fi
 
@@ -165,24 +165,32 @@ update_skill() {
     echo "  recreated .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
   fi
 
-  # 5) git commit（変更がある場合のみ）
-  (
-    cd "$target"
-    if [[ -n "$(git status --porcelain)" ]]; then
-      git add -A
-      git commit -q -m "update PoorDevSkill files"
-      echo "  committed skill update"
-    else
-      echo "  no changes detected"
-    fi
-  )
+  # 5) git commit（変更がある場合のみ、.git が存在する場合のみ）
+  if [[ -d "$target/.git" ]]; then
+    (
+      cd "$target"
+      if [[ -n "$(git status --porcelain)" ]]; then
+        git add -A
+        git commit -q -m "update PoorDevSkill files"
+        echo "  committed skill update"
+      else
+        echo "  no changes detected"
+      fi
+    )
+  else
+    echo "  skipped git commit (no .git)"
+  fi
 }
 
 # --- 引数解析 ---
 MODE="setup"
-if [[ "${1:-}" == "--update" ]]; then
-  MODE="update"
-fi
+NO_GIT=false
+for arg in "$@"; do
+  case "$arg" in
+    --update) MODE="update" ;;
+    --no-git) NO_GIT=true ;;
+  esac
+done
 
 # --- メイン処理 ---
 combo_count=$(jval '.combinations | length')
@@ -276,14 +284,18 @@ ENDJSON
     echo "  created .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
   fi
 
-  # 8) git init + 初期コミット
-  (
-    cd "$target"
-    git init -q
-    git add -A
-    git commit -q -m "initial scaffold for $dir_name"
-  )
-  echo "  git init + initial commit done"
+  # 8) git init + 初期コミット（--no-git でなければ）
+  if [[ "$NO_GIT" == false ]]; then
+    (
+      cd "$target"
+      git init -q
+      git add -A
+      git commit -q -m "initial scaffold for $dir_name"
+    )
+    echo "  git init + initial commit done"
+  else
+    echo "  skipped git init (--no-git)"
+  fi
 
 done
 

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- `poor-dev benchmark` CLI サブコマンド（setup/update/metrics/compare）
+- benchmarks/ を npm パッケージに同梱（ソースのみ、生成物は除外）
+- ベンチマーク出力ディレクトリの git 追跡を有効化
+
 ## [1.1.0] - 2026-02-13
 ### Added
 - モデルティアシステム（T1/T2/T3）— ステップ別に最適モデルを自動選択（Plan-and-Execute）
