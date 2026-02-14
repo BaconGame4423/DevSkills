@@ -82,7 +82,7 @@ TUI が起動し入力受付状態になるまで待機する。
 
 ## Step 8: プロンプト構築・送信
 
-benchmarks.json からシングルラインプロンプトを構築し、tmux send-keys で TUI に送信する。
+benchmarks.json からシングルラインプロンプトを構築し、tmux paste-buffer で TUI に送信する。
 
 ```bash
 # benchmarks.json からプロンプト要素を取得
@@ -94,11 +94,14 @@ PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。�
 
 送信:
 ```bash
-tmux send-keys -t $TARGET -l "$PROMPT"
+tmux set-buffer -b bench "$PROMPT"
+tmux paste-buffer -t $TARGET -b bench -d
 tmux send-keys -t $TARGET Enter
 ```
 
-`-l` で literal 送信（特殊キー解釈を回避）。プロンプトは約 500-600 バイトで tmux 制限内。
+`tmux send-keys -l` は Bubbletea TUI に UTF-8 マルチバイト文字（日本語）を送信できない。
+`set-buffer` + `paste-buffer` は tmux のペーストメカニズムを使うため UTF-8 を正しく扱える。
+`-b bench` で名前付きバッファを使用、`-d` でペースト後にバッファを削除。
 
 ユーザーに通知:
 - 右ペインで TUI が起動し `/poor-dev` パイプラインが開始されたこと
