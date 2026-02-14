@@ -235,6 +235,188 @@ protect_sources() {
   fi
 }
 
+# --- Validate no implementation files leaked from non-implement steps ---
+
+IMPL_EXTENSIONS="html htm js ts jsx tsx mjs cjs css scss sass less py rb go rs java kt swift c cpp h sql vue svelte"
+
+validate_no_impl_files() {
+  local fd="$1" step="$2"
+  local found_files=""
+  for ext in $IMPL_EXTENSIONS; do
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      # Skip infrastructure/tooling directories
+      case "$f" in */lib/*|*/node_modules/*|*/_runs/*|*/commands/*|*/agents/*) continue ;; esac
+      found_files="$found_files $f"
+    done < <(find "$fd" -maxdepth 3 -name "*.${ext}" -type f 2>/dev/null)
+  done
+  if [[ -n "$found_files" ]]; then
+    for f in $found_files; do rm -f "$f"; done
+    local basenames
+    basenames=$(echo "$found_files" | xargs -n1 basename 2>/dev/null | xargs)
+    echo "{\"warning\":\"Step '$step' generated impl files — deleted\",\"files\":\"$basenames\"}"
+  fi
+}
+
+# --- Parse phases from tasks.md ---
+
+parse_tasks_phases() {
+  local tasks_file="$1"
+  if [[ ! -f "$tasks_file" ]]; then
+    return
+  fi
+  local line_num=0
+  local prev_phase_num="" prev_phase_name="" prev_start=""
+  while IFS= read -r line; do
+    line_num=$((line_num + 1))
+    if [[ "$line" =~ ^##[[:space:]]+Phase[[:space:]]+([0-9]+):[[:space:]]*(.*) ]]; then
+      local phase_num="${BASH_REMATCH[1]}"
+      local phase_name="${BASH_REMATCH[2]}"
+      # Close previous phase
+      if [[ -n "$prev_phase_num" ]]; then
+        printf '%s\t%s\t%s\t%s\n' "$prev_phase_num" "$prev_phase_name" "$prev_start" "$((line_num - 1))"
+      fi
+      prev_phase_num="$phase_num"
+      prev_phase_name="$phase_name"
+      prev_start="$line_num"
+    fi
+  done < "$tasks_file"
+  # Close last phase
+  if [[ -n "$prev_phase_num" ]]; then
+    printf '%s\t%s\t%s\t%s\n' "$prev_phase_num" "$prev_phase_name" "$prev_start" "$line_num"
+  fi
+}
+
+# --- Update implement phase state in pipeline-state.json ---
+
+update_implement_phase_state() {
+  local state_file="$1" phase="$2"
+  if [[ ! -f "$state_file" ]]; then
+    return
+  fi
+  local updated
+  updated=$(jq --arg phase "$phase" '
+    .implement_phases_completed = ((.implement_phases_completed // []) + [$phase] | unique)
+  ' "$state_file")
+  echo "$updated" | jq '.' > "$state_file"
+}
+
+# --- Dispatch implement in phase-split mode ---
+
+dispatch_implement_phases() {
+  local fd="$1" project_dir="$2" feature_dir="$3" branch="$4" summary="$5" step_count="$6" total_steps="$7"
+  local tasks_file="$fd/tasks.md"
+
+  # Parse phases
+  local phases
+  phases=$(parse_tasks_phases "$tasks_file")
+
+  # Fallback: no phases found → return 1 to signal caller to use single dispatch
+  if [[ -z "$phases" ]]; then
+    echo "{\"implement\":\"fallback\",\"reason\":\"no phases found in tasks.md\"}"
+    return 1
+  fi
+
+  local phase_count
+  phase_count=$(echo "$phases" | wc -l)
+  echo "{\"implement\":\"phase-split\",\"phase_count\":$phase_count}"
+
+  # Read completed phases from pipeline-state.json
+  local completed_phases=""
+  if [[ -f "$STATE_FILE" ]]; then
+    completed_phases=$(jq -r '.implement_phases_completed[]?' "$STATE_FILE" 2>/dev/null || true)
+  fi
+
+  local phase_idx=0
+  while IFS=$'\t' read -r phase_num phase_name start_line end_line; do
+    phase_idx=$((phase_idx + 1))
+    local phase_key="phase_${phase_num}"
+
+    # Resume: skip already completed phases
+    if echo "$completed_phases" | grep -qx "$phase_key" 2>/dev/null; then
+      echo "{\"phase\":$phase_num,\"name\":\"$phase_name\",\"status\":\"skipped\",\"reason\":\"already completed\"}"
+      continue
+    fi
+
+    echo "{\"phase\":$phase_num,\"name\":\"$phase_name\",\"status\":\"starting\",\"progress\":\"$phase_idx/$phase_count\"}"
+
+    # --- Compose prompt with Phase Scope Directive ---
+    local prompt_file="/tmp/poor-dev-prompt-implement-phase${phase_num}-$$.txt"
+    local command_file="$project_dir/commands/poor-dev.implement.md"
+    if [[ ! -f "$command_file" ]]; then
+      command_file="$project_dir/.opencode/command/poor-dev.implement.md"
+    fi
+
+    # Build compose-prompt args
+    local compose_args=(
+      "$command_file"
+      "$prompt_file"
+      --header non_interactive
+    )
+
+    # Add standard context for implement
+    [[ -f "$fd/tasks.md" ]] && compose_args+=(--context "tasks=$fd/tasks.md")
+    [[ -f "$fd/plan.md" ]] && compose_args+=(--context "plan=$fd/plan.md")
+
+    # Create Phase Scope Directive context file
+    local phase_ctx="/tmp/poor-dev-phase-scope-${phase_num}-$$.txt"
+    cat > "$phase_ctx" <<PHASE_EOF
+## Phase Scope Directive
+You are executing ONLY Phase ${phase_num}: ${phase_name}.
+- Execute ONLY the uncompleted tasks (- [ ]) under "## Phase ${phase_num}:"
+- Do NOT execute tasks from other phases
+- Mark completed tasks with [X] in tasks.md
+PHASE_EOF
+    compose_args+=(--context "phase_scope=$phase_ctx")
+
+    # Pipeline metadata context
+    local pipeline_ctx="/tmp/poor-dev-pipeline-ctx-implement-phase${phase_num}-$$.txt"
+    cat > "$pipeline_ctx" <<CTX_EOF
+- FEATURE_DIR: ${feature_dir}
+- BRANCH: ${branch}
+- Feature: ${summary}
+- Step: implement phase ${phase_num}/${phase_count} (${step_count}/${total_steps})
+CTX_EOF
+    compose_args+=(--context "pipeline=$pipeline_ctx")
+
+    bash "$SCRIPT_DIR/compose-prompt.sh" "${compose_args[@]}"
+
+    # --- Dispatch ---
+    local result=""
+    result=$(bash "$SCRIPT_DIR/dispatch-step.sh" "implement" "$project_dir" "$prompt_file" "$IDLE_TIMEOUT" "$MAX_TIMEOUT" 2>&1) || {
+      local dispatch_exit=$?
+      local rate_count
+      rate_count=$(check_rate_limit)
+      if [[ "$rate_count" -gt 0 ]]; then
+        bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$fd" "rate-limited" "Rate limit at implement phase $phase_num" > /dev/null
+        echo "{\"phase\":$phase_num,\"status\":\"rate-limited\",\"rate_limit_count\":$rate_count}"
+        rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
+        exit 3
+      fi
+      echo "{\"phase\":$phase_num,\"status\":\"error\",\"exit_code\":$dispatch_exit,\"result\":$(echo "$result" | jq -R -s '.')}"
+      rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
+      exit 1
+    }
+
+    # Cleanup temp files
+    rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
+
+    # Post-phase source protection
+    local protection_result
+    protection_result=$(protect_sources)
+    if [[ -n "$protection_result" ]]; then
+      echo "$protection_result"
+    fi
+
+    # Update phase state
+    update_implement_phase_state "$STATE_FILE" "$phase_key"
+
+    echo "{\"phase\":$phase_num,\"name\":\"$phase_name\",\"status\":\"complete\",\"progress\":\"$phase_idx/$phase_count\"}"
+  done <<< "$phases"
+
+  return 0
+}
+
 # ============================================================
 # Main dispatch loop
 # ============================================================
@@ -266,6 +448,30 @@ for STEP in $PIPELINE_STEPS; do
   }
 
   echo "{\"step\":\"$STEP\",\"status\":\"starting\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\"}"
+
+  # --- L3: Pre-implement validation + Phase-split dispatch ---
+
+  if [[ "$STEP" == "implement" ]]; then
+    # L3: Clean up any impl files leaked from prior steps
+    IMPL_CLEANUP=$(validate_no_impl_files "$FD" "pre-implement")
+    if [[ -n "$IMPL_CLEANUP" ]]; then
+      echo "$IMPL_CLEANUP"
+    fi
+
+    # Attempt phase-split dispatch
+    if dispatch_implement_phases "$FD" "$PROJECT_DIR" "$FEATURE_DIR" "$BRANCH" "$SUMMARY" "$STEP_COUNT" "$TOTAL_STEPS"; then
+      # Phase-split succeeded — run post-implement protection and mark complete
+      PROTECTION_RESULT=$(protect_sources)
+      if [[ -n "$PROTECTION_RESULT" ]]; then
+        echo "$PROTECTION_RESULT"
+      fi
+      bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
+      echo "{\"step\":\"$STEP\",\"status\":\"complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"phase-split\"}"
+      continue
+    fi
+    # Fallback: no phases found — continue to single dispatch below
+    echo "{\"step\":\"$STEP\",\"status\":\"fallback\",\"reason\":\"no phases in tasks.md\"}"
+  fi
 
   # --- Compose prompt ---
 
@@ -423,6 +629,15 @@ CTX_EOF
     PROTECTION_RESULT=$(protect_sources)
     if [[ -n "$PROTECTION_RESULT" ]]; then
       echo "$PROTECTION_RESULT"
+    fi
+  fi
+
+  # --- L2: Post-step impl file validation (non-implement steps) ---
+
+  if [[ "$STEP" != "implement" ]]; then
+    IMPL_CLEANUP=$(validate_no_impl_files "$FD" "$STEP")
+    if [[ -n "$IMPL_CLEANUP" ]]; then
+      echo "$IMPL_CLEANUP"
     fi
   fi
 
