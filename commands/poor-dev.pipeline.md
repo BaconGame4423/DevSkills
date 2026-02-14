@@ -103,6 +103,9 @@ For each STEP in PIPELINE (skipping completed):
    CLI=$(echo "$RESOLVED" | jq -r '.cli')
    MODEL=$(echo "$RESOLVED" | jq -r '.model')
    ```
+
+   > **⚠ /tmp/ ファイル**: 以下のパスは poll-dispatch.sh が自動管理する。mkdir 不要。Write ツールでファイルに直接書き込むこと。
+
 6. **Dispatch** (shell-based polling):
    Write prompt → `/tmp/poor-dev-step.txt`, dispatch command → `/tmp/poor-dev-cmd.sh`:
    - opencode: `opencode run --model <MODEL> --format json "$(cat /tmp/poor-dev-step.txt)"`
@@ -171,6 +174,7 @@ Based on tasks.md Phase structure and `[P]` markers.
 - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
 - If blocked → [ERROR: description] and stop
 - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+- Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
 - End with: files created/modified, unresolved items
 ```
 

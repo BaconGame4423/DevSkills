@@ -146,6 +146,7 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
    - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
    - If blocked → [ERROR: description] and stop
    - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+   - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
    - End with: files created/modified, unresolved items
 
    ## Read-Only Execution Mode
@@ -198,7 +199,7 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
 
 specify 完了後、残りパイプラインを sub-agent として dispatch:
 
-1. Write classification JSON to `/tmp/poor-dev-classification.json`:
+1. Write ツールで `/tmp/poor-dev-classification.json` に classification JSON を書き込む（mkdir 不要）:
    ```json
    {
      "flow": "${FLOW}",
