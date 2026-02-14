@@ -216,4 +216,4 @@ specify 完了後、残りパイプラインを sub-agent として dispatch:
 4. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
    `bash lib/config-resolver.sh plan .poor-dev/config.json`
 5. Dispatch via opencode/claude/Task() with polling
-7. Poll until completion → relay progress → display result
+6. Poll until completion → relay progress → display result

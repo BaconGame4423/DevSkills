@@ -101,11 +101,11 @@ sync_scaffold() {
 
     # .opencode/agents/
     rm -rf "$variant_dir/.opencode/agents"
-    cp -r "$DEVSKILLS_DIR/.opencode/agents" "$variant_dir/.opencode/"
+    cp -rL "$DEVSKILLS_DIR/.opencode/agents" "$variant_dir/.opencode/"
 
     # .claude/agents/
     rm -rf "$variant_dir/.claude/agents"
-    cp -r "$DEVSKILLS_DIR/.claude/agents" "$variant_dir/.claude/"
+    cp -rL "$DEVSKILLS_DIR/.claude/agents" "$variant_dir/.claude/"
 
     echo "  synced $vname"
   done
@@ -123,9 +123,13 @@ sync_scaffold() {
 update_skill() {
   local target="$1" orch_cli="$2" dir_name="$3"
 
-  if [[ ! -d "$target/.git" && ! -f "$target/.poor-dev/config.json" ]]; then
+  if [[ ! -f "$target/.poor-dev/config.json" ]]; then
     echo "  SKIP: $dir_name/ はセットアップされていません（先に setup を実行してください）"
     return 1
+  fi
+  if [[ ! -d "$target/.git" ]]; then
+    ( cd "$target" && git init -q && git add -A && git commit -q -m "initial scaffold for $dir_name" )
+    echo "  created .git (was missing)"
   fi
 
   # バリアント選択
@@ -144,13 +148,13 @@ update_skill() {
 
   # 2) .opencode/ 更新（agents + commands）
   rm -rf "$target/.opencode/agents" "$target/.opencode/command"
-  cp -r "$SCAFFOLD/$variant/.opencode/agents" "$target/.opencode/"
-  cp -r "$SCAFFOLD/$variant/.opencode/command" "$target/.opencode/"
+  cp -rL "$SCAFFOLD/$variant/.opencode/agents" "$target/.opencode/"
+  cp -rL "$SCAFFOLD/$variant/.opencode/command" "$target/.opencode/"
   echo "  updated .opencode/ (agents + commands)"
 
   # 3) .claude/agents/ 更新
   rm -rf "$target/.claude/agents"
-  cp -r "$SCAFFOLD/$variant/.claude/agents" "$target/.claude/"
+  cp -rL "$SCAFFOLD/$variant/.claude/agents" "$target/.claude/"
   echo "  updated .claude/agents/"
 
   # 4) .claude/commands/ symlinks 再生成（claude variant のみ）
@@ -253,8 +257,8 @@ for i in $(seq 0 $((combo_count - 1))); do
   else
     variant="opencode-variant"
   fi
-  cp -r "$SCAFFOLD/$variant/.opencode" "$target/"
-  cp -r "$SCAFFOLD/$variant/.claude" "$target/"
+  cp -rL "$SCAFFOLD/$variant/.opencode" "$target/"
+  cp -rL "$SCAFFOLD/$variant/.claude" "$target/"
   echo "  copied $variant files"
 
   # 5) .poor-dev/config.json 生成

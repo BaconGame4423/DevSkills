@@ -245,6 +245,21 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     else
       echo "[${ELAPSED}s] pipeline-state.json not found yet"
     fi
+
+    # TUI アイドル検知（pipeline-state.json が生成されないケースの完了検知）
+    # 最初の 120 秒はモデル起動中の誤検知を防ぐためスキップ
+    if [ $ELAPSED -ge 120 ]; then
+      PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+      if [ "$ORCH_CLI" = "opencode" ]; then
+        if echo "$PANE_CONTENT" | grep -q "Ask anything"; then
+          echo "BENCH_TUI_IDLE: <combo>"; exit 0
+        fi
+      else
+        if echo "$PANE_CONTENT" | grep -q "^>"; then
+          echo "BENCH_TUI_IDLE: <combo>"; exit 0
+        fi
+      fi
+    fi
   fi
 done
 echo "BENCH_TIMEOUT: <combo>"
