@@ -144,28 +144,56 @@ fi
 
 ## Step 9: バックグラウンド完了監視
 
-Bash(run_in_background) で pipeline-state.json をポーリング（60 秒間隔、最大 120 分）。
+Bash(run_in_background) で完了監視ポーリング（最大 120 分）。
 
-完了判定ロジック:
-- `pipeline-state.json` を `find` で探索（`specs/*/pipeline-state.json` または `.poor-dev/pipeline-state.json`）
-- `current == null` AND `completed` が非空 → パイプライン全ステップ完了
-- `status == "error"` → エラー終了
+- 10 秒間隔: TUI 質問ダイアログの自動応答（`esc dismiss` パターン検知 → 1番目を選択）
+- 60 秒間隔: pipeline-state.json の完了/エラー判定
+
+質問自動応答ポリシー: 常に最初の選択肢を選択（全 combo 共通 = 公平性担保）。
+複数質問は1サイクル1質問ずつ処理。opencode のみ対応、claude CLI は今後追加。
 
 ```bash
 COMBO_DIR="benchmarks/<combo>"
-TIMEOUT=7200; ELAPSED=0
+TIMEOUT=7200; ELAPSED=0; CHECK=0
+
+# CLI に応じた質問検知パターン（現在 opencode のみ対応）
+if [ "$ORCH_CLI" = "opencode" ]; then
+  QUESTION_PATTERN="esc dismiss"
+else
+  QUESTION_PATTERN=""  # claude CLI: 未対応（パターン未検証）
+fi
+
 while [ $ELAPSED -lt $TIMEOUT ]; do
-  sleep 60; ELAPSED=$((ELAPSED + 60))
-  STATE_FILE=$(find "$COMBO_DIR" -name "pipeline-state.json" 2>/dev/null | head -1)
-  if [ -n "$STATE_FILE" ]; then
-    CURRENT=$(jq -r '.current // "running"' "$STATE_FILE" 2>/dev/null)
-    COMPLETED=$(jq -r '.completed | length' "$STATE_FILE" 2>/dev/null)
-    STATUS=$(jq -r '.status // "unknown"' "$STATE_FILE" 2>/dev/null)
-    if [ "$CURRENT" = "null" ] && [ "$COMPLETED" -gt 0 ]; then
-      echo "BENCH_PIPELINE_COMPLETE: <combo>"; exit 0
+  sleep 10; ELAPSED=$((ELAPSED + 10)); CHECK=$((CHECK + 1))
+
+  # --- 質問ダイアログ自動応答（10秒ごと、パターン設定時のみ） ---
+  if [ -n "$QUESTION_PATTERN" ]; then
+    PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+    if echo "$PANE_CONTENT" | grep -q "$QUESTION_PATTERN"; then
+      echo "[${ELAPSED}s] Question detected, auto-selecting first option"
+      tmux send-keys -t $TARGET Up Up Up Enter
+      sleep 1
+      tmux send-keys -t $TARGET Tab
+      sleep 2
     fi
-    if [ "$STATUS" = "error" ]; then
-      echo "BENCH_PIPELINE_ERROR: <combo>"; exit 1
+  fi
+
+  # --- pipeline-state.json チェック（60秒ごと） ---
+  if [ $((CHECK % 6)) -eq 0 ]; then
+    STATE_FILE=$(find "$COMBO_DIR" -name "pipeline-state.json" 2>/dev/null | head -1)
+    if [ -n "$STATE_FILE" ]; then
+      CURRENT=$(jq -r '.current // "running"' "$STATE_FILE" 2>/dev/null)
+      COMPLETED=$(jq -r '.completed | length' "$STATE_FILE" 2>/dev/null)
+      STATUS=$(jq -r '.status // "unknown"' "$STATE_FILE" 2>/dev/null)
+      echo "[${ELAPSED}s] current=$CURRENT completed=$COMPLETED status=$STATUS"
+      if [ "$CURRENT" = "null" ] && [ "$COMPLETED" -gt 0 ]; then
+        echo "BENCH_PIPELINE_COMPLETE: <combo>"; exit 0
+      fi
+      if [ "$STATUS" = "error" ]; then
+        echo "BENCH_PIPELINE_ERROR: <combo>"; exit 1
+      fi
+    else
+      echo "[${ELAPSED}s] pipeline-state.json not found yet"
     fi
   fi
 done
