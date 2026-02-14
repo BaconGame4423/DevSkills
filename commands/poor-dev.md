@@ -39,7 +39,7 @@ The text after the command **is** the user's request. Do not ask them to repeat 
 ### Flow Control Rule
 
 This command is the pipeline orchestrator. After classification (Step 1-4):
-- Pipeline flows (Feature, Bugfix, Roadmap, Discovery, Investigation) → proceed to **Step 5 Pipeline Orchestration**
+- Pipeline flows (Feature, Bugfix, Roadmap, Discovery, Investigation) → proceed to **Step 5**
 - Non-pipeline flows (Q&A, Documentation) → execute target skill directly in Step 4
 - Do NOT auto-transition to other agents via handoff frontmatter. Handoffs are UI metadata only.
 
@@ -48,25 +48,24 @@ This command is the pipeline orchestrator. After classification (Step 1-4):
 Analyze `$ARGUMENTS` through a 3-stage process.
 
 **1a. Intent Detection**: Classify by what the user wants to accomplish:
-- **Feature**: user wants to add, create, or implement new functionality
-- **Bugfix**: user reports an error, crash, broken behavior, or regression
-- **Investigation**: user wants to investigate a problem, understand behavior, or find root cause without assuming it's a bug
-- **Roadmap**: user wants to plan strategy, define vision, or explore concepts at project level
-- **Discovery**: user wants to prototype, explore ideas, rebuild existing code, or "just try something"
-- **Q&A**: user asks a question about the codebase or architecture
-- **Documentation**: user requests a report, summary, or document generation
+- **Feature**: add, create, or implement new functionality
+- **Bugfix**: error, crash, broken behavior, or regression
+- **Investigation**: investigate a problem, understand behavior, find root cause
+- **Roadmap**: plan strategy, define vision, explore concepts at project level
+- **Discovery**: prototype, explore ideas, rebuild existing code, "just try something"
+- **Q&A**: question about the codebase or architecture
+- **Documentation**: report, summary, or document generation
 
-**Priority rule**: Feature / Bugfix / Investigation / Roadmap / Discovery signals take precedence over Q&A / Documentation. Example: "How do I implement X?" → Feature (not Q&A), because the intent is implementation.
+**Priority rule**: Feature / Bugfix / Investigation / Roadmap / Discovery signals take precedence over Q&A / Documentation.
 
-**1b. Contextual Analysis** (when intent is ambiguous):
-- Problem description ("X happens", "X doesn't work") → bugfix
-- Investigation signal ("why does X happen", "investigate X", "something seems off") → investigation
+**1b. Contextual Analysis** (when ambiguous):
+- Problem description → bugfix
+- Investigation signal ("why does X", "investigate") → investigation
 - Desired state ("I want X", "add X") → feature
-- Planning/strategy ("plan for X", "strategy") → roadmap
-- Exploration ("try X", "prototype", "rebuild", "vibe coding") → discovery
-- Question ("what is X", "how does X work") → Q&A
-- Report request ("summarize X", "list all X") → documentation
-- Improvement/change ("optimize X", "improve X") → ambiguous
+- Planning/strategy → roadmap
+- Exploration ("try X", "prototype", "rebuild") → discovery
+- Question → Q&A
+- Report request → documentation
 
 **1c. Confidence**: High / Medium / Low
 
@@ -102,595 +101,119 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 
 ### Step 4: Routing
 
-**4A Feature**: Report "Classified as feature: <summary>". → Step 5 Pipeline Orchestration に進む
-
+**4A Feature**: Report "Classified as feature: <summary>". → Step 5
 **4B Bugfix**:
-1. Check `bug-patterns.md` for similar past patterns. If found, inform user.
+1. Check `bug-patterns.md` for similar past patterns.
 2. Create `$FEATURE_DIR/bug-report.md`:
-
    ```markdown
    # Bug Report: [BUG SHORT NAME]
    **Branch**: `[###-fix-bug-name]` | **Created**: [DATE] | **Status**: Investigating
    **Input**: "$ARGUMENTS"
-
    ## Description
    [summary]
-
    ## Expected vs Actual
    - Expected: [expected]
    - Actual: [actual, with error messages if available]
-
    ## Steps to Reproduce
    1. [Step 1]
-
    ## Context
    - Frequency: [always / intermittent / specific conditions]
    - Environment: [OS, Language/Runtime, Key Dependencies]
    - Since When: [onset timing]
    - Reproduction: [Not Attempted / Reproduced / Could Not Reproduce]
    ```
-
-   Fill what can be extracted from `$ARGUMENTS`. Leave unknowns as placeholders.
-3. Report "Classified as bugfix: <summary>". → Step 5 Pipeline Orchestration に進む
-
-**4C Roadmap**: Report "Classified as roadmap: <summary>". → Step 5 Pipeline Orchestration に進む
-
+   Fill what can be extracted. Leave unknowns as placeholders.
+3. Report "Classified as bugfix: <summary>". → Step 5
+**4C Roadmap**: Report "Classified as roadmap: <summary>". → Step 5
 **4D Q&A**: Report "Classified as Q&A: <summary>". Execute `/poor-dev.ask` directly (non-pipeline).
-
 **4E Documentation**: Report "Classified as documentation: <summary>". Execute `/poor-dev.report` directly (non-pipeline).
+**4F Discovery**: Report "Classified as discovery: <summary>". → Step 5
+**4G Investigation**: Report "Classified as investigation: <summary>". → Step 5
 
-**4F Discovery**: Report "Classified as discovery: <summary>". → Step 5 Pipeline Orchestration に進む
-Discovery handles its own branch/directory creation.
+### Step 5: Specify + Pipeline Dispatch
 
-**4G Investigation**: Report "Classified as investigation: <summary>". → Step 5 Pipeline Orchestration に進む
-Investigation is a non-pipeline flow (read-only analysis). No branch/directory creation needed.
+After routing to a pipeline flow, orchestrate the specify step directly, then dispatch the remaining pipeline to a sub-agent.
 
-### Step 5: Pipeline Orchestration
+#### 5A. Specify Step (read-only dispatch)
 
-After routing is complete, automatically orchestrate the full pipeline for the classified flow.
-Non-pipeline flows (Q&A, Documentation) are handled directly in Step 4 and skip this step.
+1. Read `commands/poor-dev.specify.md`
+2. Strip YAML frontmatter (first `---` to next `---`). Validate no `handoffs:` remains.
+3. Prepend NON_INTERACTIVE_HEADER + READONLY_HEADER:
+   ```markdown
+   ## Mode: NON_INTERACTIVE (pipeline sub-agent)
+   - No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
+   - No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
+   - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
+   - If blocked → [ERROR: description] and stop
+   - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+   - End with: files created/modified, unresolved items
 
-#### 5.0 Pre-flight Check
-
-```
-OPENCODE_AVAILABLE = (command -v opencode returns 0)
-OPENCODE_LOG_DIR = ~/.local/share/opencode/log
-
-# Polling config (from .poor-dev/config.json → polling)
-POLL_INTERVAL = config.polling.interval || 1          (秒)
-IDLE_TIMEOUT  = config.polling.idle_timeout || 120    (出力停滞でキル)
-MAX_TIMEOUT   = config.polling.max_timeout || config.dispatch_timeout || 600  (絶対安全上限)
-```
-
-If `opencode` is not available:
-- Display warning: "opencode が見つかりません。Claude Code (haiku) にフォールバックします"
-- Set FALLBACK_MODE = true (all dispatches use Task() with model=haiku)
-
-#### 5.0b CLI Capability Detection
-
-利用可能なツール一覧を確認し INTERACTIVE_MODE を判定:
-- AskUserQuestion ツールが利用可能 → INTERACTIVE_MODE = true
-- AskUserQuestion ツールが利用不可 → INTERACTIVE_MODE = false
-
-判定結果を表示: "INTERACTIVE_MODE: ${INTERACTIVE_MODE}"
-
-#### 5.1 Pipeline Selection
-
-Based on the classification from Step 1:
-
-| Classification | Pipeline |
-|---------------|----------|
-| Feature | `specify → suggest → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
-| Bugfix | `bugfix → [CONDITIONAL]` |
-| Bugfix (small) | `bugfix → planreview(fix-plan.md) → implement → qualityreview → phasereview` |
-| Bugfix (large) | `bugfix → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
-| Investigation | `investigate` (single step, read-only) |
-| Roadmap | `concept → goals → milestones → roadmap` |
-| Discovery-init | `discovery` (single step) |
-| Discovery-rebuild | `rebuildcheck → [CONDITIONAL]` |
-| Discovery-rebuild (REBUILD) | `rebuildcheck → harvest → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
-| Discovery-rebuild (CONTINUE) | `rebuildcheck` (pipeline pauses) |
-
-For single-step pipelines (investigation, discovery-init): dispatch that step and return. No pipeline-state tracking needed.
-For conditional pipelines (bugfix, discovery-rebuild): dispatch the first step, then use Section C to resolve the variant and determine the continuation pipeline.
-
-#### 5.2 Resume Detection
-
-Check for `$FEATURE_DIR/pipeline-state.json`:
-
-```json
-{
-  "flow": "feature",
-  "variant": null,
-  "completed": ["specify", "plan", "planreview"],
-  "current": "tasks",
-  "status": "active",
-  "pauseReason": null,
-  "condition": null,
-  "pendingApproval": null,
-  "updated": "2026-02-12T10:30:00Z"
-}
-```
-
-**Schema notes**:
-- `status`: `"active"` | `"paused"` | `"rate-limited"` | `"error"` | `"stopped"` | `"awaiting-approval"`
-- `pendingApproval`: `null` | `{ "type": "spec-approval|gate|review-nogo|resume-paused", "step": "<step-name>" }`
-
-**Backward compatibility**: Existing pipeline-state.json without `variant`/`condition`/`status`/`pendingApproval` fields → treat as linear pipeline with `status: "active"`, `variant: null`, `pendingApproval: null`.
-
-If found:
-
-**Case 1: `status: "active"` (or absent)**:
-- INTERACTIVE_MODE = true → AskUserQuestion:
-  - "前回は `${current}` ステップで中断しています。再開しますか？"
-    - "再開する（${current} から）" — skip completed steps
-    - "最初からやり直す" — delete pipeline-state.json, start fresh
-- INTERACTIVE_MODE = false → 自動再開（再実行 = 続行意思）。skip completed steps.
-
-**Case 2: `status: "paused"`** (discovery-rebuild CONTINUE):
-- INTERACTIVE_MODE = true → AskUserQuestion:
-  - "前回のリビルド判定で CONTINUE（継続開発）となり、パイプラインが一時停止中です。"
-    - "リビルド判定を再実行する" — reset to rebuildcheck step, set status to "active"
-    - "harvest にスキップする（プロトタイプ完了とみなす）" — set completed to ["rebuildcheck"], current to "harvest", variant to "discovery-rebuild", status to "active"
-    - "探索を続行する（パイプライン終了）" — delete pipeline-state.json, exit
-- INTERACTIVE_MODE = false → PAUSE_FOR_APPROVAL("resume-paused", current, status summary)
-
-**Case 3: `status: "rate-limited"`**:
-- INTERACTIVE_MODE = true → AskUserQuestion:
-  - "前回は `${current}` ステップでレートリミットにより中断しました（${pauseReason}）。"
-    - "再開する（${current} から）" — set status to "active", resume from current
-    - "止める" — delete pipeline-state.json, exit
-- INTERACTIVE_MODE = false → 自動再開（再試行）。set status to "active", resume from current.
-
-**Case 4: `status: "awaiting-approval"`**:
-- pendingApproval.type を読み取り
-- INTERACTIVE_MODE = true の場合:
-  - type に応じた AskUserQuestion を表示:
-    - spec-approval → "承認する / 修正指示付きで棄却 / 棄却する"
-    - gate → "進む / 修正する / 止める"
-    - review-nogo → "修正して再レビュー / 止める"
-    - resume-paused → Case 2 と同じ選択肢
-  - 回答に基づきパイプライン再開・修正・停止
-  - pendingApproval を null にクリア、status を "active" に更新
-- INTERACTIVE_MODE = false の場合:
-  - 再実行 = 暗黙の承認として扱う
-  - spec-approval → spec-draft.md を spec.md にコピーしてパイプライン続行
-  - gate → 自動続行
-  - review-nogo → 自動再レビュー
-  - resume-paused → 自動再開
-  - pendingApproval を null にクリア、status を "active" に更新
-  - 表示: "前回の承認待ちを自動承認しました（${type}）。パイプラインを続行します。"
-
-If not found → start from beginning.
-
-#### 5.3 Step Dispatch Loop
-
-⚠ **CRITICAL: Pipeline Step Integrity**
-- Each step MUST be dispatched as a separate sub-agent execution
-- NEVER skip steps, combine steps, or execute step logic inline
-- NEVER perform the work of a step yourself — always dispatch to the corresponding command
-- If a step fails, STOP. Do not skip to the next step.
-
-**Pre-dispatch artifact check** (defense-in-depth):
-
-| Phase | Required artifacts in FEATURE_DIR |
-|-------|----------------------------------|
-| plan | spec.md |
-| tasks | plan.md, spec.md |
-| implement | spec.md, tasks.md |
-
-If required artifact is missing → `[ERROR: Missing ${artifact} for ${STEP}. Run preceding step first.]` → stop pipeline.
-
-For each STEP in PIPELINE (skipping already-completed steps if resuming):
-
-- If STEP == "specify": → Section A2 (Specify Step Read-Only Override) を実行
-  - **Speculative execution** (2.1): speculation.enabled == true かつ speculation.pairs.specify == "suggest" の場合:
-    - specify dispatch 直後（完了を待たずに）、suggest も投機的に開始:
-      ```
-      spec_suggest_task = dispatch_background("suggest", context=spec-draft-preview)
-      ```
-    - specify 完了後:
-      - spec-draft.md が承認済み（spec.md にコピー済み）→ 投機 suggest の結果を採用
-      - spec が修正された → 投機 suggest をキャンセルし、通常の suggest を再 dispatch
-- If STEP == "plan": Check `${FEATURE_DIR}/suggestions.yaml` exists (verify suggest phase completed). If missing, warn but continue (suggestions are optional).
-- If STEP == "implement": → Section D (Parallel Implementation) を実行
-- Otherwise: → Section A (通常 Production Steps) / B / C を実行
-
-##### A. Production Steps (plan, tasks, implement, harvest, bugfix)
-
-1. **Read command**: Read `commands/poor-dev.${STEP}.md`
-2. **Strip sections**:
-   a. **Frontmatter removal**: ファイル先頭の YAML frontmatter ブロック（最初の `---` から次の `---` まで）を完全に除去する。
-      部分的な除去は禁止（handoffs, description 等を個別に削除するのではなく、frontmatter 全体を除去）。
-   b. **Section removal**: "Gate Check" セクション、"Dashboard Update" セクションを除去。
-   c. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
-3. **Prepend**: NON_INTERACTIVE_HEADER (see 5.4)
-4. **Append context block** (step-filtered):
+   ## Read-Only Execution Mode
+   You have READ-ONLY tool access (Edit, Write, Bash, NotebookEdit are disabled).
+   - Output the spec draft as plain markdown text in your response.
+   - First line MUST be: `[BRANCH: suggested-short-name]`
+   - The rest of your output is the spec draft content (using the Spec Template).
+   - Include `[NEEDS CLARIFICATION: question]` markers inline as needed (max 3).
+   - Do NOT attempt to create branches, directories, or files.
    ```
-   ## Pipeline Context
-   - FEATURE_DIR: ${FEATURE_DIR}
-   - BRANCH: ${BRANCH}
-   - Feature description: ${FEATURE_SUMMARY}
-   - target_file: ${TARGET_FILE}
-   - Previous step output: (3-line summary of previous step result)
-
-   ## Artifacts (filtered for ${STEP})
-   ${FILTERED_ARTIFACTS}
-   ```
-
-   **Feature description optimization**: 初回 dispatch（specify）は `${ARGUMENTS}` 全文を送る。以降は初回の出力から 1 行サマリーを生成し `${FEATURE_SUMMARY}` として使う。
-
-   **Step-specific context filter** (5.1):
-   | Step | Include | Exclude |
-   |------|---------|---------|
-   | specify | user input only | plan.md, tasks.md |
-   | suggest | spec.md (summary only) | plan.md, tasks.md, constitution |
-   | plan | spec.md, research.md, suggestions.yaml, constitution(filtered) | tasks.md |
-   | planreview | plan.md, spec.md (requirements section only) | research.md, constitution |
-   | tasks | plan.md (Architecture + Phases sections only), spec.md, constitution(filtered) | research.md |
-   | tasksreview | tasks.md, spec.md (requirements only), plan.md (summary only) | research.md |
-   | implement | tasks.md, plan.md (tech stack + file structure only), contracts/ | research.md, constitution |
-   | review 系 | target file + spec.md (requirements only) + review-log.yaml (windowed) | other artifacts |
-
-   **Large artifact section extraction** (5.3):
-   ```
-   if file_size(artifact) > 10KB:
-     extract only relevant sections (Summary, Technical Context, Architecture, Requirements)
-   else:
-     include full file
-   ```
-
-   **target_file resolution** (variant-based):
-   | Variant | planreview target_file |
-   |---------|----------------------|
-   | (default) | plan.md |
-   | bugfix-small | fix-plan.md |
-5. **Resolve model** (tiered resolution):
-
-   Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults.
-
-   **Resolution chain** (first match wins):
-   ```
-   1. overrides.${STEP}                    → { cli, model }
-   2. overrides.${CATEGORY}                → { cli, model }  (CATEGORY = step の親: e.g., planreview-pm → planreview)
-   3. step_tiers.${STEP} → tier name       → tiers[tier]     → { cli, model }
-      - tier name が tiers に未定義 → WARNING log, fallthrough
-   4. default                              → { cli, model }
-   5. hardcoded fallback                   → { cli: "claude", model: "sonnet" }
-   ```
-
-   **Constitution filtering** (constitution.md セクション抽出):
-   - constitution.md の `<!-- section: X -->` マーカーに基づき、STEP に関連するセクションのみ抽出
-   - マッピング: specify→spec, plan→plan, tasks→tasks, implement→implement, suggest→(skip), review系→(skip)
-   - `common` セクションは常に含む
-   - マーカーがない/フィルタ対象外 → constitution 全文を含む（後方互換）
-6. **Dispatch** (シェルスクリプトベースポーリング):
-
-   **起動**: プロンプトは /tmp/poor-dev-step.txt に書き出し済み。
-   dispatch コマンドを /tmp/poor-dev-cmd.sh に Write ツールで書き出す（変数は展開済みの値を埋め込む）:
-   - If OPENCODE_AVAILABLE and resolved cli == "opencode":
-     ```
-     opencode run --model <RESOLVED_MODEL> --format json "$(cat /tmp/poor-dev-step.txt)"
-     ```
-   - If OPENCODE_AVAILABLE and resolved cli == "claude":
-     ```
-     cat /tmp/poor-dev-step.txt | claude -p --model <RESOLVED_MODEL> --no-session-persistence --output-format text
-     ```
-   - If FALLBACK_MODE:
-     ```
-     Task(subagent_type="general-purpose", model="haiku", prompt=<assembled prompt>)
-     ```
-     (FALLBACK_MODE はタイムアウト不要 — Task() は内部で管理。ポーリングループをスキップ)
-
-   **実行** (FALLBACK_MODE 以外):
-   ```
-   OUTPUT_FILE = /tmp/poor-dev-output-${STEP}.txt
-   PROGRESS_FILE = /tmp/poor-dev-progress-${STEP}.txt
-   POLL_COPY = /tmp/poor-dev-poll-$$.sh
-
-   cp lib/poll-dispatch.sh "$POLL_COPY"
-
-   Bash(run_in_background: true):
-     "$POLL_COPY" /tmp/poor-dev-cmd.sh ${OUTPUT_FILE} ${PROGRESS_FILE} ${IDLE_TIMEOUT} ${MAX_TIMEOUT}
-   → task_id を取得
-   ```
-
-   **ブロッキング待機** (進捗リレー付き、ポーリング最適化済み):
-   ```
-   DISPLAYED = 0
-
-   while true:
-     TaskOutput(task_id, block=true, timeout=30000)
-       → completed/failed → break
-       → timeout (30秒経過) → 進捗チェックへ
-
-     Read(PROGRESS_FILE)
-       → DISPLAYED 以降の新規マーカーのみユーザーにリレー表示
-       → DISPLAYED を更新
-   ```
-   ※ TaskOutput(block=true, timeout=30000) で最大 30 秒ブロック → 完了待ちの場合そのまま抜ける
-   ※ ツール呼び出し回数: ~120 回/10分 → ~20 回/10分（80% 削減）
-
-   **完了時**: TaskOutput → JSON サマリー (~200B) を取得
-
-   **設計意図**:
-   - ポーリングループ・タイムアウト監視・マーカー抽出は全て lib/poll-dispatch.sh 内で実行
-   - オーケストレーターのコンテキストには軽量な進捗マーカーと最終JSONサマリーのみが入る
-   - output_file 全文はオーケストレーターのコンテキストに入らない（ディスク上に保持）
-
-6b. **Rate limit detection** (JSON サマリーの exit_code != 0 の場合のみ。正常完了時はスキップ):
-
-   ⚠ **絶対禁止**: プロセス実行中に opencode ログを手動チェックしてレートリミットを判断してはならない。detection はプロセス completed/failed 後のみ。
-
-   (1) ログ検出:
-       ```bash
-       LATEST_LOG=$(ls -t ${OPENCODE_LOG_DIR}/*.log 2>/dev/null | head -1)
-       RATE_LIMIT_COUNT=$(grep -c "Rate limit" "$LATEST_LOG" 2>/dev/null || echo 0)
-       ```
-
-   (2) 判定:
-   - `RATE_LIMIT_COUNT == 0` → 通常エラー。step 7 に進む
-   - `RATE_LIMIT_COUNT > 0` かつ FALLBACK_MODEL あり → FALLBACK_MODEL で step 6 再実行
-     - 再実行成功 → step 7、再度 rate limit → パイプライン中断、rate limit なし → 通常エラー
-   - `RATE_LIMIT_COUNT > 0` かつ FALLBACK なし/fallback も rate limit → `status: "rate-limited"` でパイプライン中断
-7. **Output parsing** (JSON サマリーベース):
-   - JSON.clarifications が非空:
-     - INTERACTIVE_MODE = true → AskUserQuestion でリレー → 回答追加して再 dispatch
-     - INTERACTIVE_MODE = false → マーカーを保持して自動続行
-   - JSON.errors が非空 → stop pipeline, report error
-   - JSON.timeout_type != "none" → タイムアウト報告
-   - Verify expected output files exist (spec.md, plan.md, tasks.md etc.) via Glob
-7b. **Artifact display** (特定ステップ完了後のみ):
-
-   | STEP | 表示内容 |
-   |------|---------|
-   | plan | plan.md の Summary + Technical Context セクションを日本語で要約表示。詳細は plan.md 参照の旨を付記。 |
-   | specify | (A2 Step 11 で仕様サマリーを既に表示するため不要) |
-
-   表示後の動作は既存の Gate Check (Step 8) に委譲。
-   plan 表示のために独自の確認ポイントは追加しない（既存の gates.after-plan で制御可能）。
-8. **Gate check**: Read `.poor-dev/config.json` gates. If `gates.after-${STEP}` is true:
-   - INTERACTIVE_MODE = true → AskUserQuestion: "進む / 修正する / 止める"
-     - "修正する" → user can manually run `/poor-dev.${STEP}`, then re-run `/poor-dev` to resume
-     - "止める" → save pipeline-state.json, exit
-   - INTERACTIVE_MODE = false:
-     - ゲート有効時 → PAUSE_FOR_APPROVAL("gate", STEP, step summary)
-     - ゲート無効時 → 自動続行
-9. **Update pipeline-state.json**: Add STEP to `completed`, set `current` to next step
-10. **Progress report**: "Step N/M: ${STEP} complete"
-
-##### D. Parallel Implementation (implement ステップ専用)
-
-implement は tasks.md の Phase 構造と `[P]` マーカーに基づき並列 dispatch を行う。
-
-**D1. tasks.md 解析**:
-- Phase ヘッダー (`## Phase N:`) を検出
-- 各タスクの `[P]` / `[P:group]` マーカーと `files:` メタデータを抽出
-- DAG 構造（depends: 関係）を構築
-
-**D2. 戦略選択** (`config.parallel` に基づく):
-```
-if parallel.enabled == false → 全 Phase を順次実行（既存動作）
-elif parallel.strategy == "auto":
-  if all [P] tasks have non-overlapping files → Strategy A (same-branch)
-  else → Strategy C (phase-split)
-elif parallel.strategy == "same-branch" → Strategy A
-elif parallel.strategy == "worktree" → Strategy B
-elif parallel.strategy == "phase-split" → Strategy C
-```
-
-**D3. Phase 別 dispatch**:
-- Phase ごとに dispatch（通常の implement sub-agent 呼び出し）
-- `[P]` タスクを含む Phase は並列 dispatch:
-  - 各 [P] タスクを個別プロンプトに分割
-  - 各プロンプトに「担当: [I1] のみ。files: src/server/** のみ変更可能」を明記
-  - 全 sub-agent を並列で dispatch（run_in_background=true）
-  - 全完了待ち → 次の Phase へ
-- `[P]` なしの Phase は通常の順次 dispatch
-
-**D4. 障害復旧**:
-- 1 sub-agent 失敗 → 成功分はコミット済み、失敗タスクのみ再 dispatch
-- ファイル衝突（戦略 B）→ review-fixer に解決委譲、3 回失敗 → 順次フォールバック
-- 全タイムアウト → pipeline-state.json に error 記録、次回 resume 時に順次再試行
-
-**D5. 進捗追跡**:
-- tasks.md の `[X]` マーカーと各 sub-agent の PROGRESS_FILE を監視
-- Phase 完了ごとに進捗報告
-
-**Post-implement source protection check** は既存のまま維持（全並列タスク完了後に実行）。
-
-**Post-implement source protection check** (implement ステップ完了後に必ず実行):
-1. `git diff --name-only HEAD` で変更ファイル一覧を取得
-2. 以下のパターンに一致するファイルがあれば:
-   `agents/**`, `commands/**`, `lib/poll-dispatch.sh`, `.poor-dev/**`
-   → `git checkout HEAD -- <matched_files>` で復元
-   → `[WARNING: Protected files were modified by implement and restored: <file_list>]` を出力
-3. 一致なし → 何もしない（正常）
-
-##### A2. Specify Step (Read-Only Override)
-
-Section A steps 1-5 に従う。以下の差分を適用:
-- **Step 3**: NON_INTERACTIVE_HEADER に加え READONLY_HEADER (5.4b) も prepend
-- **Step 6 dispatch**: Section A step 6 と同じポーリング方式。CLI ごとの差異:
-   - opencode: 同じコマンド（READONLY_HEADER のプロンプト制約で読み取り専用を担保）
-   - claude: `--disallowedTools "Edit,Write,Bash,NotebookEdit"` を追加
-   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)` (ポーリングなし)
-7. **Output parse**:
-   a. 1行目から `[BRANCH: ...]` マーカーを抽出 → SUGGESTED_BRANCH
-   b. 残り全体をドラフト本文として保持
-   c. `[ERROR: ...]` → stop pipeline, report error
-8. **Branch + FEATURE_DIR**:
-   - 既にフィーチャーブランチ上 → FEATURE_DIR は既知、スキップ
-   - main 上 → SUGGESTED_BRANCH でブランチ作成 + `mkdir -p FEATURE_DIR`
-9. **Write draft**: FEATURE_DIR/spec-draft.md にドラフト本文を書き出し
-10. **[NEEDS CLARIFICATION] 解決**:
-    - spec-draft.md 内の `[NEEDS CLARIFICATION: ...]` マーカーを全て抽出
-    - INTERACTIVE_MODE = true → 各マーカーについて AskUserQuestion（オプション表形式で質問を中継）→ 回答で spec-draft.md 内の該当マーカーを置換
-    - INTERACTIVE_MODE = false → マーカーを残す（仕様承認の一時停止中にユーザーが確認・手動解決）
-11. **ユーザー承認**:
-    - spec-draft.md の内容を以下の日本語整形フォーマットでユーザーに表示する（原文ファイルはそのまま保持）:
-
-      ```
-      ## 仕様ドラフト: [機能名の日本語訳]
-
-      ### ユーザーストーリー
-      - **P1**: [ストーリータイトルの日本語要約（1行）]
-      - **P1**: [同上]
-      - **P2**: [同上]
-      ...
-
-      ### 機能要件
-      - FR-001: [要件の日本語訳（1行）]
-      - FR-002: [同上]
-      ...
-
-      ### エッジケース
-      - [エッジケースの日本語要約（1行）]
-      ...
-
-      ### 成功基準
-      - SC-001: [基準の日本語訳（1行）]
-      ...
-      ```
-
-    - 各項目は spec-draft.md から抽出し、orchestrator が日本語に翻訳・要約する
-    - 詳細が必要な場合はユーザーが spec-draft.md を直接参照できる旨を注記する
+4. Append: `$ARGUMENTS` (full original user input) as context
+5. Resolve model: `bash lib/config-resolver.sh specify .poor-dev/config.json`
+6. Dispatch with polling (same pattern as pipeline):
+   - opencode/claude/FALLBACK dispatch → poll-dispatch.sh → JSON summary
+   - If cli=claude: add `--disallowedTools "Edit,Write,Bash,NotebookEdit"`
+   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)`
+7. Parse output:
+   - Extract `[BRANCH: ...]` → SUGGESTED_BRANCH
+   - Remaining = draft body
+   - `[ERROR: ...]` → stop
+8. Branch + FEATURE_DIR:
+   - Already on feature branch → FEATURE_DIR known, skip
+   - On main → create branch from SUGGESTED_BRANCH + `mkdir -p FEATURE_DIR`
+9. Write `FEATURE_DIR/spec-draft.md`
+10. **[NEEDS CLARIFICATION] resolution**:
+    - Extract all `[NEEDS CLARIFICATION: ...]` markers from spec-draft.md
+    - INTERACTIVE_MODE = true → AskUserQuestion per marker → replace in spec-draft.md
+    - INTERACTIVE_MODE = false → keep markers (user resolves during approval pause)
+11. **User approval**:
+    Display spec-draft.md as 日本語要約:
+    ```
+    ## 仕様ドラフト: [機能名の日本語訳]
+    ### ユーザーストーリー
+    - **P1**: [ストーリータイトルの日本語要約（1行）]
+    ### 機能要件
+    - FR-001: [要件の日本語訳（1行）]
+    ### エッジケース
+    - [日本語要約]
+    ### 成功基準
+    - SC-001: [基準の日本語訳]
+    ```
     - INTERACTIVE_MODE = true → AskUserQuestion:
-      - "承認する" → `cp spec-draft.md spec.md && rm spec-draft.md`、パイプライン続行
-      - "修正指示付きで棄却" → ユーザーの自由記述を spec-draft.md 末尾に `## Feedback` として追記 → パイプライン停止
-      - "棄却する" → パイプライン停止（spec-draft.md はそのまま保存）
-      - 停止時: pipeline-state.json に `status: "stopped"`, `pauseReason: "spec rejected"` を記録
-    - INTERACTIVE_MODE = false → 仕様サマリーを表示 → PAUSE_FOR_APPROVAL("spec-approval", "specify", summary)
-12. **Validation**: 承認後、spec.md に対して checklists/requirements.md を生成（orchestrator がインラインで実行）
-13. **Gate check + pipeline-state.json update**: Section A Step 8-9 と同じ
+      - "承認する" → `cp spec-draft.md spec.md && rm spec-draft.md`、続行
+      - "修正指示付きで棄却" → feedback 追記 → 停止
+      - "棄却する" → 停止 (spec-draft.md 保存)
+    - INTERACTIVE_MODE = false → 表示 → PAUSE_FOR_APPROVAL("spec-approval", "specify", summary)
+12. Validation: 承認後 spec.md → checklists/requirements.md 生成
 
-##### B. Review Steps (planreview, tasksreview, architecturereview, qualityreview, phasereview)
+#### 5B. Pipeline Dispatch (remaining steps)
 
-Reviews are dispatched as **black-box orchestrators**. The review command internally handles:
-persona spawn → aggregation → fixer → loop until convergence.
+specify 完了後、残りパイプラインを sub-agent として dispatch:
 
-ブラックボックス dispatch + シェルスクリプトベースポーリング + JSON サマリーによる verdict 抽出。
-
-**Review depth** (3.2): config.review_depth に基づきレビューの深度を動的調整。
-各レビューオーケストレーター内部で depth が判定される（poor-dev.md 側では dispatch するだけ）。
-
-1. **Read command**: Read `commands/poor-dev.${STEP}.md`
-2. **Strip sections**:
-   a. **Frontmatter removal**: ファイル先頭の YAML frontmatter ブロック（最初の `---` から次の `---` まで）を完全に除去する。
-      部分的な除去は禁止（handoffs, description 等を個別に削除するのではなく、frontmatter 全体を除去）。
-   b. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
-3. **Prepend**: NON_INTERACTIVE_HEADER
-4. **Append context block**: FEATURE_DIR, BRANCH, target_file (resolved by variant — see Section A step 4 table; e.g., plan.md for planreview, fix-plan.md for bugfix-small planreview)
-5. **Resolve model**: Same tiered config resolution as production steps (Section A step 5), using CATEGORY=`${STEP}`
-6. **Dispatch**: Section A step 6 と同じシェルスクリプトベースポーリング。
-   進捗マーカー（`[REVIEW-PROGRESS: ...]`）は poll-dispatch.sh が自動抽出し progress_file に書き出す。
-   オーケストレーターは progress_file を Read して新規マーカーのみリレー表示する。
-
-6b. **Rate limit detection**: Section A step 6b と同じフローを適用。JSON サマリーの exit_code != 0 の場合のみ検出・フォールバック・パイプライン中断を行う。
-7. **Verdict extraction**: JSON サマリーの verdict フィールドを確認:
-   - "GO" → proceed to next step
-   - "CONDITIONAL":
-     - INTERACTIVE_MODE = true → AskUserQuestion: "レビュー結果は CONDITIONAL です。進めますか？ / 修正しますか？"
-     - INTERACTIVE_MODE = false → 警告表示のみで自動続行
-   - "NO-GO":
-     - INTERACTIVE_MODE = true → AskUserQuestion: "レビューが NO-GO を返しました。修正して再レビューしますか？ / 止めますか？"
-     - INTERACTIVE_MODE = false → レビュー結果表示 → PAUSE_FOR_APPROVAL("review-nogo", STEP, verdict)
-   - null → stop pipeline, report error
-8. **Gate check + pipeline-state.json update**: Same as production steps
-
-##### C. Conditional Steps (bugfix, rebuildcheck)
-
-Steps that produce a marker determining the continuation pipeline. Dispatched via Section A, but with additional post-processing.
-
-1. **Dispatch**: Same as Section A (read command, strip, prepend, append context, resolve model, dispatch with adaptive polling)
-1b. **Rate limit detection**: Section A step 6b と同じフローを適用。dispatch 失敗時のレートリミット検出・フォールバック・パイプライン中断を行う。
-2. **Marker extraction**: Search output for structured markers:
-   - `[SCALE: SMALL]`, `[SCALE: LARGE]` (from bugfix)
-   - `[VERDICT: CONTINUE]`, `[VERDICT: REBUILD]` (from rebuildcheck)
-   - `[RECLASSIFY: FEATURE]` (from bugfix)
-3. **Variant resolution table**:
-
-   | Step | Marker | Variant | Continuation Pipeline |
-   |------|--------|---------|----------------------|
-   | bugfix | `[SCALE: SMALL]` | bugfix-small | `planreview(fix-plan.md) → implement → qualityreview → phasereview` |
-   | bugfix | `[SCALE: LARGE]` | bugfix-large | `plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
-   | bugfix | `[RECLASSIFY: FEATURE]` | — | Pipeline stops. Route to `/poor-dev.specify` |
-   | rebuildcheck | `[VERDICT: REBUILD]` | discovery-rebuild | `harvest → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
-   | rebuildcheck | `[VERDICT: CONTINUE]` | discovery-continue | Pipeline pauses (graceful) |
-
-4. **Update pipeline-state.json**: Record `variant`, `condition` (step + marker + resolved variant):
+1. Write classification JSON to `/tmp/poor-dev-classification.json`:
    ```json
    {
-     "condition": {
-       "step": "bugfix",
-       "marker": "[SCALE: SMALL]",
-       "resolved": "bugfix-small"
-     }
+     "flow": "${FLOW}",
+     "feature_dir": "${FEATURE_DIR}",
+     "branch": "${BRANCH}",
+     "summary": "${FEATURE_SUMMARY}",
+     "interactive_mode": ${INTERACTIVE_MODE},
+     "completed": ["specify"],
+     "arguments": "${ORIGINAL_ARGUMENTS}"
    }
    ```
-5. **Branch processing**:
-   - **Continuation pipeline exists** → Replace remaining pipeline steps with the variant's continuation pipeline. Resume dispatch loop from the next step.
-   - **discovery-continue** → Set `status: "paused"`, `pauseReason: "rebuildcheck CONTINUE"` in pipeline-state.json. Report "パイプラインを一時停止しました（リビルド判定: CONTINUE）。プロトタイプ開発を続行してください。再度 `/poor-dev` を実行すると再判定できます。" Exit pipeline.
-   - **Marker not found** → Set `status: "error"` in pipeline-state.json. Report error and stop pipeline.
-6. **Reclassification escape** (bugfix only): `[RECLASSIFY: FEATURE]` → Stop pipeline, delete pipeline-state.json, report "バグ修正から機能リクエストに再分類されました。" Route to `/poor-dev.specify`.
-
-#### 5.4 NON_INTERACTIVE_HEADER
-
-Prepended to all dispatched command prompts:
-
-```markdown
-## Mode: NON_INTERACTIVE (pipeline sub-agent)
-- No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
-- No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
-- Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
-- If blocked → [ERROR: description] and stop
-- File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
-- End with: files created/modified, unresolved items
-```
-
-#### 5.4b READONLY_HEADER
-
-specify ステップにのみ追加で prepend されるヘッダー:
-
-```markdown
-## Read-Only Execution Mode
-
-You have READ-ONLY tool access (Edit, Write, Bash, NotebookEdit are disabled).
-- Output the spec draft as plain markdown text in your response.
-- First line MUST be: `[BRANCH: suggested-short-name]`
-- The rest of your output is the spec draft content (using the Spec Template).
-- Include `[NEEDS CLARIFICATION: question]` markers inline as needed (max 3).
-- Do NOT attempt to create branches, directories, or files.
-```
-
-#### 5.4c PAUSE_FOR_APPROVAL(type, step, display_content)
-
-INTERACTIVE_MODE = false の場合に、確認が必要な箇所でパイプラインを一時停止するメカニズム。
-
-1. **成果物の表示**: display_content をユーザーに出力（仕様サマリー、プラン概要、レビュー結果等）
-2. **pipeline-state.json 更新**:
-   ```json
-   {
-     "status": "awaiting-approval",
-     "pauseReason": "${type} at ${step}",
-     "pendingApproval": { "type": "${type}", "step": "${step}" }
-   }
-   ```
-3. **ユーザーへのメッセージ**:
-   "⏸ 承認待ちで一時停止しました（${type}）。"
-   "成果物を確認後、`/poor-dev` を再実行すると承認して続行します。"
-   "パイプラインを中止するには pipeline-state.json を削除してください。"
-4. **パイプライン終了**
-
-**設計意図**: 再実行 = 暗黙の承認。ユーザーが成果物を確認し、問題なければ再実行する。問題があれば成果物を手動編集してから再実行するか、パイプラインを破棄する。
-
-#### 5.5 Error Recovery
-
-- **Step failure**: Pipeline stops. Artifacts preserved in FEATURE_DIR. Re-run `/poor-dev` to resume.
-- **Manual override**: Run individual commands directly, then `/poor-dev` to resume pipeline.
-- **Clarify skip**: Excluded from pipeline. specify includes clarification. For more, use gate + `/poor-dev.clarify`.
-- **Conditional pause**: `status: "paused"` (not error). Re-run `/poor-dev` for Case 2 resume.
-- **Variant preservation**: Resolved variant saved in pipeline-state.json. Conditional step NOT re-executed on resume.
-- **Spec rejection**: spec-draft.md preserved. Run `/poor-dev.specify` manually, then `/poor-dev` resumes from plan.
-- **Rate limit**: Fallback model auto-retry → both limited → `status: "rate-limited"` → re-run to resume. Logs: `~/.local/share/opencode/log/`
-- **Idle timeout**: IDLE_TIMEOUT reached → kill process → `status: "error"` in pipeline-state.json.
+2. Read `commands/poor-dev.pipeline.md`, strip frontmatter
+3. Prepend NON_INTERACTIVE_HEADER
+4. Append classification JSON as context
+5. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
+   `bash lib/config-resolver.sh plan .poor-dev/config.json`
+6. Dispatch via opencode/claude/Task() with polling
+7. Poll until completion → relay progress → display result

@@ -219,7 +219,8 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 
 | コマンド | 用途 |
 |---------|------|
-| `/poor-dev` | 入力の受付（全フロー自動分類・ルーティング） |
+| `/poor-dev` | 入力の受付（全フロー自動分類・ルーティング + specify オーケストレーション） |
+| `/poor-dev.pipeline` | パイプライン実行 sub-agent（`/poor-dev` から自動 dispatch。直接呼び出し不要） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 | `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
 
