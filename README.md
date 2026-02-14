@@ -284,6 +284,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `poor-dev benchmark update` | ベンチマークスキルファイルの更新 |
 | `poor-dev benchmark metrics <dir>` | 指定ディレクトリのメトリクス収集 |
 | `poor-dev benchmark compare` | COMPARISON.md の生成 |
+| `poor-dev benchmark run <combo> [version]` | ベンチマーク一括実行（セットアップ→opencode→メトリクス収集） |
 
 ---
 
