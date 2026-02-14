@@ -6,6 +6,12 @@
 #   ./benchmarks/run-benchmark.sh <combo> [version]
 #       セットアップ + CLI自動検出 + 非対話パイプライン実行 + 分析 + メトリクス収集
 #
+#   ./benchmarks/run-benchmark.sh --setup <combo> [version]
+#       環境セットアップのみ（lib/commands/pipeline.md 配置）
+#
+#   ./benchmarks/run-benchmark.sh --post <combo>
+#       ポスト処理のみ（メトリクス収集 + PoorDevSkills 分析 + 完了マーカー）
+#
 #   ./benchmarks/run-benchmark.sh --collect <combo>
 #       メトリクス収集のみ
 # ============================================================
@@ -45,28 +51,32 @@ jval() { jq -r "$1" "$CONFIG"; }
 
 # --- 引数解析 ---
 COLLECT_ONLY=false
+SETUP_ONLY=false
+POST_ONLY=false
 COMBO=""
 VERSION=""
 
-if [[ "${1:-}" == "--collect" ]]; then
-  COLLECT_ONLY=true
-  COMBO="${2:-}"
-elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  echo "Usage:"
-  echo "  $0 <combo> [version]    セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
-  echo "  $0 --collect <combo>    メトリクス収集のみ"
-  echo ""
-  echo "Arguments:"
-  echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all, claude_all)"
-  echo "  version  PoorDevSkills バージョン (デフォルト: package.json の version)"
-  echo ""
-  echo "利用可能な組み合わせ:"
-  jq -r '.combinations[] | "  \(.dir_name)\t(\(.orchestrator)/\(.sub_agent))"' "$CONFIG"
-  exit 0
-else
-  COMBO="${1:-}"
-  VERSION="${2:-}"
-fi
+case "${1:-}" in
+  --collect) COLLECT_ONLY=true; COMBO="${2:-}" ;;
+  --setup)   SETUP_ONLY=true;   COMBO="${2:-}"; VERSION="${3:-}" ;;
+  --post)    POST_ONLY=true;    COMBO="${2:-}" ;;
+  --help|-h)
+    echo "Usage:"
+    echo "  $0 <combo> [version]       セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
+    echo "  $0 --setup <combo> [ver]   環境セットアップのみ"
+    echo "  $0 --post <combo>          ポスト処理のみ（分析 + メトリクス + 完了マーカー）"
+    echo "  $0 --collect <combo>       メトリクス収集のみ"
+    echo ""
+    echo "Arguments:"
+    echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all, claude_all)"
+    echo "  version  PoorDevSkills バージョン (デフォルト: package.json の version)"
+    echo ""
+    echo "利用可能な組み合わせ:"
+    jq -r '.combinations[] | "  \(.dir_name)\t(\(.orchestrator)/\(.sub_agent))"' "$CONFIG"
+    exit 0
+    ;;
+  *)         COMBO="${1:-}"; VERSION="${2:-}" ;;
+esac
 
 if [[ -z "$COMBO" ]]; then
   err "combo を指定してください"
@@ -482,6 +492,25 @@ if [[ "$COLLECT_ONLY" == true ]]; then
     exit 1
   fi
   collect_and_summarize 0
+  exit 0
+fi
+
+if [[ "$SETUP_ONLY" == true ]]; then
+  # --setup モード: 環境セットアップのみ
+  setup_environment
+  exit 0
+fi
+
+if [[ "$POST_ONLY" == true ]]; then
+  # --post モード: メトリクス収集 + 分析 + 完了マーカー
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  collect_and_summarize 0
+  analyze_poordev
+  date +%s > "$TARGET_DIR/.bench-complete"
+  ok "ポスト処理完了: $COMBO"
   exit 0
 fi
 

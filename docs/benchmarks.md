@@ -61,6 +61,40 @@ benchmarks/
 
 DevSkills のコマンド/エージェントファイルをスキャフォールドに同期し、各ベンチマーク環境のスキルファイルだけを更新する。
 
+### run-benchmark.sh
+
+個別のフェーズを実行するユーティリティスクリプト。
+
+```bash
+# フル実行（セットアップ → パイプライン → 分析 → メトリクス）
+./benchmarks/run-benchmark.sh <combo> [version]
+
+# 環境セットアップのみ（lib/commands/pipeline.md 配置）
+./benchmarks/run-benchmark.sh --setup <combo> [version]
+
+# ポスト処理のみ（メトリクス収集 + PoorDevSkills 分析 + 完了マーカー）
+./benchmarks/run-benchmark.sh --post <combo>
+
+# メトリクス収集のみ
+./benchmarks/run-benchmark.sh --collect <combo>
+```
+
+`/bench` スキルは `--setup` と `--post` を使用する。パイプライン実行自体は対話 TUI（`opencode` / `claude`）経由で行われる。
+
+### ベンチマーク実行（/bench スキル）
+
+`/bench <combo>` で対話 TUI 経由のベンチマーク実行を開始する:
+
+1. `--setup` で環境セットアップ
+2. 右 tmux ペインに対話 TUI（opencode / claude）を起動
+3. `/poor-dev` プロンプトを TUI にキー入力として送信
+4. pipeline-state.json をポーリングして完了監視
+5. 完了後 `--post` でメトリクス収集・分析
+
+TUI 内ではスキル（`/poor-dev`）が正しく認識・実行され、PoorDevSkills パイプライン（specify → plan → tasks → implement → review）が完全に動作する。
+
+> **Note**: TUI モードでは `.bench-output.txt` は生成されない。パイプライン成果物（spec.md, plan.md, tasks.md, コード, pipeline-state.json）が実行結果となる。
+
 ### メトリクス収集
 
 ```bash
