@@ -146,6 +146,7 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
    - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
    - If blocked → [ERROR: description] and stop
    - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+   - Git 操作制限: commit は許可、push は絶対に禁止（git push, git push origin 等すべて）
    - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
    - End with: files created/modified, unresolved items
 
