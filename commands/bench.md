@@ -243,7 +243,12 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
           if echo "$RESOLVED_PATH" | grep -q '\.\.'; then
             echo "[${ELAPSED}s] BENCH_PERMISSION_SUSPICIOUS: path contains '..': $PERM_PATH"
           elif echo "$RESOLVED_PATH" | grep -q "^${PROJECT_ROOT}/"; then
-            IS_SAFE=true
+            # インフラパスはプロジェクト内でも承認しない
+            if echo "$RESOLVED_PATH" | grep -qE "/(lib|commands)/"; then
+              echo "[${ELAPSED}s] BENCH_PERMISSION_DENIED: infrastructure path: $PERM_PATH"
+            else
+              IS_SAFE=true
+            fi
           elif [ "$RESOLVED_PATH" = "$PROJECT_ROOT" ]; then
             IS_SAFE=true
           else

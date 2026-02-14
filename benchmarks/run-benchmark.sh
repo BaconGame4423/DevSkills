@@ -50,8 +50,8 @@ fi
 jval() { jq -r "$1" "$CONFIG"; }
 
 # --- スキャフォールドホワイトリスト ---
-SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules")
-SCAFFOLD_LINKS=("commands" "lib")
+SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules" "commands" "lib")
+SCAFFOLD_LINKS=()
 SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version" "CLAUDE.md" "AGENTS.md")
 
 _is_scaffold() {
@@ -281,17 +281,17 @@ setup_environment() {
     warn "pipeline.md が見つかりません"
   fi
 
-  # lib/ symlink（存在しない場合のみ）
-  if [[ ! -e "$TARGET_DIR/lib" ]]; then
-    ln -s "$DEVSKILLS_DIR/lib" "$TARGET_DIR/lib"
-    ok "lib/ symlink を作成"
-  fi
+  # lib/ 読み取り専用コピー（symlink ではなく実体コピー + 書き込み不可）
+  rm -f "$TARGET_DIR/lib" 2>/dev/null || rm -rf "$TARGET_DIR/lib"
+  cp -rL "$DEVSKILLS_DIR/lib" "$TARGET_DIR/lib"
+  chmod -R a-w "$TARGET_DIR/lib"
+  ok "lib/ を読み取り専用コピー"
 
-  # commands/ symlink（存在しない場合のみ）
-  if [[ ! -e "$TARGET_DIR/commands" ]]; then
-    ln -s "$DEVSKILLS_DIR/commands" "$TARGET_DIR/commands"
-    ok "commands/ symlink を作成"
-  fi
+  # commands/ 読み取り専用コピー
+  rm -f "$TARGET_DIR/commands" 2>/dev/null || rm -rf "$TARGET_DIR/commands"
+  cp -rL "$DEVSKILLS_DIR/commands" "$TARGET_DIR/commands"
+  chmod -R a-w "$TARGET_DIR/commands"
+  ok "commands/ を読み取り専用コピー"
 
   # 5) git commit（.git が存在する場合のみ）
   if [[ -d "$TARGET_DIR/.git" ]]; then

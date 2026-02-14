@@ -25,9 +25,16 @@ NON_INTERACTIVE_HEADER='## Mode: NON_INTERACTIVE (pipeline sub-agent)
 - No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
 - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
 - If blocked → [ERROR: description] and stop
-- File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
 - Git 操作制限: commit は許可、push は絶対に禁止（git push, git push origin 等すべて）
 - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
+
+⚠️ FILE SCOPE — 絶対に守ること:
+- 変更可能: FEATURE_DIR 内 + プロジェクトソースファイルのみ
+- 変更禁止: lib/, commands/, agents/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+- /tmp/ ファイルの読み取り・作成・変更は禁止（poll-dispatch.sh が自動管理）
+- パイプライン基盤（シェルスクリプト、設定ファイル）の分析・修正・デバッグは禁止
+- 基盤に問題を発見しても修正しないこと → [ERROR: infrastructure issue] を出力して停止
+
 - End with: files created/modified, unresolved items'
 
 READONLY_HEADER='## Read-Only Execution Mode
