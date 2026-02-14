@@ -72,13 +72,37 @@ opencode はディレクトリ内の `opencode.json` でモデル設定済み。
 
 パスは絶対パスに解決してから送信すること。
 
-## Step 7: CLI 初期化待機
+## Step 7: CLI 初期化待機（ポーリング）
+
+TUI が入力受付状態になるまで `tmux capture-pane` でポーリングする。
+
+CLI ごとの READY_PATTERN:
+- `opencode` → `"Ask anything"`
+- `claude` → `">"`
 
 ```bash
-sleep 8
+# READY_PATTERN は Step 3 の ORCH_CLI に基づいて設定
+if [ "$ORCH_CLI" = "opencode" ]; then
+  READY_PATTERN="Ask anything"
+else
+  READY_PATTERN=">"
+fi
+
+WAIT_TIMEOUT=30; WAITED=0
+while [ $WAITED -lt $WAIT_TIMEOUT ]; do
+  if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "$READY_PATTERN"; then
+    sleep 1  # 追加の安定待機
+    break
+  fi
+  sleep 1; WAITED=$((WAITED + 1))
+done
+if [ $WAITED -ge $WAIT_TIMEOUT ]; then
+  echo "ERROR: TUI が ${WAIT_TIMEOUT}秒以内に初期化されませんでした"
+  # ユーザーにエラー通知して中断
+fi
 ```
 
-TUI が起動し入力受付状態になるまで待機する。
+ポーリング間隔: 1 秒、タイムアウト: 30 秒。タイムアウト時はエラー通知して中断する。
 
 ## Step 8: プロンプト構築・送信
 
@@ -92,11 +116,20 @@ REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' ben
 PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
 ```
 
-送信:
+送信（変化確認付き）:
 ```bash
+# 送信前のペイン内容を取得
+BEFORE=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
+# paste-buffer 送信
 tmux set-buffer -b bench "$PROMPT"
 tmux paste-buffer -t $TARGET -b bench -d
 tmux send-keys -t $TARGET Enter
+sleep 2
+# 送信後のペイン内容を比較
+AFTER=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
+if [ "$BEFORE" = "$AFTER" ]; then
+  echo "WARNING: プロンプト送信が反映されていない可能性があります"
+fi
 ```
 
 `tmux send-keys -l` は Bubbletea TUI に UTF-8 マルチバイト文字（日本語）を送信できない。
