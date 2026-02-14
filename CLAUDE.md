@@ -39,4 +39,3 @@
 
 - ベンチマーク基盤の詳細は [docs/benchmarks.md](docs/benchmarks.md) を参照
 - `benchmarks/` ソースファイルは npm パッケージに含まれる（CLI: `poor-dev benchmark`）
-- ベンチマーク実行結果ディレクトリも git で追跡する

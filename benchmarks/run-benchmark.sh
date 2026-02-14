@@ -52,7 +52,7 @@ jval() { jq -r "$1" "$CONFIG"; }
 # --- スキャフォールドホワイトリスト ---
 SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs")
 SCAFFOLD_LINKS=("commands" "lib")
-SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version")
+SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version" "CLAUDE.md" "AGENTS.md")
 
 _is_scaffold() {
   local base="$1"

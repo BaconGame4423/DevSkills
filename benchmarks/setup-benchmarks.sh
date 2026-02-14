@@ -128,7 +128,20 @@ update_skill() {
     return 1
   fi
   if [[ ! -d "$target/.git" ]]; then
-    ( cd "$target" && git init -q && git add -A && git commit -q -m "initial scaffold for $dir_name" )
+    (
+      cd "$target"
+      git init -q
+      # pre-push hook: ベンチマーク環境からの push を物理的にブロック
+      mkdir -p .git/hooks
+      cat > .git/hooks/pre-push <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+      chmod +x .git/hooks/pre-push
+      git add -A
+      git commit -q -m "initial scaffold for $dir_name"
+    )
     echo "  created .git (was missing)"
   fi
 
@@ -142,6 +155,8 @@ update_skill() {
   # 1) common ファイル更新
   cp "$SCAFFOLD/common/constitution.md" "$target/"
   cp "$SCAFFOLD/common/.poor-dev-version" "$target/"
+  cp "$SCAFFOLD/common/CLAUDE.md" "$target/"
+  cp "$SCAFFOLD/common/AGENTS.md" "$target/"
   rm -rf "$target/templates"
   cp -r "$SCAFFOLD/common/templates" "$target/"
   echo "  updated common files"
@@ -171,6 +186,14 @@ update_skill() {
 
   # 5) git commit（変更がある場合のみ、.git が存在する場合のみ）
   if [[ -d "$target/.git" ]]; then
+    # pre-push hook を確保（update 時にも）
+    mkdir -p "$target/.git/hooks"
+    cat > "$target/.git/hooks/pre-push" <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+    chmod +x "$target/.git/hooks/pre-push"
     (
       cd "$target"
       if [[ -n "$(git status --porcelain)" ]]; then
@@ -248,6 +271,8 @@ for i in $(seq 0 $((combo_count - 1))); do
   cp "$SCAFFOLD/common/constitution.md" "$target/"
   cp "$SCAFFOLD/common/.gitignore" "$target/"
   cp "$SCAFFOLD/common/.poor-dev-version" "$target/"
+  cp "$SCAFFOLD/common/CLAUDE.md" "$target/"
+  cp "$SCAFFOLD/common/AGENTS.md" "$target/"
   cp -r "$SCAFFOLD/common/templates" "$target/"
   echo "  copied common files"
 
@@ -293,6 +318,14 @@ ENDJSON
     (
       cd "$target"
       git init -q
+      # pre-push hook: ベンチマーク環境からの push を物理的にブロック
+      mkdir -p .git/hooks
+      cat > .git/hooks/pre-push <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+      chmod +x .git/hooks/pre-push
       git add -A
       git commit -q -m "initial scaffold for $dir_name"
     )
