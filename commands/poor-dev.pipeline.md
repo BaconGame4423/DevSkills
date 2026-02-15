@@ -39,8 +39,16 @@ Handle exit code from `pipeline-runner.sh`:
 |-----------|---------|--------|
 | `0` | All steps complete | Report success with step summary |
 | `1` | Error | Report error details from JSONL output |
-| `2` | NO-GO / Pause | Report NO-GO verdict, advise re-run after resolution |
+| `2` | Pause (sub-types below) | Parse last JSONL line for type |
 | `3` | Rate limit | Report rate limit, advise waiting and re-running |
+
+**Exit code 2 sub-types** (distinguish by last JSONL line):
+
+| JSONL `type`/`verdict` | Meaning | User Action |
+|------------------------|---------|-------------|
+| `type: clarification` | Clarifications found in spec | Run `/poor-dev.clarify`, then re-run `/poor-dev` |
+| `type: gate` | Config gate (e.g. `after-specify`) | Review artifacts, then re-run `/poor-dev` |
+| `verdict: NO-GO` | Review NO-GO | Resolve issues, then re-run `/poor-dev` |
 
 stdout is JSONL format — each line is a JSON object describing step progress.
 Parse and relay progress to the user.
@@ -51,6 +59,13 @@ Parse and relay progress to the user.
 - **Rate limit**: Wait and re-run. `pipeline-runner.sh` handles resume via `pipeline-state.json`.
 - **NO-GO verdict**: Review output, resolve issues, re-run `/poor-dev`.
 - **Gate pause**: `pipeline-runner.sh` exits 0 at gates. Re-run to continue past gate.
+
+## Spec Review Gate (optional)
+
+`.poor-dev/config.json` に `"gates": {"after-specify": "approval"}` を設定すると、
+specify 完了後にパイプラインが一時停止し、spec.md を確認してから再実行で続行できる。
+
+`"auto_approve": true` が設定されている場合、ゲートと clarification は自動的にスキップされる（ベンチマーク用）。
 
 ## Headers
 

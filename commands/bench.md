@@ -316,6 +316,10 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
       if [ "$STATUS" = "error" ]; then
         echo "BENCH_PIPELINE_ERROR: <combo>"; exit 1
       fi
+      if [ "$STATUS" = "awaiting-approval" ]; then
+        echo "BENCH_AWAITING_APPROVAL: <combo> (auto_approve may be missing in config)"
+        exit 1
+      fi
     else
       echo "[${ELAPSED}s] pipeline-state.json not found yet"
     fi

@@ -92,6 +92,12 @@ if [[ -f "$STATE_FILE" ]]; then
   while IFS= read -r s; do
     [[ -n "$s" ]] && COMPLETED_SET["$s"]=1
   done < <(jq -r '.completed[]?' "$STATE_FILE" 2>/dev/null || true)
+
+  # Clear any pending approval on resume
+  PENDING_STATUS=$(jq -r '.status // "active"' "$STATE_FILE" 2>/dev/null || true)
+  if [[ "$PENDING_STATUS" == "awaiting-approval" ]]; then
+    bash "$SCRIPT_DIR/pipeline-state.sh" clear-approval "$FD" > /dev/null
+  fi
 fi
 
 # --- Read config for timeouts ---
@@ -459,6 +465,11 @@ for STEP in $PIPELINE_STEPS; do
     exit 1
   }
 
+  # Warn if unresolved clarifications exist
+  if [[ "$STEP" == "suggest" ]] && [[ -f "$FD/pending-clarifications.json" ]]; then
+    echo "{\"step\":\"$STEP\",\"warning\":\"unresolved clarifications exist in pending-clarifications.json\"}"
+  fi
+
   echo "{\"step\":\"$STEP\",\"status\":\"starting\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\"}"
 
   # --- L3: Pre-implement validation + Phase-split dispatch ---
@@ -681,13 +692,40 @@ CTX_EOF
 
   bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
 
+  # --- Read auto_approve once per step ---
+  AUTO_APPROVE="false"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    AUTO_APPROVE=$(jq -r '.auto_approve // false' "$CONFIG_FILE" 2>/dev/null || echo "false")
+  fi
+
+  # --- Clarification gate (after specify) ---
+  if [[ "$STEP" == "specify" ]]; then
+    CLARIFICATIONS=$(echo "$RESULT" | jq -r '.clarifications | length' 2>/dev/null || echo "0")
+    if [[ "$CLARIFICATIONS" -gt 0 ]]; then
+      # Save clarifications atomically for orchestrator / /poor-dev.clarify
+      echo "$RESULT" | jq '.clarifications' > "$FD/pending-clarifications.json.tmp"
+      mv "$FD/pending-clarifications.json.tmp" "$FD/pending-clarifications.json"
+
+      if [[ "$AUTO_APPROVE" != "true" ]]; then
+        bash "$SCRIPT_DIR/pipeline-state.sh" set-approval "$FD" "clarification" "$STEP" > /dev/null
+        echo "{\"step\":\"$STEP\",\"status\":\"awaiting-approval\",\"type\":\"clarification\"}"
+        exit 2
+      else
+        echo "{\"step\":\"$STEP\",\"status\":\"auto-approved\",\"type\":\"clarification\"}"
+      fi
+    fi
+  fi
+
   # --- Gate check ---
 
   if [[ -f "$CONFIG_FILE" ]]; then
     GATE=$(jq -r ".gates[\"after-${STEP}\"] // empty" "$CONFIG_FILE" 2>/dev/null || true)
     if [[ -n "$GATE" ]]; then
-      echo "{\"action\":\"gate\",\"step\":\"$STEP\",\"gate\":\"after-${STEP}\"}"
-      exit 0
+      if [[ "$AUTO_APPROVE" != "true" ]]; then
+        bash "$SCRIPT_DIR/pipeline-state.sh" set-approval "$FD" "gate" "$STEP" > /dev/null
+        echo "{\"action\":\"gate\",\"step\":\"$STEP\",\"gate\":\"after-${STEP}\"}"
+        exit 2
+      fi
     fi
   fi
 

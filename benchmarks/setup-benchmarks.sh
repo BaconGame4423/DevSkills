@@ -62,6 +62,7 @@ derive_config() {
   },
   "overrides": {},
   "gates": {},
+  "auto_approve": true,
   "polling": {
     "interval": 1,
     "idle_timeout": 120,
