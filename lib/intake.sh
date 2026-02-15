@@ -128,17 +128,29 @@ if [[ ! -f "$FD/spec.md" ]] || [[ ! -s "$FD/spec.md" ]]; then
 fi
 echo '{"event":"specify","status":"complete","file":"'"$FEATURE_DIR/spec.md"'"}'
 
-# --- 5. Pipeline runner ---
+# --- 5. Pipeline runner (background) ---
+#
+# pipeline-runner.sh can take 30-60+ minutes to complete (dispatching multiple
+# sub-agent steps). Running it synchronously would exceed the bash tool timeout
+# in TUI-based LLM environments (opencode, claude). Instead, we launch it in
+# the background and return immediately so the calling model can poll
+# pipeline-state.json for progress.
+
+PIPELINE_LOG="$FD/pipeline.log"
+PIPELINE_PID_FILE="$FD/pipeline.pid"
 
 echo '{"event":"pipeline","status":"starting"}'
-PIPELINE_EXIT=0
-bash "$SCRIPT_DIR/pipeline-runner.sh" \
+
+nohup bash "$SCRIPT_DIR/pipeline-runner.sh" \
   --flow "$FLOW" \
   --feature-dir "$FEATURE_DIR" \
   --branch "$BRANCH" \
   --project-dir "$PROJECT_DIR" \
   --completed specify \
-  --summary "$INPUT" || PIPELINE_EXIT=$?
+  --summary "$INPUT" > "$PIPELINE_LOG" 2>&1 &
+PIPELINE_PID=$!
+echo "$PIPELINE_PID" > "$PIPELINE_PID_FILE"
 
-echo '{"event":"pipeline","status":"complete","exit_code":'"$PIPELINE_EXIT"'}'
-exit $PIPELINE_EXIT
+echo '{"event":"pipeline","status":"background","pid":'"$PIPELINE_PID"',"feature_dir":"'"$FEATURE_DIR"'","log":"'"$PIPELINE_LOG"'"}'
+echo '{"event":"intake_complete","feature_dir":"'"$FEATURE_DIR"'","branch":"'"$BRANCH"'","spec":"'"$FEATURE_DIR/spec.md"'"}'
+exit 0

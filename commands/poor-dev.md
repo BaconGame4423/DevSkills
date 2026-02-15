@@ -101,12 +101,57 @@ INPUTEOF
 `<分類結果>` は Step 1 の分類結果に置換する（feature, bugfix, investigation, roadmap, discovery）。
 `<User Input セクションのテキストをここにコピー>` は上記 User Input セクションの内容をそのまま貼り付ける。
 
-exit code で分岐:
-- `0`: 全完了 → stdout の JSONL から結果サマリーを報告
-- `1`: エラー → エラー詳細を報告
-- `2`: NO-GO → ユーザーと対話して解決策を検討
-- `3`: rate-limit → 時間をおいて再実行を案内
+intake.sh は仕様生成（specify）を同期実行した後、パイプライン（残りステップ）をバックグラウンドで起動して即座に終了する。
+
+exit code `0` の場合、stdout の JSONL から `feature_dir` を取得し、Step 4 へ進む。
+exit code 非0 の場合はエラーを報告して終了。
 
 非パイプラインフローの場合:
 - Q&A → `/poor-dev.ask` コマンドを実行
 - Documentation → `/poor-dev.report` コマンドを実行
+
+### Step 4: パイプライン監視
+
+intake.sh 完了後、パイプラインはバックグラウンドで実行中。`pipeline-state.json` をポーリングして進捗を報告する。
+
+**重要: lib/ や commands/ のファイルを読んだり変更しないこと。** インフラ調査は禁止。
+
+以下のポーリングコマンドを **繰り返し** 実行する（1回の bash 呼び出しで最大60秒待機）:
+
+```bash
+FD="<feature_dir の絶対パス>"
+PID_FILE="$FD/pipeline.pid"
+STATE_FILE="$FD/pipeline-state.json"
+
+# PID 生存確認
+if [ -f "$PID_FILE" ]; then
+  PID=$(cat "$PID_FILE")
+  if kill -0 "$PID" 2>/dev/null; then
+    echo "RUNNING (PID=$PID)"
+  else
+    wait "$PID" 2>/dev/null; EXIT=$?
+    echo "FINISHED (exit=$EXIT)"
+    rm -f "$PID_FILE"
+  fi
+else
+  echo "NO_PID_FILE"
+fi
+
+# 状態確認
+if [ -f "$STATE_FILE" ]; then
+  jq '{current, status, completed_count: (.completed | length), total: (.pipeline | length)}' "$STATE_FILE"
+else
+  echo "NO_STATE_FILE"
+fi
+```
+
+ポーリング結果で分岐:
+- `RUNNING` + `status=active` → 30秒待ってから再度ポーリング
+- `FINISHED (exit=0)` + `status=completed` → 成功報告
+- `FINISHED (exit=1)` → `pipeline.log` の末尾20行を表示してエラー報告
+- `FINISHED (exit=2)` → NO-GO verdict。ユーザーと対話して解決策を検討
+- `FINISHED (exit=3)` → rate-limit。時間をおいて再実行を案内
+- `NO_PID_FILE` + `status=completed` → パイプライン既に完了
+- `NO_PID_FILE` + `status=active` → 以前の実行が中断された。ユーザーに `/poor-dev` 再実行を案内
+
+**エラー時の禁止事項**: pipeline-runner.sh を直接呼び出さないこと。lib/ 内のスクリプトを読まないこと。エラーはそのまま報告し、ユーザーに `/poor-dev` 再実行を案内する。

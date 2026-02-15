@@ -26,6 +26,7 @@ while [[ $# -gt 0 ]]; do
     --project-dir) PROJECT_DIR="$2"; shift 2 ;;
     --completed)  COMPLETED_CSV="$2"; shift 2 ;;
     --summary)    SUMMARY="$2";     shift 2 ;;
+    --resume)     shift ;;  # no-op: resume is automatic via pipeline-state.json
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
