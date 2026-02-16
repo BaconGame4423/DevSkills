@@ -543,7 +543,7 @@ for STEP in $PIPELINE_STEPS; do
         echo "$PROTECTION_RESULT"
       fi
       bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
-      echo "{\"step\":\"$STEP\",\"status\":\"complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"phase-split\"}"
+      echo "{\"step\":\"$STEP\",\"status\":\"step_complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"phase-split\"}"
       continue
     fi
     # Fallback: no phases found — continue to single dispatch below
@@ -590,7 +590,7 @@ for STEP in $PIPELINE_STEPS; do
       echo "$REVIEW_RESULT"
 
       bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
-      echo "{\"step\":\"$STEP\",\"status\":\"complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"bash\"}"
+      echo "{\"step\":\"$STEP\",\"status\":\"step_complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"bash\"}"
       continue
     fi
   fi
@@ -895,7 +895,13 @@ CTX_EOF
   echo "{\"step\":\"$STEP\",\"status\":\"step_complete\",\"progress\":\"$COMPLETED_COUNT/$TOTAL_STEPS\",\"result\":$RESULT}"
 done
 
-# All steps complete
+# --next mode: 1 ステップ実行済み。pipeline_complete は出さない。
+# 次回 --next 呼び出し時に L499-503 が全完了を検知して pipeline_complete を出力する。
+if [[ "$NEXT_MODE" == "true" ]]; then
+  exit 0
+fi
+
+# All steps complete (full pipeline mode)
 bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "completed" > /dev/null 2>&1 || true
 echo "{\"status\":\"pipeline_complete\",\"flow\":\"$FLOW\",\"steps_completed\":$STEP_COUNT}"
 exit 0

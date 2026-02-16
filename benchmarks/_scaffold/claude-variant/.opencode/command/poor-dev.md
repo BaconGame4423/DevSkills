@@ -112,8 +112,8 @@ bash lib/pipeline-runner.sh --next --flow <FLOW> --feature-dir <FEATURE_DIR> --b
 各実行で1ステップが完了する。
 
 **ループ判定（出力テキストで判断）:**
-- 出力に `pipeline_complete` が含まれる → **全完了。最終結果を報告して終了。**
-- 出力に `step_complete` が含まれる → **完了したステップを1行報告し、同じコマンドを再実行。**
+- 出力に `step_complete` が含まれる → **完了したステップを1行報告し、同じコマンドを再実行。**（優先）
+- 出力に `pipeline_complete` が含まれる（かつ `step_complete` がない場合のみ）→ **全完了。最終結果を報告して終了。**
 - 出力に `awaiting-approval` かつ `clarification` が含まれる → **出力テキストをそのままユーザーに見せ、回答を待つ。回答を得たら:**
   ```bash
   bash lib/apply-clarifications.sh <FEATURE_DIR> <<'ANSWERS'
