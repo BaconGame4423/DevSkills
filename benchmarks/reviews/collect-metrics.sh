@@ -103,7 +103,7 @@ echo ""
 echo "--- Git History ---"
 
 if [ -d "$DIR_PATH/.git" ]; then
-    git -C "$DIR_PATH" log --oneline --all --format='%h %ai %s' 2>/dev/null || echo "  (no commits)"
+    git -C "$DIR_PATH" log --oneline --all --format='%h %ai %s' --max-count=20 2>/dev/null || echo "  (no commits)"
 
     first_commit=$(git -C "$DIR_PATH" log --all --reverse --format='%ai' 2>/dev/null | head -1)
     last_commit=$(git -C "$DIR_PATH" log --all --format='%ai' 2>/dev/null | head -1)

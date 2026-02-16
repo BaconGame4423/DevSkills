@@ -362,18 +362,15 @@ STEP 3: Issues > 0 → Fix sub-agent → back to STEP 1
 - 修正サブエージェント: write-enabled（`review-fixer`）
 - 10回超で安全弁（ユーザー確認）
 
-### エージェント間通信: 英語コンパクトYAML
+### エージェント間通信: 行指向フラットテキスト
 
 トークン効率のため、エージェント間通信は全て英語:
 
-```yaml
-p: PM
-v: CONDITIONAL
-i:
-  - H: success metrics not quantitative
-  - M: P2 priority rationale unclear
-r:
-  - add DAU/MAU ratio as metric
+```
+VERDICT: CONDITIONAL
+ISSUE: H | success metrics not quantitative | spec.md
+ISSUE: M | P2 priority rationale unclear | plan.md
+REC: add DAU/MAU ratio as metric
 ```
 
 ### レビューの判定
