@@ -134,7 +134,7 @@ fi
 
 # --- Initialize review-log.yaml ---
 
-LOG_PATH="$FD/review-log.yaml"
+LOG_PATH="$FD/review-log-${REVIEW_TYPE}.yaml"
 NEXT_ID=1
 
 if [[ -f "$LOG_PATH" ]]; then

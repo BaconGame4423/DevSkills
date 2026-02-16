@@ -122,9 +122,20 @@ while [[ $ITER -lt $MAX_ITER ]]; do
       --header non_interactive
     )
 
-    # Add target file as context
+    # Add target file/directory as context
     if [[ -f "$TARGET_FILE" ]]; then
       COMPOSE_ARGS+=(--context "target=$TARGET_FILE")
+    elif [[ -d "$TARGET_FILE" ]]; then
+      # ディレクトリターゲット: 実装ファイルを個別に追加（最大 20 件）
+      local impl_files
+      impl_files=$(find "$TARGET_FILE" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null || true)
+      local impl_idx=0
+      while IFS= read -r impl_file; do
+        [[ -z "$impl_file" ]] && continue
+        impl_idx=$((impl_idx + 1))
+        [[ $impl_idx -gt 20 ]] && break
+        COMPOSE_ARGS+=(--context "impl_${impl_idx}=$impl_file")
+      done <<< "$impl_files"
     fi
 
     # Add spec as context
@@ -181,7 +192,8 @@ while [[ $ITER -lt $MAX_ITER ]]; do
     --output-dir "$OUTPUT_DIR" \
     --log "$LOG_PATH" \
     --id-prefix "$ID_PREFIX" \
-    --next-id "$NEXT_ID")
+    --next-id "$NEXT_ID" \
+    --review-type "$REVIEW_TYPE")
 
   TOTAL=$(json_get "$AGG" '.total')
   COUNT_C=$(json_get "$AGG" '.C')

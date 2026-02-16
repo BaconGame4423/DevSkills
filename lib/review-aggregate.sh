@@ -27,14 +27,16 @@ OUTPUT_DIR=""
 LOG_PATH=""
 ID_PREFIX=""
 NEXT_ID=1
+REVIEW_TYPE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-    --log)        LOG_PATH="$2"; shift 2 ;;
-    --id-prefix)  ID_PREFIX="$2"; shift 2 ;;
-    --next-id)    NEXT_ID="$2"; shift 2 ;;
-    *)            die "Unknown argument: $1" ;;
+    --output-dir)   OUTPUT_DIR="$2"; shift 2 ;;
+    --log)          LOG_PATH="$2"; shift 2 ;;
+    --id-prefix)    ID_PREFIX="$2"; shift 2 ;;
+    --next-id)      NEXT_ID="$2"; shift 2 ;;
+    --review-type)  REVIEW_TYPE="$2"; shift 2 ;;
+    *)              die "Unknown argument: $1" ;;
   esac
 done
 
@@ -135,8 +137,14 @@ fi
 
 STABLE_ISSUES=""
 if [[ -n "$LOG_PATH" ]]; then
-  STABLE_ISSUES="$(dirname "$LOG_PATH")/review-issues-latest.txt"
+  if [[ -n "$REVIEW_TYPE" ]]; then
+    STABLE_ISSUES="$(dirname "$LOG_PATH")/review-issues-${REVIEW_TYPE}.txt"
+  else
+    STABLE_ISSUES="$(dirname "$LOG_PATH")/review-issues-latest.txt"
+  fi
   cp "$ISSUES_FILE" "$STABLE_ISSUES"
+  # 互換性のため latest も更新
+  cp "$ISSUES_FILE" "$(dirname "$LOG_PATH")/review-issues-latest.txt"
 fi
 
 # --- Output ---

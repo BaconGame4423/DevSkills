@@ -84,14 +84,11 @@ for artifact in spec.md plan.md tasks.md review-log.yaml; do
 done
 
 # Check pipeline-state.json if exists
-if [ -f "$DIR_PATH/.poor-dev/pipeline-state.json" ]; then
+PSJ=$(find "$DIR_PATH" -name "pipeline-state.json" -not -path '*/_runs/*' -not -path '*/.git/*' -print -quit 2>/dev/null)
+if [ -n "$PSJ" ]; then
     echo ""
-    echo "  pipeline-state.json:"
-    cat "$DIR_PATH/.poor-dev/pipeline-state.json" 2>/dev/null | head -20
-elif [ -f "$DIR_PATH/pipeline-state.json" ]; then
-    echo ""
-    echo "  pipeline-state.json:"
-    cat "$DIR_PATH/pipeline-state.json" 2>/dev/null | head -20
+    echo "  pipeline-state.json (${PSJ#$DIR_PATH/}):"
+    head -20 "$PSJ" 2>/dev/null
 else
     echo "  pipeline-state.json: not found"
 fi
@@ -105,8 +102,8 @@ echo "--- Git History ---"
 if [ -d "$DIR_PATH/.git" ]; then
     git -C "$DIR_PATH" log --oneline --all --format='%h %ai %s' --max-count=20 2>/dev/null || echo "  (no commits)"
 
-    first_commit=$(git -C "$DIR_PATH" log --all --reverse --format='%ai' 2>/dev/null | head -1)
-    last_commit=$(git -C "$DIR_PATH" log --all --format='%ai' 2>/dev/null | head -1)
+    first_commit=$(git -C "$DIR_PATH" log --all --reverse --format='%ai' --max-count=1 2>/dev/null)
+    last_commit=$(git -C "$DIR_PATH" log --all --format='%ai' --max-count=1 2>/dev/null)
     commit_count=$(git -C "$DIR_PATH" rev-list --all --count 2>/dev/null || echo 0)
     echo ""
     echo "  Commits: $commit_count"
@@ -124,7 +121,7 @@ echo "--- Timing Estimation ---"
 
 # Try to get timing from git or file modification times
 if [ -d "$DIR_PATH/.git" ]; then
-    first_ts=$(git -C "$DIR_PATH" log --all --reverse --format='%at' 2>/dev/null | head -1)
+    first_ts=$(git -C "$DIR_PATH" log --all --reverse --format='%at' --max-count=1 2>/dev/null)
 else
     # Fallback: use oldest output file modification time (recursive)
     earliest_mod=""

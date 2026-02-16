@@ -161,7 +161,10 @@ context_args_for_step() {
       ;;
     architecturereview*|qualityreview*|phasereview*)
       [[ -f "$fd/spec.md" ]] && args="$args --context spec=$fd/spec.md"
-      [[ -f "$fd/review-log.yaml" ]] && args="$args --context review_log=$fd/review-log.yaml"
+      # レビュータイプ別ログがあれば使用、なければ旧形式にフォールバック
+      local _rl="$fd/review-log-${step}.yaml"
+      [[ ! -f "$_rl" ]] && _rl="$fd/review-log.yaml"
+      [[ -f "$_rl" ]] && args="$args --context review_log=$_rl"
       ;;
     bugfix)
       [[ -f "$fd/bug-report.md" ]] && args="$args --context bug_report=$fd/bug-report.md"
@@ -373,9 +376,28 @@ dispatch_implement_phases() {
 
     # --- Compose prompt with Phase Scope Directive ---
     local prompt_file="/tmp/poor-dev-prompt-implement-phase${phase_num}-$$.txt"
-    local command_file="$project_dir/commands/poor-dev.implement.md"
-    if [[ ! -f "$command_file" ]]; then
-      command_file="$project_dir/.opencode/command/poor-dev.implement.md"
+    local command_file=""
+    local cmd_variant=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+      cmd_variant=$(jq -r '.command_variant // ""' "$CONFIG_FILE" 2>/dev/null || true)
+    fi
+    if [[ -n "$cmd_variant" ]]; then
+      for candidate in \
+        "$project_dir/commands/poor-dev.implement-${cmd_variant}.md" \
+        "$project_dir/.opencode/command/poor-dev.implement-${cmd_variant}.md"; do
+        [[ -f "$candidate" ]] && command_file="$candidate" && break
+      done
+    fi
+    if [[ -z "$command_file" ]]; then
+      for candidate in \
+        "$project_dir/commands/poor-dev.implement.md" \
+        "$project_dir/.opencode/command/poor-dev.implement.md"; do
+        [[ -f "$candidate" ]] && command_file="$candidate" && break
+      done
+    fi
+    if [[ -z "$command_file" ]]; then
+      echo "{\"implement\":\"error\",\"reason\":\"implement command file not found\"}"
+      return 1
     fi
 
     # Build compose-prompt args
@@ -413,6 +435,9 @@ CTX_EOF
     bash "$SCRIPT_DIR/compose-prompt.sh" "${compose_args[@]}"
 
     # --- Dispatch ---
+    local pre_phase_head
+    pre_phase_head=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
+
     local impl_result_file="/tmp/poor-dev-result-implement-phase${phase_num}-$$.json"
     bash "$SCRIPT_DIR/dispatch-step.sh" "implement" "$project_dir" "$prompt_file" \
       "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$impl_result_file" || {
@@ -448,6 +473,20 @@ CTX_EOF
     protection_result=$(protect_sources)
     if [[ -n "$protection_result" ]]; then
       echo "$protection_result"
+    fi
+
+    # Post-phase file generation check
+    local phase_files=""
+    if [[ -n "$pre_phase_head" ]]; then
+      phase_files=$(git -C "$project_dir" diff --name-only "$pre_phase_head" HEAD 2>/dev/null || true)
+    fi
+    local uncommitted
+    uncommitted=$(git -C "$project_dir" diff --name-only 2>/dev/null || true)
+    uncommitted="${uncommitted}$(printf '\n')$(git -C "$project_dir" diff --name-only --cached 2>/dev/null || true)"
+    phase_files="${phase_files}${uncommitted}"
+    phase_files=$(echo "$phase_files" | grep -vE '^$|^(agents/|commands/|lib/|\.poor-dev/|\.opencode/|\.claude/)' | sort -u || true)
+    if [[ -z "$phase_files" ]]; then
+      echo "{\"phase\":$phase_num,\"warning\":\"no new files detected after phase completion\"}"
     fi
 
     # Update phase state
