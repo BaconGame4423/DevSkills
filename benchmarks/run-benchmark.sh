@@ -282,13 +282,15 @@ setup_environment() {
   fi
 
   # lib/ 読み取り専用コピー（symlink ではなく実体コピー + 書き込み不可）
-  rm -f "$TARGET_DIR/lib" 2>/dev/null || rm -rf "$TARGET_DIR/lib"
+  chmod -R u+w "$TARGET_DIR/lib" 2>/dev/null || true
+  rm -rf "$TARGET_DIR/lib"
   cp -rL "$DEVSKILLS_DIR/lib" "$TARGET_DIR/lib"
   chmod -R a-w "$TARGET_DIR/lib"
   ok "lib/ を読み取り専用コピー"
 
   # commands/ 読み取り専用コピー
-  rm -f "$TARGET_DIR/commands" 2>/dev/null || rm -rf "$TARGET_DIR/commands"
+  chmod -R u+w "$TARGET_DIR/commands" 2>/dev/null || true
+  rm -rf "$TARGET_DIR/commands"
   cp -rL "$DEVSKILLS_DIR/commands" "$TARGET_DIR/commands"
   chmod -R a-w "$TARGET_DIR/commands"
   ok "commands/ を読み取り専用コピー"
