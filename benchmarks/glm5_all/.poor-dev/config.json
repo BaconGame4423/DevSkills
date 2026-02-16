@@ -15,5 +15,8 @@
   "parallel": {
     "enabled": true,
     "strategy": "phase-split"
-  }
+  },
+  "command_variant": "simple",
+  "review_mode": "bash",
+  "auto_approve": true
 }
