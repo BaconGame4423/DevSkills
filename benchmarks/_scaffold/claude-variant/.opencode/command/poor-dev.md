@@ -114,11 +114,18 @@ bash lib/pipeline-runner.sh --next --flow <FLOW> --feature-dir <FEATURE_DIR> --b
 **ループ判定（出力テキストで判断）:**
 - 出力に `pipeline_complete` が含まれる → **全完了。最終結果を報告して終了。**
 - 出力に `step_complete` が含まれる → **完了したステップを1行報告し、同じコマンドを再実行。**
-- exit code が 0 以外 → **エラー。出力を確認しユーザーに報告して停止。**
+- 出力に `awaiting-approval` かつ `clarification` が含まれる → **出力テキストをそのままユーザーに見せ、回答を待つ。回答を得たら:**
+  ```bash
+  bash lib/apply-clarifications.sh <FEATURE_DIR> <<'ANSWERS'
+  <ユーザーの回答テキスト>
+  ANSWERS
+  ```
+  **完了後、Step 3b と同じコマンドを再実行。**
+- 上記以外でエラーが発生した場合 → **出力を確認しユーザーに報告して停止。**
 
 pipeline-state.json が完了済みステップを自動記録するため、再実行すると次のステップから始まる。
 
-**禁止事項**: lib/ 内のスクリプトを直接読んだり修正しないこと。上記コマンド以外のスクリプトは使わない。
+**禁止事項**: lib/ 内のスクリプトを直接読んだり修正しないこと。上記コマンドと apply-clarifications.sh 以外のスクリプトは使わない。
 
 非パイプラインフローの場合:
 - Q&A → `/poor-dev.ask` コマンドを実行
