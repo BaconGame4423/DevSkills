@@ -109,6 +109,10 @@ if [[ -f "$STATE_FILE" ]]; then
   fi
 fi
 
+# implement が既に完了済みの場合（レジューム時）、後続レビューで impl ファイルを消さない
+IMPLEMENT_COMPLETED=false
+[[ -n "${COMPLETED_SET[implement]:-}" ]] && IMPLEMENT_COMPLETED=true
+
 # --- Read config for timeouts ---
 
 CONFIG_FILE="$PROJECT_DIR/.poor-dev/config.json"
@@ -543,6 +547,7 @@ for STEP in $PIPELINE_STEPS; do
         echo "$PROTECTION_RESULT"
       fi
       bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
+      IMPLEMENT_COMPLETED=true
       echo "{\"step\":\"$STEP\",\"status\":\"step_complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"phase-split\"}"
       continue
     fi
@@ -835,11 +840,12 @@ CTX_EOF
     if [[ -n "$PROTECTION_RESULT" ]]; then
       echo "$PROTECTION_RESULT"
     fi
+    IMPLEMENT_COMPLETED=true
   fi
 
   # --- L2: Post-step impl file validation (non-implement steps) ---
 
-  if [[ "$STEP" != "implement" ]]; then
+  if [[ "$STEP" != "implement" ]] && [[ "$IMPLEMENT_COMPLETED" != "true" ]]; then
     IMPL_CLEANUP=$(validate_no_impl_files "$FD" "$STEP")
     if [[ -n "$IMPL_CLEANUP" ]]; then
       echo "$IMPL_CLEANUP"
