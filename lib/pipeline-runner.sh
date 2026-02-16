@@ -864,17 +864,13 @@ CTX_EOF
       echo "$RESULT" | jq '.clarifications' > "$FD/pending-clarifications.json.tmp"
       mv "$FD/pending-clarifications.json.tmp" "$FD/pending-clarifications.json"
 
-      if [[ "$AUTO_APPROVE" != "true" ]]; then
-        bash "$SCRIPT_DIR/pipeline-state.sh" set-approval "$FD" "clarification" "$STEP" > /dev/null
-        echo ""
-        echo "=== 仕様の確認事項 ==="
-        echo "$RESULT" | jq -r '.clarifications[]' 2>/dev/null | sed 's/\[NEEDS CLARIFICATION: //;s/\]$//' | nl -ba
-        echo ""
-        echo "{\"step\":\"$STEP\",\"status\":\"awaiting-approval\",\"type\":\"clarification\"}"
-        exit 2
-      else
-        echo "{\"step\":\"$STEP\",\"status\":\"auto-approved\",\"type\":\"clarification\"}"
-      fi
+      bash "$SCRIPT_DIR/pipeline-state.sh" set-approval "$FD" "clarification" "$STEP" > /dev/null
+      echo ""
+      echo "=== 仕様の確認事項 ==="
+      echo "$RESULT" | jq -r '.clarifications[]' 2>/dev/null | sed 's/\[NEEDS CLARIFICATION: //;s/\]$//' | nl -ba
+      echo ""
+      echo "{\"step\":\"$STEP\",\"status\":\"awaiting-approval\",\"type\":\"clarification\"}"
+      exit 2
     fi
   fi
 
