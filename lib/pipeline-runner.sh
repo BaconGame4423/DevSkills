@@ -550,17 +550,90 @@ for STEP in $PIPELINE_STEPS; do
     echo "{\"step\":\"$STEP\",\"status\":\"fallback\",\"reason\":\"no phases in tasks.md\"}"
   fi
 
-  # --- Compose prompt ---
+  # --- Review step: bash-driven mode (review_mode=bash) ---
 
-  PROMPT_FILE="/tmp/poor-dev-prompt-${STEP}-$$.txt"
-  COMMAND_FILE="$PROJECT_DIR/commands/poor-dev.${STEP}.md"
+  if is_review "$STEP"; then
+    REVIEW_MODE="llm"
+    if [[ -f "$CONFIG_FILE" ]]; then
+      REVIEW_MODE=$(jq -r '.review_mode // "llm"' "$CONFIG_FILE" 2>/dev/null || echo "llm")
+    fi
 
-  # Fallback to .opencode/command/ if commands/ not found
-  if [[ ! -f "$COMMAND_FILE" ]]; then
-    COMMAND_FILE="$PROJECT_DIR/.opencode/command/poor-dev.${STEP}.md"
+    if [[ "$REVIEW_MODE" == "bash" ]]; then
+      # Determine target file for review
+      REVIEW_TARGET=""
+      case "$STEP" in
+        planreview)          REVIEW_TARGET="$FD/plan.md" ;;
+        tasksreview)         REVIEW_TARGET="$FD/tasks.md" ;;
+        architecturereview)  REVIEW_TARGET="$FD" ;;
+        qualityreview)       REVIEW_TARGET="$FD" ;;
+        phasereview)         REVIEW_TARGET="$FD" ;;
+      esac
+
+      echo "{\"step\":\"$STEP\",\"status\":\"review-bash\",\"mode\":\"bash\"}"
+      REVIEW_RESULT=$(bash "$SCRIPT_DIR/review-runner.sh" \
+        --type "$STEP" \
+        --target "${REVIEW_TARGET:-$FD}" \
+        --feature-dir "$FEATURE_DIR" \
+        --project-dir "$PROJECT_DIR" 2>&1) || {
+        REVIEW_EXIT=$?
+        echo "$REVIEW_RESULT"
+
+        if [[ $REVIEW_EXIT -eq 3 ]]; then
+          bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "rate-limited" "Rate limit at review $STEP" > /dev/null
+          exit 3
+        elif [[ $REVIEW_EXIT -eq 2 ]]; then
+          bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "paused" "NO-GO verdict at $STEP" > /dev/null
+          echo "{\"action\":\"pause\",\"step\":\"$STEP\",\"reason\":\"NO-GO verdict\"}"
+          exit 2
+        fi
+      }
+      echo "$REVIEW_RESULT"
+
+      bash "$SCRIPT_DIR/pipeline-state.sh" complete-step "$FD" "$STEP" > /dev/null
+      echo "{\"step\":\"$STEP\",\"status\":\"complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"mode\":\"bash\"}"
+      continue
+    fi
   fi
 
-  if [[ ! -f "$COMMAND_FILE" ]]; then
+  # --- Resolve command file (variant support) ---
+
+  PROMPT_FILE="/tmp/poor-dev-prompt-${STEP}-$$.txt"
+  COMMAND_FILE=""
+
+  # Check for command_variant in config
+  CMD_VARIANT=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    CMD_VARIANT=$(jq -r '.command_variant // ""' "$CONFIG_FILE" 2>/dev/null || true)
+  fi
+
+  # Variant resolution chain:
+  # 1. commands/poor-dev.${STEP}-${variant}.md (if variant set)
+  # 2. .opencode/command/poor-dev.${STEP}-${variant}.md (if variant set)
+  # 3. commands/poor-dev.${STEP}.md (fallback)
+  # 4. .opencode/command/poor-dev.${STEP}.md (fallback)
+  if [[ -n "$CMD_VARIANT" ]]; then
+    for candidate in \
+      "$PROJECT_DIR/commands/poor-dev.${STEP}-${CMD_VARIANT}.md" \
+      "$PROJECT_DIR/.opencode/command/poor-dev.${STEP}-${CMD_VARIANT}.md"; do
+      if [[ -f "$candidate" ]]; then
+        COMMAND_FILE="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$COMMAND_FILE" ]]; then
+    for candidate in \
+      "$PROJECT_DIR/commands/poor-dev.${STEP}.md" \
+      "$PROJECT_DIR/.opencode/command/poor-dev.${STEP}.md"; do
+      if [[ -f "$candidate" ]]; then
+        COMMAND_FILE="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$COMMAND_FILE" ]]; then
     echo "{\"step\":\"$STEP\",\"error\":\"Command file not found: poor-dev.${STEP}.md\"}"
     exit 1
   fi
@@ -632,22 +705,43 @@ CTX_EOF
   : "${RESULT:={}}"
   rm -f "$PROMPT_FILE" "$RESULT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
 
-  # --- Post-specify: extract spec.md ---
+  # --- Post-step: extract output to artifact files ---
 
-  if [[ "$STEP" == "specify" ]]; then
-    SPEC_OUTPUT=$(ls -t /tmp/poor-dev-output-specify-*.txt 2>/dev/null | head -1)
-    if [[ -n "$SPEC_OUTPUT" && -f "$SPEC_OUTPUT" ]]; then
-      SPEC_TEXT=$(jq -r 'select(.type=="text") | .part.text // empty' "$SPEC_OUTPUT" 2>/dev/null || true)
-      if [[ -n "$SPEC_TEXT" ]]; then
-        echo "$SPEC_TEXT" | sed '/^\[BRANCH:/d' > "$FD/spec.md"
-      else
-        # claude CLI text format fallback
-        sed '/^\[BRANCH:/d' "$SPEC_OUTPUT" > "$FD/spec.md"
+  STEP_OUTPUT=$(ls -t /tmp/poor-dev-output-${STEP}-*.txt 2>/dev/null | head -1 || true)
+  if [[ -n "$STEP_OUTPUT" && -f "$STEP_OUTPUT" ]]; then
+    SAVE_TO=""
+    case "$STEP" in
+      specify)  SAVE_TO="$FD/spec.md" ;;
+      suggest)  SAVE_TO="$FD/suggestions.yaml" ;;
+      plan)     SAVE_TO="$FD/plan.md" ;;
+      tasks)    SAVE_TO="$FD/tasks.md" ;;
+    esac
+
+    if [[ -n "$SAVE_TO" ]]; then
+      EXTRACT_RESULT=$(bash "$SCRIPT_DIR/extract-output.sh" "$STEP_OUTPUT" "$SAVE_TO" 2>/dev/null || true)
+      if [[ -z "$EXTRACT_RESULT" ]] || echo "$EXTRACT_RESULT" | jq -e '.error' > /dev/null 2>&1; then
+        echo "{\"step\":\"$STEP\",\"status\":\"error\",\"reason\":\"output extraction failed\",\"detail\":$(echo "$EXTRACT_RESULT" | jq -R -s '.')}"
+        exit 1
       fi
     fi
+  fi
+
+  # Validate critical artifacts
+  if [[ "$STEP" == "specify" ]]; then
     if [[ ! -f "$FD/spec.md" ]] || [[ ! -s "$FD/spec.md" ]]; then
       echo "{\"step\":\"specify\",\"status\":\"error\",\"reason\":\"spec.md not extracted\"}"
       exit 1
+    fi
+  fi
+
+  # Post-tasks: validate format
+  if [[ "$STEP" == "tasks" && -f "$FD/tasks.md" ]]; then
+    TASKS_VALIDATE=$(bash "$SCRIPT_DIR/tasks-validate.sh" "$FD/tasks.md" 2>/dev/null || true)
+    if [[ -n "$TASKS_VALIDATE" ]]; then
+      TASKS_VALID=$(echo "$TASKS_VALIDATE" | jq -r '.valid' 2>/dev/null || true)
+      if [[ "$TASKS_VALID" == "false" ]]; then
+        echo "{\"step\":\"tasks\",\"warning\":\"tasks.md format validation failed\",\"validation\":$TASKS_VALIDATE}"
+      fi
     fi
   fi
 

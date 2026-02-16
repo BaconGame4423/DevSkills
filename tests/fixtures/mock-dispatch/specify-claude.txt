@@ -1,0 +1,14 @@
+[BRANCH: add-user-auth]
+
+# Feature Specification: User Authentication
+
+**Created**: 2026-02-16
+**Status**: Draft
+
+## User Scenarios & Testing
+
+### User Story 1 - Login (Priority: P1)
+Users can log in with email and password.
+
+**Acceptance Scenarios**:
+1. **Given** valid credentials, **When** user submits login, **Then** user is authenticated
