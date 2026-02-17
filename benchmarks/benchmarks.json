@@ -17,7 +17,7 @@
       { "id": "FR-012", "name": "エラーハンドリング（不正入力）" },
       { "id": "FR-013", "name": "プリセット関数ボタン" }
     ],
-    "process_stages": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement", "qualityreview", "phasereview"]
+    "process_stages": ["specify", "suggest", "plan", "planreview", "tasks", "tasksreview", "implement", "architecturereview", "qualityreview", "phasereview"]
   },
   "models": {
     "m2.5": {
@@ -44,7 +44,7 @@
           "max_timeout": 600,
           "step_timeouts": {
             "plan": { "idle_timeout": 300, "max_timeout": 1200 },
-            "implement": { "idle_timeout": 600, "max_timeout": 1800 }
+            "implement": { "idle_timeout": 900, "max_timeout": 2400 }
           }
         }
       }

@@ -68,7 +68,7 @@ CMDEOF
   claude)
     cat > "$CMD_FILE" <<CMDEOF
 #!/usr/bin/env bash
-cd "$PROJECT_DIR" && cat "$PROMPT_FILE" | env -u CLAUDECODE claude -p --model "$MODEL" --no-session-persistence --output-format text
+cd "$PROJECT_DIR" && cat "$PROMPT_FILE" | env -u CLAUDECODE claude -p --model "$MODEL" --no-session-persistence --output-format text --dangerously-skip-permissions
 CMDEOF
     ;;
   *)
