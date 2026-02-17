@@ -301,6 +301,17 @@ GITIGNORE_EOF
 CLAUDE_EOF
     echo "  created CLAUDE.md (minimal)"
 
+    # opencode.json（orch が opencode の場合のみ）
+    if [[ "$orch_cli" == "opencode" ]]; then
+      cat > "$target/opencode.json" <<ENDJSON
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "model": "$orch_model"
+}
+ENDJSON
+      echo "  generated opencode.json (baseline)"
+    fi
+
     # git init + pre-push hook
     if [[ "$NO_GIT" == false ]]; then
       (

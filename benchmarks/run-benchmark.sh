@@ -266,11 +266,39 @@ setup_baseline_environment() {
   info "=== ベースライン環境セットアップ: $COMBO ==="
   echo ""
 
-  # ディレクトリ未作成なら setup-benchmarks.sh を実行
+  # ディレクトリ作成（インラインセットアップ）
   if [[ ! -d "$TARGET_DIR" ]]; then
-    info "setup-benchmarks.sh を実行（ディレクトリ未作成）"
-    bash "$SCRIPT_DIR/setup-benchmarks.sh"
-    ok "セットアップ完了"
+    mkdir -p "$TARGET_DIR"
+
+    # .gitignore
+    cat > "$TARGET_DIR/.gitignore" <<'GITIGNORE_EOF'
+node_modules/
+dist/
+*.log
+_runs/
+GITIGNORE_EOF
+
+    # CLAUDE.md（git push 禁止のみ）
+    cat > "$TARGET_DIR/CLAUDE.md" <<'CLAUDE_EOF'
+# CLAUDE.md (Baseline Benchmark)
+
+## 制約
+- `git push` は絶対に実行しないでください
+- 実装が完了したら `git commit` してください
+CLAUDE_EOF
+
+    # opencode.json（OpenCode CLI の場合）
+    if [[ "$ORCH_CLI" == "opencode" ]]; then
+      cat > "$TARGET_DIR/opencode.json" <<ENDJSON
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "model": "$ORCH_MODEL"
+}
+ENDJSON
+      ok "opencode.json を生成"
+    fi
+
+    ok "baseline ディレクトリを作成"
   fi
 
   # .git がなければ初期化
@@ -296,7 +324,9 @@ HOOK_EOF
 }
 
 # ============================================================
-# run_baseline: baseline 実行（claude -p --output-format json）
+# run_baseline: baseline 実行（CLI 自動分岐）
+# - claude: claude -p --output-format json → 単一 JSON
+# - opencode: opencode run --format json → JSONL (1行1イベント)
 # ============================================================
 run_baseline() {
   local prompt="$1"
@@ -304,40 +334,70 @@ run_baseline() {
 
   start_ts=$(date +%s%3N)
 
-  info "claude -p で baseline 実行中..."
-  (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
-    --model "$ORCH_MODEL" \
-    --output-format json \
-    --dangerously-skip-permissions \
-    --no-session-persistence \
-    <<< "$prompt") > "$TARGET_DIR/.bench-output.json" 2>"$TARGET_DIR/.bench-stderr.txt" || true
+  if [[ "$ORCH_CLI" == "claude" ]]; then
+    # --- Claude CLI: 単一 JSON 出力 ---
+    info "claude -p で baseline 実行中..."
+    (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
+      --model "$ORCH_MODEL" \
+      --output-format json \
+      --dangerously-skip-permissions \
+      --no-session-persistence \
+      <<< "$prompt") > "$TARGET_DIR/.bench-output.json" 2>"$TARGET_DIR/.bench-stderr.txt" || true
 
-  end_ts=$(date +%s%3N)
+    end_ts=$(date +%s%3N)
 
-  # JSON から metrics 抽出 → .bench-metrics.json 生成
-  local input_tokens cache_creation cache_read output_tokens cost_usd duration_ms duration_api_ms num_turns is_error wall_clock_ms
-  input_tokens=$(jq -r '.usage.input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  cache_creation=$(jq -r '.usage.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  output_tokens=$(jq -r '.usage.output_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  cost_usd=$(jq -r '.total_cost_usd // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  duration_ms=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  duration_api_ms=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  num_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  is_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo false)
-  wall_clock_ms=$((end_ts - start_ts))
+    # JSON から metrics 抽出
+    local input_tokens cache_creation cache_read output_tokens cost_usd duration_ms duration_api_ms num_turns is_error wall_clock_ms
+    input_tokens=$(jq -r '.usage.input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_creation=$(jq -r '.usage.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    output_tokens=$(jq -r '.usage.output_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cost_usd=$(jq -r '.total_cost_usd // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    duration_ms=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    duration_api_ms=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    num_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    is_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo false)
+    wall_clock_ms=$((end_ts - start_ts))
+
+  else
+    # --- OpenCode CLI: JSONL 出力 (1行1イベント) ---
+    info "opencode run で baseline 実行中..."
+    (cd "$TARGET_DIR" && opencode run \
+      --model "$ORCH_MODEL" \
+      --format json \
+      "$prompt") > "$TARGET_DIR/.bench-output.json" 2>"$TARGET_DIR/.bench-stderr.txt" || true
+
+    end_ts=$(date +%s%3N)
+
+    # JSONL から step_finish イベントを集約して metrics 抽出
+    local input_tokens cache_creation cache_read output_tokens cost_usd reasoning_tokens num_turns is_error wall_clock_ms duration_ms duration_api_ms
+    input_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.input // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    output_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.output // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_creation=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.cache.write // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_read=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.cache.read // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cost_usd=$(jq -s '[.[] | select(.type == "step_finish") | .part.cost // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    reasoning_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.reasoning // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    num_turns=$(jq -s '[.[] | select(.type == "step_finish")] | length' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    is_error=false
+    wall_clock_ms=$((end_ts - start_ts))
+    # JSONL には duration_ms/duration_api_ms がないため 0 固定（wall_clock_ms で代替）
+    duration_ms=0
+    duration_api_ms=0
+  fi
 
   # .bench-metrics.json に書き出し
-  jq -n --arg model "$ORCH_MODEL" \
+  jq -n --arg model "$ORCH_MODEL" --arg cli "$ORCH_CLI" \
     --argjson in "$input_tokens" --argjson cache_create "$cache_creation" \
     --argjson cache_rd "$cache_read" --argjson out "$output_tokens" \
     --argjson cost "$cost_usd" --argjson dur "$duration_ms" \
     --argjson dur_api "$duration_api_ms" \
     --argjson wall "$wall_clock_ms" --argjson turns "$num_turns" \
     --argjson err "$is_error" \
-    '{mode:"baseline", model:$model,
+    --argjson reasoning "${reasoning_tokens:-0}" \
+    '{mode:"baseline", model:$model, cli:$cli,
       input_tokens:$in, cache_creation_input_tokens:$cache_create,
       cache_read_input_tokens:$cache_rd, output_tokens:$out,
+      reasoning_tokens:$reasoning,
       total_tokens:($in+$cache_create+$cache_rd+$out),
       cost_usd:$cost, duration_ms:$dur, duration_api_ms:$dur_api,
       wall_clock_ms:$wall, num_turns:$turns, is_error:$err,
@@ -815,7 +875,7 @@ if [[ "$MODE" == "baseline" ]]; then
   echo ""
   echo -e "${BOLD}============================================================${NC}"
   echo -e "${BOLD}  ベースライン実行: $COMBO${NC}"
-  echo -e "${BOLD}  CLI: claude / モデル: $ORCH_MODEL${NC}"
+  echo -e "${BOLD}  CLI: $ORCH_CLI / モデル: $ORCH_MODEL${NC}"
   echo -e "${BOLD}============================================================${NC}"
   echo ""
 
