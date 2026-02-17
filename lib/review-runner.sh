@@ -123,9 +123,20 @@ while [[ $ITER -lt $MAX_ITER ]]; do
       continue
     fi
 
+    # Resolve agent file (contains full review instructions for bash dispatch)
+    AGENT_FILE=""
+    for candidate in \
+      "$PROJECT_DIR/agents/opencode/${PERSONA_NAME}.md" \
+      "$PROJECT_DIR/agents/claude/${PERSONA_NAME}.md" \
+      "$PROJECT_DIR/.opencode/agents/${PERSONA_NAME}.md" \
+      "$PROJECT_DIR/.claude/agents/${PERSONA_NAME}.md"; do
+      [[ -f "$candidate" ]] && AGENT_FILE="$candidate" && break
+    done
+
     # Build context for persona
+    # Use agent file (full instructions) for compose-prompt, fall back to command stub
     COMPOSE_ARGS=(
-      "$COMMAND_FILE"
+      "${AGENT_FILE:-$COMMAND_FILE}"
       "$PROMPT_FILE"
       --header non_interactive
     )
