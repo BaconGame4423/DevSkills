@@ -17,6 +17,7 @@ $ARGUMENTS
 - ツール（Edit, Write, Bash）は使用しない
 - suggestions が存在しない場合は spec のみで計画を生成する
 - `constitution.md` が存在する場合はその制約を考慮する
+- spec に `[NEEDS CLARIFICATION]` が残っている場合は、合理的なデフォルトを仮定して解決してから計画を生成する。`[NEEDS CLARIFICATION]` をそのまま計画に持ち越さない
 
 ## 出力テンプレート
 
@@ -77,4 +78,5 @@ $ARGUMENTS
 - spec の User Stories の優先順位を尊重する
 - suggestions から採用された技術をアーキテクチャに反映する
 - 並列実装可能な境界を明示する
+- Project Structure は必ず1つの構造を選択し、選択しなかったオプションは記載しないこと
 - `[PROGRESS: plan complete]` を末尾に出力する
