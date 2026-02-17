@@ -7,9 +7,9 @@
 
 ## Phase 2: Foundational
 
-- [ ] T003 [P] ベースCSSスタイル作成 in css/styles.css（レイアウト、グリッド、フォント、カラーテーマ）
+- [X] T003 [P] ベースCSSスタイル作成 in css/styles.css（レイアウト、グリッド、フォント、カラーテーマ）
   - files: css/styles.css
-- [ ] T004 [P] メイン初期化スクリプト作成 in js/main.js（AppOrchestrator、ResizeObserver、イベントバインディング枠組み）
+- [X] T004 [P] メイン初期化スクリプト作成 in js/main.js（AppOrchestrator、ResizeObserver、イベントバインディング枠組み）
   - files: js/main.js
 
 ## Phase 3: User Story 1 - 基本グラフ描画 (P1)
