@@ -602,10 +602,16 @@ for STEP in $PIPELINE_STEPS; do
   # --- L3: Pre-implement validation + Phase-split dispatch ---
 
   if [[ "$STEP" == "implement" ]]; then
-    # L3: Clean up any impl files leaked from prior steps
-    IMPL_CLEANUP=$(validate_no_impl_files "$FD" "pre-implement")
-    if [[ -n "$IMPL_CLEANUP" ]]; then
-      echo "$IMPL_CLEANUP"
+    # L3: Clean up any impl files leaked from prior steps (skip on phase-split resume)
+    local _impl_completed=""
+    if [[ -f "$STATE_FILE" ]]; then
+      _impl_completed=$(jq -r '.implement_phases_completed[]?' "$STATE_FILE" 2>/dev/null || true)
+    fi
+    if [[ -z "$_impl_completed" ]]; then
+      IMPL_CLEANUP=$(validate_no_impl_files "$FD" "pre-implement")
+      if [[ -n "$IMPL_CLEANUP" ]]; then
+        echo "$IMPL_CLEANUP"
+      fi
     fi
 
     # Attempt phase-split dispatch

@@ -68,8 +68,6 @@ fi
     done < "$ISSUES_FILE"
   else
     echo "  issues: []"
-    echo "  issues_count: 0"
-    echo "  summary: \"No issues found\""
   fi
 
   # Fixed issues from previous iteration
