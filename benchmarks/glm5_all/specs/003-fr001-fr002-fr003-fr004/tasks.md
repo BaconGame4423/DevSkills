@@ -17,16 +17,16 @@
 **Story Goal**: 学生や教育者が数式を入力し、視覚的に関数の振る舞いを理解できる
 **Independent Test**: 入力フィールドに "x^2" を入力し、放物線が表示されることを確認
 
-- [ ] T005 [US1] [P] 数式入力コントローラー実装 in js/input.js（math.js パース、debounce 150ms、バリデーション、エラー分類）
+- [X] T005 [US1] [P] 数式入力コントローラー実装 in js/input.js（math.js パース、debounce 150ms、バリデーション、エラー分類）
   - depends: [T002]
   - files: js/input.js
-- [ ] T006 [US1] [P] グラフレンダラー実装 in js/graph.js（function-plot 初期化、軸ラベル、グリッド線、自動スケール、evaluteFn 生成）
+- [X] T006 [US1] [P] グラフレンダラー実装 in js/graph.js（function-plot 初期化、軸ラベル、グリッド線、自動スケール、evaluteFn 生成）
   - depends: [T002]
   - files: js/graph.js
-- [ ] T007 [US1] 入力→グラフ連携 in js/main.js（InputController → GraphRenderer データフロー、エラー表示UI）
+- [X] T007 [US1] 入力→グラフ連携 in js/main.js（InputController → GraphRenderer データフロー、エラー表示UI）
   - depends: [T005, T006, T004]
   - files: js/main.js, css/styles.css
-- [ ] T008 [US1] サポート関数テスト in js/input.js（sin, cos, tan, log, exp, sqrt, abs の評価確認）
+- [X] T008 [US1] サポート関数テスト in js/input.js（sin, cos, tan, log, exp, sqrt, abs の評価確認）
   - depends: [T005]
   - files: js/input.js
 

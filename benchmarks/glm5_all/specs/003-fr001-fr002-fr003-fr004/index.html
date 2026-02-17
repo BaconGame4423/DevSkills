@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>関数ビジュアライザー</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.0/lib/browser/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/function-plot@1.23.2/dist/function-plot.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>関数ビジュアライザー</h1>
+        </header>
+        <main class="main-content">
+            <section class="input-section">
+                <label for="function-input">数式を入力:</label>
+                <input type="text" id="function-input" placeholder="例: x^2, sin(x), 2*x+1" autocomplete="off">
+                <div id="error-display" class="error-display"></div>
+            </section>
+            <section class="graph-section">
+                <div id="graph-container"></div>
+            </section>
+            <section class="preset-section" id="preset-buttons">
+            </section>
+        </main>
+    </div>
+    <script src="js/input.js"></script>
+    <script src="js/graph.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
