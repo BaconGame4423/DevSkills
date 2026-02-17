@@ -315,25 +315,36 @@ run_baseline() {
   end_ts=$(date +%s%3N)
 
   # JSON から metrics 抽出 → .bench-metrics.json 生成
-  local input_tokens output_tokens cost_usd duration_ms num_turns wall_clock_ms
+  local input_tokens cache_creation cache_read output_tokens cost_usd duration_ms duration_api_ms num_turns is_error wall_clock_ms
   input_tokens=$(jq -r '.usage.input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+  cache_creation=$(jq -r '.usage.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+  cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
   output_tokens=$(jq -r '.usage.output_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
-  cost_usd=$(jq -r '.cost_usd // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+  cost_usd=$(jq -r '.total_cost_usd // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
   duration_ms=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+  duration_api_ms=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
   num_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+  is_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo false)
   wall_clock_ms=$((end_ts - start_ts))
 
   # .bench-metrics.json に書き出し
   jq -n --arg model "$ORCH_MODEL" \
-    --argjson in "$input_tokens" --argjson out "$output_tokens" \
+    --argjson in "$input_tokens" --argjson cache_create "$cache_creation" \
+    --argjson cache_rd "$cache_read" --argjson out "$output_tokens" \
     --argjson cost "$cost_usd" --argjson dur "$duration_ms" \
+    --argjson dur_api "$duration_api_ms" \
     --argjson wall "$wall_clock_ms" --argjson turns "$num_turns" \
-    '{mode:"baseline", model:$model, input_tokens:$in, output_tokens:$out,
-      total_tokens:($in+$out), cost_usd:$cost, duration_ms:$dur,
-      wall_clock_ms:$wall, num_turns:$turns, timestamp:now|todate}' \
+    --argjson err "$is_error" \
+    '{mode:"baseline", model:$model,
+      input_tokens:$in, cache_creation_input_tokens:$cache_create,
+      cache_read_input_tokens:$cache_rd, output_tokens:$out,
+      total_tokens:($in+$cache_create+$cache_rd+$out),
+      cost_usd:$cost, duration_ms:$dur, duration_api_ms:$dur_api,
+      wall_clock_ms:$wall, num_turns:$turns, is_error:$err,
+      timestamp:now|todate}' \
     > "$TARGET_DIR/.bench-metrics.json"
 
-  ok "baseline 実行完了 (wall: ${wall_clock_ms}ms, tokens: $((input_tokens + output_tokens)))"
+  ok "baseline 実行完了 (wall: ${wall_clock_ms}ms, tokens: $((input_tokens + cache_creation + cache_read + output_tokens)), cost: \$${cost_usd})"
 }
 
 # ============================================================
@@ -683,23 +694,31 @@ collect_and_summarize() {
   # トークン/コストメトリクス（baseline の場合）
   if [[ -f "$TARGET_DIR/.bench-metrics.json" ]]; then
     echo -e "${CYAN}--- トークン/コストメトリクス ---${NC}"
-    local m_in m_out m_total m_cost m_dur m_wall m_turns m_model
+    local m_in m_cache_create m_cache_read m_out m_total m_cost m_dur m_dur_api m_wall m_turns m_model m_error
     m_in=$(jq -r '.input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_cache_create=$(jq -r '.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_cache_read=$(jq -r '.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
     m_out=$(jq -r '.output_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
     m_total=$(jq -r '.total_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
     m_cost=$(jq -r '.cost_usd // 0' "$TARGET_DIR/.bench-metrics.json")
     m_dur=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_dur_api=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-metrics.json")
     m_wall=$(jq -r '.wall_clock_ms // 0' "$TARGET_DIR/.bench-metrics.json")
     m_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-metrics.json")
     m_model=$(jq -r '.model // "unknown"' "$TARGET_DIR/.bench-metrics.json")
-    echo "  モデル:       $m_model"
-    echo "  入力トークン: $m_in"
-    echo "  出力トークン: $m_out"
-    echo "  合計トークン: $m_total"
-    echo "  コスト (USD): \$$m_cost"
-    echo "  API時間 (ms): $m_dur"
-    echo "  壁時計 (ms):  $m_wall"
-    echo "  ターン数:     $m_turns"
+    m_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-metrics.json")
+    echo "  モデル:                $m_model"
+    echo "  入力トークン:          $m_in"
+    echo "  キャッシュ作成トークン: $m_cache_create"
+    echo "  キャッシュ読取トークン: $m_cache_read"
+    echo "  出力トークン:          $m_out"
+    echo "  合計トークン:          $m_total"
+    echo "  コスト (USD):          \$$m_cost"
+    echo "  API時間 (ms):          $m_dur"
+    echo "  API時間(api) (ms):     $m_dur_api"
+    echo "  壁時計 (ms):           $m_wall"
+    echo "  ターン数:              $m_turns"
+    echo "  エラー:                $m_error"
     echo ""
   fi
 
