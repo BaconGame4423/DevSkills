@@ -23,12 +23,31 @@
     "m2.5": {
       "display_name": "MiniMax M2.5",
       "cli": "opencode",
-      "model_id": "opencode/minimax-m2.5-free"
+      "model_id": "opencode/minimax-m2.5-free",
+      "config_extras": {
+        "polling": {
+          "idle_timeout": 300
+        }
+      }
     },
     "glm5": {
       "display_name": "GLM-5",
       "cli": "opencode",
-      "model_id": "zai-coding-plan/glm-5"
+      "model_id": "zai-coding-plan/glm-5",
+      "config_extras": {
+        "command_variant": "simple",
+        "review_mode": "bash",
+        "parallel": { "enabled": true, "strategy": "phase-split" },
+        "polling": {
+          "interval": 1,
+          "idle_timeout": 300,
+          "max_timeout": 600,
+          "step_timeouts": {
+            "plan": { "idle_timeout": 300, "max_timeout": 1200 },
+            "implement": { "idle_timeout": 600, "max_timeout": 1800 }
+          }
+        }
+      }
     },
     "claude": {
       "display_name": "Claude",

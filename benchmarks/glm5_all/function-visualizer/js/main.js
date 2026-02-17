@@ -151,6 +151,11 @@ class AppOrchestrator {
                 showDerivative: this.state.showDerivative
             });
         }
+        if (this.state.showDerivative && this.derivativeCalculator) {
+            this.derivativeCalculator.setRange(
+                this.graphRenderer ? this.graphRenderer.options.domain.x : [-10, 10]
+            );
+        }
     }
 
     setInputController(controller) {
@@ -178,4 +183,14 @@ const app = new AppOrchestrator();
 
 document.addEventListener('DOMContentLoaded', () => {
     app.init();
+    
+    app.setGraphRenderer(graphRenderer);
+    app.setDerivativeCalculator(derivativeCalculator);
+    graphRenderer.setDerivativeCalculator(derivativeCalculator);
+    
+    if (typeof inputController !== 'undefined') {
+        app.setInputController(inputController);
+    }
+    
+    app.updateGraph();
 });

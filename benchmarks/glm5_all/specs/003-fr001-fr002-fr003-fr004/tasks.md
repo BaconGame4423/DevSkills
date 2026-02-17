@@ -35,13 +35,13 @@
 **Story Goal**: 関数とその導関数の関係を視覚的に理解できる
 **Independent Test**: x^2 を入力し、導関数 2x が自動計算・表示されることを確認
 
-- [ ] T009 [US2] 数値微分計算器実装 in js/derivative.js（中心差分法、h=1e-5、xRange と step パラメータ、f'(x) 配列生成）
+- [X] T009 [US2] 数値微分計算器実装 in js/derivative.js（中心差分法、h=1e-5、xRange と step パラメータ、f'(x) 配列生成）
   - depends: [T006]
   - files: js/derivative.js
-- [ ] T010 [US2] 導関数グラフ重畳表示 in js/graph.js（複数系列管理、元関数と導関数の異なる色で描画、導関数表示トグル）
+- [X] T010 [US2] 導関数グラフ重畳表示 in js/graph.js（複数系列管理、元関数と導関数の異なる色で描画、導関数表示トグル）
   - depends: [T009, T006]
   - files: js/graph.js
-- [ ] T011 [US2] 導関数UI統合 in js/main.js（導関数表示チェックボックス、GraphRenderer との連携、自動更新）
+- [X] T011 [US2] 導関数UI統合 in js/main.js（導関数表示チェックボックス、GraphRenderer との連携、自動更新）
   - depends: [T010, T007]
   - files: js/main.js, index.html
 

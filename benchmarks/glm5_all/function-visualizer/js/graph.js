@@ -14,6 +14,20 @@ class GraphRenderer {
         this.currentExpression = '';
         this.showDerivative = false;
         this.derivativeData = null;
+        this.derivativeCalculator = null;
+    }
+
+    setDerivativeCalculator(calculator) {
+        this.derivativeCalculator = calculator;
+    }
+
+    toggleDerivative(show) {
+        this.showDerivative = show;
+        if (this.currentExpression) {
+            this.render(this.currentExpression, {
+                showDerivative: this.showDerivative
+            });
+        }
     }
 
     render(expression, options = {}) {
@@ -24,7 +38,21 @@ class GraphRenderer {
 
         this.currentExpression = expression;
         this.showDerivative = options.showDerivative || false;
-        this.derivativeData = options.derivativeData || null;
+
+        if (this.showDerivative && this.derivativeCalculator) {
+            const evaluateFn = this.generateEvaluateFn(expression);
+            if (evaluateFn) {
+                this.derivativeData = this.derivativeCalculator.computeDerivative(
+                    evaluateFn,
+                    this.options.domain.x,
+                    0.1
+                );
+            } else {
+                this.derivativeData = null;
+            }
+        } else {
+            this.derivativeData = null;
+        }
 
         const series = this.buildSeries(expression);
 
@@ -113,8 +141,7 @@ class GraphRenderer {
         if (!this.container || !this.currentExpression) return;
         
         this.render(this.currentExpression, {
-            showDerivative: this.showDerivative,
-            derivativeData: this.derivativeData
+            showDerivative: this.showDerivative
         });
     }
 
@@ -128,8 +155,7 @@ class GraphRenderer {
         
         if (this.currentExpression) {
             this.render(this.currentExpression, {
-                showDerivative: this.showDerivative,
-                derivativeData: this.derivativeData
+                showDerivative: this.showDerivative
             });
         }
     }
