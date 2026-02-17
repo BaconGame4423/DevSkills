@@ -195,6 +195,7 @@ Permission required スマート承認ポリシー:
 注意: Tab は opencode のモード切替（agents タブ等）になるため絶対に使わない。
 
 ```bash
+set +H 2>/dev/null || true   # history expansion 無効化
 COMBO_DIR="benchmarks/<combo>"
 TIMEOUT=7200; ELAPSED=0; CHECK=0
 
@@ -320,8 +321,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         echo "BENCH_PIPELINE_ERROR: <combo>"; exit 1
       fi
       if [ "$STATUS" = "awaiting-approval" ]; then
-        echo "BENCH_AWAITING_APPROVAL: <combo> (auto_approve may be missing in config)"
-        exit 1
+        echo "[${ELAPSED}s] awaiting-approval detected, checking for questions..."
       fi
     else
       echo "[${ELAPSED}s] pipeline-state.json not found yet"
