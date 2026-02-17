@@ -1,0 +1,99 @@
+まずプロジェクトの既存技術スタックを確認します。
+```yaml
+exploration_session:
+  status: completed
+  findings_summary: |
+    関数ビジュアライザー開発において、軽量かつ高性能な技術スタックを調査した。グラフ描画は Canvas ベースの function-plot ライブラリ（math.js 内部使用）が最適。数式パースと評価には math.js を採用し、数値微分は中心差分法で実装可能。リアルタイム更新には requestAnimationFrame と debounce の組み合わせが 60fps 達成に有効。プロジェクト固有の依存関係はないため、新しい技術選択が可能。
+  sources_consulted:
+    - math.js official documentation
+    - function-plot (maurizzzio) GitHub repository
+    - MDN Canvas API documentation
+    - Numerical differentiation methods (finite differences)
+
+suggestions:
+  - id: S001
+    type: library
+    name: "function-plot (maurizzzio)"
+    description: "関数グラフ描画に特化した軽量ライブラリ。math.js を内部で使用し、ズーム、パン、グリッド線、軸ラベルを標準サポート。"
+    rationale: "FR-001〜FR-006 のグラフ描画要件を単一ライブラリで満たせる。Canvas ベースで高速描画（SC-001 の 500ms 以内を達成可能）。"
+    maintainability_score: 85
+    security_score: 95
+    source_urls:
+      - "https://github.com/maurizzzio/function-plot"
+    evidence:
+      - "GitHub Stars: 2.4k+、数学・教育分野で広く採用"
+      - "最終更新: 活発にメンテナンス中（2024年以降も更新あり）"
+      - "math.js 内蔵により追加依存最小"
+
+  - id: S002
+    type: library
+    name: "math.js"
+    description: "包括的な数式パーサーと評価エンジン。sin, cos, tan, log, exp, sqrt, abs 等の数学関数を標準サポート。"
+    rationale: "FR-002（数式入力）と FR-006（複数関数サポート）の中核。カスタムスコープ定義でセキュアな評価が可能。"
+    maintainability_score: 95
+    security_score: 90
+    source_urls:
+      - "https://mathjs.org/"
+      - "https://github.com/josdejong/mathjs"
+    evidence:
+      - "GitHub Stars: 14k+、npm 週間ダウンロード 400k+"
+      - "10年以上の安定したメンテナンス歴"
+      - "セキュアな式評価（sandboxed evaluation サポート）"
+
+  - id: S003
+    type: usage_pattern
+    name: "数値微分（中心差分法）"
+    description: "数式レベルのシンボリック微分ではなく、数値計算で導関数値を算出。f'(x) ≈ (f(x+h) - f(x-h)) / 2h"
+    rationale: "Clarification で数値計算のみが推奨されたため。実装が単純で SC-002（200ms 以内）を容易に達成可能。"
+    maintainability_score: 90
+    security_score: 100
+    source_urls:
+      - "https://en.wikipedia.org/wiki/Finite_difference"
+    evidence:
+      - "計算量 O(n)、グラフ点数に対して線形時間"
+      - "math.js 評価関数と組み合わせて即座に実装可能"
+      - "学術・教育ツールでの実績多数"
+
+  - id: S004
+    type: best_practice
+    name: "requestAnimationFrame + debounce パターン"
+    description: "リアルタイム更新のパフォーマンス最適化。入力は debounce（100-200ms）でバッチ化、描画は rAF で同期。"
+    rationale: "SC-005（16ms/60fps 以下）達成に必須。無駄な再描画を防止し、CPU 使用率を最適化。"
+    maintainability_score: 85
+    security_score: 100
+    source_urls:
+      - "https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame"
+    evidence:
+      - "Web アニメーション/リアルタイム更新の業界標準"
+      - "Chrome DevTools チーム推奨パターン"
+      - "lodash.debounce 等で実装容易"
+
+  - id: S005
+    type: best_practice
+    name: "Canvas auto-resize with ResizeObserver"
+    description: "レスポンシブデザインのため、ResizeObserver でコンテナサイズ変更を検知し Canvas を動的リサイズ。"
+    rationale: "FR-011（レスポンシブ）と FR-004（自動スケール）の実装基盤。window resize イベントより効率的。"
+    maintainability_score: 80
+    security_score: 100
+    source_urls:
+      - "https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver"
+    evidence:
+      - "全モダンブラウザでサポート（IE 以外）"
+      - "パフォーマンス向上：レイアウト計算を最小化"
+      - "function-plot ライブラリ内で統合可能"
+
+  - id: S006
+    type: usage_pattern
+    name: "try-catch 数式評価 + ユーザーフレンドリーエラー"
+    description: "math.js.evaluate() を try-catch でラップし、パースエラーや定義域エラーを適切に処理・表示。"
+    rationale: "FR-012（エラーハンドリング）対応。不正入力時に具体的なエラーメッセージ（括弧不一致、未定義関数等）を表示。"
+    maintainability_score: 90
+    security_score: 95
+    source_urls:
+      - "https://mathjs.org/docs/expressions/parsing.html#error-handling"
+    evidence:
+      - "math.js が詳細なエラー情報（位置、型）を提供"
+      - "UX 向上：ユーザーが即座に修正可能"
+
+[PROGRESS: suggest complete]
+```

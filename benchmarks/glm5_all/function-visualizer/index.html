@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>関数ビジュアライザー</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/function-plot/1.24.5/function-plot.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>関数ビジュアライザー</h1>
+        </header>
+        
+        <main class="main-content">
+            <section class="input-section">
+                <div class="input-group">
+                    <label for="function-input">f(x) = </label>
+                    <input type="text" id="function-input" placeholder="x^2" autocomplete="off">
+                </div>
+                <div id="error-message" class="error-message"></div>
+            </section>
+            
+            <section class="controls-section">
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="show-derivative">
+                        導関数を表示
+                    </label>
+                    <label>
+                        <input type="checkbox" id="show-tangent">
+                        接線を表示
+                    </label>
+                </div>
+            </section>
+            
+            <section class="graph-section">
+                <div id="graph-container"></div>
+            </section>
+            
+            <section class="tooltip-section" id="tooltip" style="display: none;">
+                <div class="tooltip-content">
+                    <span id="tooltip-x">x: --</span>
+                    <span id="tooltip-fx">f(x): --</span>
+                    <span id="tooltip-dfx">f'(x): --</span>
+                </div>
+            </section>
+            
+            <section class="presets-section">
+                <h3>プリセット関数</h3>
+                <div class="preset-buttons">
+                    <button class="preset-btn" data-formula="x^2">x²</button>
+                    <button class="preset-btn" data-formula="x^3">x³</button>
+                    <button class="preset-btn" data-formula="sin(x)">sin(x)</button>
+                    <button class="preset-btn" data-formula="cos(x)">cos(x)</button>
+                    <button class="preset-btn" data-formula="tan(x)">tan(x)</button>
+                    <button class="preset-btn" data-formula="log(x)">log(x)</button>
+                    <button class="preset-btn" data-formula="exp(x)">exp(x)</button>
+                    <button class="preset-btn" data-formula="sqrt(x)">√x</button>
+                    <button class="preset-btn" data-formula="abs(x)">|x|</button>
+                    <button class="preset-btn" data-formula="1/x">1/x</button>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="js/input.js"></script>
+    <script src="js/graph.js"></script>
+    <script src="js/derivative.js"></script>
+    <script src="js/tooltip.js"></script>
+    <script src="js/tangent.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

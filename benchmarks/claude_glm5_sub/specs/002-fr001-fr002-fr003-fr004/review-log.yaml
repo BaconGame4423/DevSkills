@@ -1,0 +1,51 @@
+type: tasks
+target: specs/002-fr001-fr002-fr003-fr004/tasks.md
+iterations:
+  - n: 1
+    timestamp: 2026-02-17T06:10:00Z
+    issues_total: 10
+    issues_new_h: 8
+    issues:
+      TECHLEAD:
+        - {id: TR-001, sev: H, loc: "tasks.md:1-63", desc: "File contains only summary - no actual task definitions"}
+        - {id: TR-002, sev: H, loc: "tasks.md:1-63", desc: "66 tasks claimed but 0 defined"}
+      SENIOR:
+        - {id: TR-001, sev: H, loc: "tasks.md:1-63", desc: "Missing all 66 task definitions"}
+      DEVOPS:
+        - {id: TR-001, sev: H, loc: "tasks.md:1-63", desc: "No actual task definitions"}
+        - {id: TR-002, sev: H, loc: "tasks.md:missing", desc: "No build/deploy tasks"}
+        - {id: TR-003, sev: H, loc: "tasks.md:missing", desc: "No CI/CD pipeline tasks"}
+        - {id: TR-004, sev: M, loc: "tasks.md:missing", desc: "No environment config tasks"}
+        - {id: TR-005, sev: M, loc: "tasks.md:missing", desc: "No testing infrastructure tasks"}
+      JUNIOR:
+        - {id: TR-001, sev: H, loc: "tasks.md:1-63", desc: "No actual task definitions found"}
+        - {id: TR-002, sev: H, loc: "tasks.md:1-5", desc: "Progress indicators suggest incomplete generation"}
+    verdicts: {TECHLEAD: NO-GO, SENIOR: NO-GO, DEVOPS: NO-GO, JUNIOR: NO-GO}
+    action: FIX
+  - n: 2
+    timestamp: 2026-02-17T06:15:00Z
+    issues_total: 9
+    issues_new_h: 2
+    issues:
+      TECHLEAD:
+        - {id: TR-003, sev: H, loc: "tasks.md:269-281", desc: "T022/T023 both modify GraphService.ts but marked [P] parallel"}
+        - {id: TR-004, sev: M, loc: "tasks.md:811-815", desc: "Dependency graph shows T022→T023 but task defs inconsistent"}
+      SENIOR:
+        - {id: TR-001, sev: M, loc: "T013:150", desc: "Reactive event emitters not specified"}
+        - {id: TR-002, sev: L, loc: "T018:212", desc: "No test task for nested functions"}
+        - {id: TR-003, sev: L, loc: "T025:301", desc: "Empty input handling not explicit"}
+      JUNIOR:
+        - {id: TR-001, sev: H, loc: "tasks.md:259-282", desc: "T022/T023 parallel markers contradict deps"}
+        - {id: TR-002, sev: M, loc: "tasks.md:209-218", desc: "T018 should depend on T017"}
+        - {id: TR-003, sev: M, loc: "tasks.md:40-76", desc: "npm scripts not explicitly added"}
+    verdicts: {TECHLEAD: CONDITIONAL, SENIOR: CONDITIONAL, DEVOPS: GO, JUNIOR: NO-GO}
+    action: FIX
+    fixed_verified: [TR-001, TR-002 from iter1, DEVOPS-001~005]
+  - n: 3
+    timestamp: 2026-02-17T06:20:00Z
+    issues_total: 0
+    issues_new_h: 0
+    issues: []
+    verdicts: {TECHLEAD: GO, SENIOR: GO, DEVOPS: GO, JUNIOR: GO}
+    action: COMPLETE
+    fixed_verified: [TR-003, TR-004 from iter2, all M/L issues]

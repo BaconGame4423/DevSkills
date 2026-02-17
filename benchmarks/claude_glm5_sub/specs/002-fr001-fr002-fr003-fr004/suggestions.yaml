@@ -1,0 +1,114 @@
+- id: "b1e2c3d4-5f6a-7b8c-9d0e-1f2a3b4c5d6e"
+  type: library
+  name: "function-plot"
+  description: "D3.js-based 2D function plotting library with built-in derivative visualization support. Provides interactive graphs with automatic re-evaluation on scale changes and mouse-following tangent line updates."
+  rationale: "Directly satisfies FR-001 through FR-010 by providing native support for function graphing, derivative display with updateOnMouseMove, tangent line visualization, and real-time updates. Uses interval-arithmetic for pixel-perfect rendering of oscillating functions."
+  maintainability_score: 88
+  security_score: 95
+  source_urls:
+    - "https://www.npmjs.com/package/function-plot"
+    - "https://github.com/mauriciopoppe/function-plot"
+    - "https://mauriciopoppe.github.io/function-plot/"
+  adoption_examples:
+    - "Desmos-like educational tools"
+    - "Mathematical visualization notebooks"
+    - "Calculus teaching applications"
+  evidence:
+    - "Version 1.25.3 published January 2026 (1 month ago)"
+    - "1,000+ GitHub stars, 121 forks, 15 contributors"
+    - "2,994 weekly npm downloads"
+    - "Built-in derivative configuration: derivative: { fn: '2*x', updateOnMouseMove: true }"
+    - "No known CVEs, MIT licensed, FOSSA audited"
+  created_at: "2026-02-17T10:01:00Z"
+
+- id: "c2d3e4f5-6a7b-8c9d-0e1f-2a3b4c5d6e7f"
+  type: library
+  name: "math.js"
+  description: "Comprehensive JavaScript math library with symbolic computation capabilities including derivative calculation via math.derivative(). Features flexible expression parser supporting all required functions (sin, cos, tan, log, exp, sqrt, abs)."
+  rationale: "Essential for FR-007 (derivative calculation) and FR-012 (error handling). The derivative function returns symbolic expressions like '2*x + 1' from 'x^2 + x', enabling both display and evaluation. Expression parser handles invalid syntax gracefully."
+  maintainability_score: 95
+  security_score: 92
+  source_urls:
+    - "https://mathjs.org/"
+    - "https://github.com/josdejong/mathjs"
+    - "https://www.npmjs.com/package/mathjs"
+  adoption_examples:
+    - "MathNotepad"
+    - "Hundreds of npm packages (2,550+ dependents)"
+    - "Educational platforms worldwide"
+  evidence:
+    - "Version 15.1.1 published 7 days ago"
+    - "15,000+ GitHub stars, 1,300+ forks, 251 contributors"
+    - "1.78 million weekly npm downloads"
+    - "Built-in derivative: math.derivative('x^2 + x', 'x') returns '2*x + 1'"
+    - "Apache 2.0 license, FOSSA audited, high test coverage"
+  created_at: "2026-02-17T10:01:30Z"
+
+- id: "d3e4f5a6-7b8c-9d0e-1f2a-3b4c5d6e7f8a"
+  type: library
+  name: "D3.js"
+  description: "Industry-standard JavaScript visualization library for creating custom interactive data visualizations. Provides SVG/Canvas rendering, scales, axes, zoom, and brush interactions."
+  rationale: "function-plot is built on D3.js, making it a required dependency. D3's zoom behavior (d3-zoom) enables FR-004 (auto zoom/scale) and mobile pinch-zoom for FR-011 (responsive design). d3-brush supports interactive region selection."
+  maintainability_score: 90
+  security_score: 95
+  source_urls:
+    - "https://d3js.org/"
+    - "https://github.com/d3/d3"
+  adoption_examples:
+    - "Observable Platform"
+    - "New York Times visualizations"
+    - "Financial Times graphics"
+    - "function-plot library"
+  evidence:
+    - "Version 7.9.0, active development by Observable"
+    - "111,900+ GitHub stars (most starred visualization library)"
+    - "Modular architecture - load only needed components"
+    - "ISC license, mature codebase since 2011"
+    - "Extensive documentation and community examples"
+  created_at: "2026-02-17T10:02:00Z"
+
+- id: "e4f5a6b7-8c9d-0e1f-2a3b-4c5d6e7f8a9b"
+  type: library
+  name: "lodash.debounce"
+  description: "Standalone debounce utility from Lodash. Creates a debounced function that delays invoking the provided function until after the specified wait time has elapsed since the last call."
+  rationale: "Directly implements FR-003 requirement for 300ms debounce on real-time graph updates. Prevents excessive re-rendering during typing, ensuring SC-002 (less than 100ms latency after typing stops). 27M+ weekly downloads demonstrates battle-tested reliability."
+  maintainability_score: 92
+  security_score: 95
+  source_urls:
+    - "https://www.npmjs.com/package/lodash.debounce"
+    - "https://lodash.com/docs/4.17.15#debounce"
+  adoption_examples:
+    - "React applications worldwide"
+    - "Search input handlers"
+    - "Real-time form validation"
+    - "Resize event handlers"
+  evidence:
+    - "27,452,188 weekly npm downloads (most popular debounce solution)"
+    - "6,214+ npm dependents"
+    - "MIT license, minimal bundle size"
+    - "Industry standard for debounce implementation"
+    - "Zero dependencies"
+  created_at: "2026-02-17T10:02:30Z"
+
+- id: "f5a6b7c8-9d0e-1f2a-3b4c-5d6e7f8a9b0c"
+  type: best_practice
+  name: "requestAnimationFrame for Tooltip Updates"
+  description: "Use browser's requestAnimationFrame API for cursor-following tooltip updates to ensure smooth 30+ FPS rendering. Throttle tooltip position calculations to animation frames rather than every mousemove event."
+  rationale: "Essential for FR-009 (cursor-following tooltip) and SC-006 (minimum 30fps updates). Raw mousemove events fire faster than screen refresh, causing janky updates. RAF synchronizes updates with browser paint cycle for smooth 60fps capability on capable displays."
+  maintainability_score: 95
+  security_score: 98
+  source_urls:
+    - "https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame"
+    - "https://web.dev/animations/"
+  adoption_examples:
+    - "Google Maps"
+    - "Desmos Graphing Calculator"
+    - "Figma"
+    - "High-performance canvas applications"
+  evidence:
+    - "Native browser API, zero dependencies"
+    - "Standard practice for 60fps animations"
+    - "Reduces CPU usage vs raw event handlers"
+    - "Automatically pauses when tab is hidden"
+    - "Supported in all modern browsers since 2013"
+  created_at: "2026-02-17T10:03:00Z"
