@@ -1,0 +1,330 @@
+:root {
+    --primary-color: #2c3e50;
+    --secondary-color: #3498db;
+    --accent-color: #e74c3c;
+    --derivative-color: #27ae60;
+    --tangent-color: #9b59b6;
+    --background-color: #f5f7fa;
+    --card-background: #ffffff;
+    --border-color: #ddd;
+    --text-color: #333;
+    --error-color: #e74c3c;
+    --grid-color: rgba(0, 0, 0, 0.1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header {
+    text-align: center;
+    padding: 1.5rem 0;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 1.5rem;
+}
+
+header h1 {
+    color: var(--primary-color);
+    font-size: 1.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.input-section {
+    background: var(--card-background);
+    padding: 1.25rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.function-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.function-input-group label {
+    font-weight: 600;
+    color: var(--primary-color);
+    white-space: nowrap;
+}
+
+.function-input-group input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.function-input-group input:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.function-input-group input::placeholder {
+    color: #aaa;
+}
+
+.error-display {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background-color: #fee;
+    border: 1px solid var(--error-color);
+    border-radius: 4px;
+    color: var(--error-color);
+    font-size: 0.9rem;
+    display: none;
+}
+
+.error-display.visible {
+    display: block;
+}
+
+.controls-section {
+    background: var(--card-background);
+    padding: 1.25rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.toggle-controls {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.toggle-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.toggle-option:hover {
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+.toggle-option input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--secondary-color);
+}
+
+.toggle-label {
+    font-weight: 500;
+    user-select: none;
+}
+
+.preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.preset-label {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-right: 0.5rem;
+}
+
+.preset-btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background-color: var(--secondary-color);
+    color: white;
+    border-color: var(--secondary-color);
+}
+
+.preset-btn:active {
+    transform: scale(0.95);
+}
+
+.graph-section {
+    background: var(--card-background);
+    padding: 1.25rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.graph-container {
+    position: relative;
+    flex: 1;
+    min-height: 400px;
+}
+
+.graph-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.tooltip-info {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.75rem;
+    background-color: var(--background-color);
+    border-radius: 6px;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.tooltip-info span {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.95rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+#tooltip-x {
+    background-color: rgba(44, 62, 80, 0.15);
+}
+
+#tooltip-fx {
+    background-color: rgba(52, 152, 219, 0.15);
+}
+
+#tooltip-dfx {
+    background-color: rgba(39, 174, 96, 0.15);
+}
+
+footer {
+    text-align: center;
+    padding: 1rem 0;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    color: #666;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 1024px) {
+    .container {
+        padding: 0.75rem;
+    }
+
+    header h1 {
+        font-size: 1.5rem;
+    }
+
+    .graph-container {
+        min-height: 350px;
+    }
+}
+
+@media (max-width: 768px) {
+    html {
+        font-size: 14px;
+    }
+
+    header {
+        padding: 1rem 0;
+    }
+
+    header h1 {
+        font-size: 1.25rem;
+    }
+
+    .function-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .function-input-group input {
+        min-width: auto;
+    }
+
+    .toggle-controls {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .preset-buttons {
+        justify-content: center;
+    }
+
+    .preset-label {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .graph-container {
+        min-height: 300px;
+    }
+
+    .tooltip-info {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .preset-btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    .graph-container {
+        min-height: 250px;
+    }
+}

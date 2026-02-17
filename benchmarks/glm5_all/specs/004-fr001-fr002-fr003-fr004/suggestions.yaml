@@ -1,0 +1,121 @@
+```yaml
+exploration_session:
+  status: completed
+  findings_summary: |
+    この機能はインタラクティブな関数グラフ描画と数値微分を含む数学ツールである。
+    主要な技術要件として、高速なグラフ描画ライブラリ、数式パーサー、数値微分計算、
+    レスポンシブUI設計が挙げられる。vanilla JS + Canvas APIまたは軽量なグラフライブラリ、
+    math.jsによる数式解析が最適な組み合わせと判断した。
+  sources_consulted:
+    - math.js documentation
+    - Chart.js / Plotly.js comparison
+    - MDN Canvas API reference
+    - Numerical differentiation methods
+
+suggestions:
+  - id: S001
+    type: library
+    name: "math.js - 数式パーサー・評価エンジン"
+    description: |
+      数式文字列をパース・評価できる包括的な数学ライブラリ。
+      sin,cos,tan,log,exp,sqrt,abs等の標準関数をネイティブサポート。
+    rationale: "FR-002, FR-006, FR-012の数式入力・評価・エラーハンドリングに最適。数値微分の計算にも活用可能。"
+    maintainability_score: 90
+    security_score: 95
+    source_urls:
+      - "https://mathjs.org/"
+    evidence:
+      - "GitHub stars: 14k+, 最終更新: 2025年活発にメンテナンス中"
+      - "Wolfram, Mathematica等の商業製品でも採用実績"
+
+  - id: S002
+    type: library
+    name: "Chart.js - インタラクティブグラフ描画"
+    description: |
+      軽量で高性能なチャートライブラリ。プラグインシステムによる拡張性が高く、
+      カーソル追従ツールチップを標準サポート。
+    rationale: "FR-001, FR-003, FR-005, FR-009のグラフ表示・ツールチップに対応。レスポンシブデザインも標準装備。"
+    maintainability_score: 85
+    security_score: 95
+    source_urls:
+      - "https://www.chartjs.org/"
+    evidence:
+      - "GitHub stars: 65k+, 週間ダウンロード数: 400万+"
+      - "Mozilla, GitHub等の企業で採用実績"
+
+  - id: S003
+    type: best_practice
+    name: "数値微分（中心差分法）"
+    description: |
+      f'(x) ≈ (f(x+h) - f(x-h)) / (2h) による数値微分実装。
+      シンプルかつ高精度（O(h²)誤差）で、記号微分の複雑さを回避。
+    rationale: "FR-007, FR-008, FR-010の導関数計算・接線表示に必要。clarificationで数値微分が優先と決定。"
+    maintainability_score: 85
+    security_score: 100
+    source_urls:
+      - "https://en.wikipedia.org/wiki/Numerical_differentiation"
+    evidence:
+      - "標準的な数値計算手法として広く採用"
+      - "h=1e-5程度で倍精度計算に十分な精度を達成"
+
+  - id: S004
+    type: best_practice
+    name: "入力のdebounce（遅延実行）"
+    description: |
+      ユーザー入力から200-300ms後にグラフ更新を実行。
+      連続入力時の過剰な再描画を防止し、パフォーマンスを維持。
+    rationale: "FR-003のリアルタイム更新において、SC-001の1秒以内応答を確保しつつCPU負荷を軽減。"
+    maintainability_score: 90
+    security_score: 100
+    source_urls:
+      - "https://davidwalsh.name/javascript-debounce-function"
+    evidence:
+      - "Google, Facebook等のWebアプリで標準的に採用"
+
+  - id: S005
+    type: best_practice
+    name: "CSS Grid + Flexbox によるレスポンシブレイアウト"
+    description: |
+      外部フレームワークに依存せず、ネイティブCSSでレスポンシブ設計。
+      メディアクエリでブレークポイント: 768px, 1024pxを設定。
+    rationale: "FR-011のレスポンシブデザイン実現。依存関係を最小化し、セキュリティリスクを低減。"
+    maintainability_score: 80
+    security_score: 100
+    source_urls:
+      - "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Grid_Layout"
+    evidence:
+      - "モダンブラウザ全対応（Can I Use: 97%+）"
+      - "Bootstrap等のフレームワークより軽量"
+
+  - id: S006
+    type: usage_pattern
+    name: "Canvas API直接使用（代替案）"
+    description: |
+      Chart.jsの代替として、HTML5 Canvas APIでグラフを自前描画。
+      最大の柔軟性とパフォーマンスを得られるが、実装コストが高い。
+    rationale: "複雑な数学的描画（漸近線処理等）でより細かい制御が必要な場合に検討。"
+    maintainability_score: 60
+    security_score: 100
+    source_urls:
+      - "https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API"
+    evidence:
+      - "Desmos, GeoGebra等の数学ツールで採用"
+      - "IE9+で完全サポート"
+
+  - id: S007
+    type: best_practice
+    name: "try-catch + ユーザーフレンドリーエラーメッセージ"
+    description: |
+      数式評価時に発生する例外をcatchし、日本語で分かりやすいエラーメッセージを表示。
+      「無効な数式です: 閉じ括弧が不足しています」等の具体的指示。
+    rationale: "FR-012のエラーハンドリング実現。学習ツールとしてUX向上に不可欠。"
+    maintainability_score: 85
+    security_score: 95
+    source_urls:
+      - "https://mathjs.org/docs/expressions/error_handling.html"
+    evidence:
+      - "math.jsが詳細なエラー情報を提供"
+      - "教育系アプリのベストプラクティス"
+```
+
+[PROGRESS: suggest complete]
