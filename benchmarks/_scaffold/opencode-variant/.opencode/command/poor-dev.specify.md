@@ -156,6 +156,10 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
 - Limit clarifications to max 3, prioritized: scope > security/privacy > UX > technical.
 - Think like a tester: every requirement must be testable and unambiguous.
 
+**CRITICAL PROHIBITION**: Do NOT create any implementation files (.html, .js, .css, .py, etc.).
+This step produces ONLY: spec.md, checklists/requirements.md.
+Implementation happens in the implement step. Generated code files will be automatically deleted.
+
 **Reasonable defaults** (don't ask about): data retention, performance targets, error handling, auth method, integration patterns.
 
 **Success criteria must be**: measurable (specific metrics), technology-agnostic, user-focused, verifiable without implementation details.

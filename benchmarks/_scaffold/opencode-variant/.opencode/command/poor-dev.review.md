@@ -68,17 +68,14 @@ STEP 4: 1x Fix sub-agent (sequential, WRITE)
 
 **Safety**: Review sub-agents are read-only (no Write/Edit/Bash). Only the fixer agent has write access.
 
-## Output Format (compact English YAML)
+## Output Format (line-oriented)
 
 Per-persona:
-```yaml
-p: PM
-v: GO|CONDITIONAL|NO-GO
-i:
-  - C: description
-  - H: description
-r:
-  - recommendation
+```
+VERDICT: GO|CONDITIONAL|NO-GO
+ISSUE: C | description | file_or_section
+ISSUE: H | description | file_or_section
+REC: recommendation
 ```
 
 Aggregated:

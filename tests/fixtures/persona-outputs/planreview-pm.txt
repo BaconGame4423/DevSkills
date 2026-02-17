@@ -1,0 +1,4 @@
+VERDICT: CONDITIONAL
+ISSUE: H | Missing error handling for API timeout scenarios | src/api/client.ts:45
+ISSUE: M | Variable naming inconsistency in user service | src/services/user.ts:12
+ISSUE: L | Consider adding JSDoc comments for public methods | src/models/user.ts:8

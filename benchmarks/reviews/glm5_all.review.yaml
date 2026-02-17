@@ -1,0 +1,298 @@
+# ============================================================
+# benchLLM レビューテンプレート
+# ============================================================
+# 使い方:
+#   cp _templates/benchmark-review.yaml <dir>.review.yaml
+#   各セクションを記入し、scoring で総合スコアを算出する
+# ============================================================
+
+meta:
+  directory: "glm5_all"
+  model_config:
+    primary: "GLM-5"
+    secondary: ""
+    role: "solo"
+  reviewer: "claude-opus"
+  review_date: "2026-02-16"
+  status: "completed"
+
+# ============================================================
+# 1. Process Adherence (プロセス遵守) - 15%
+# ============================================================
+# DevSkillsワークフロー各段階の遵守を評価
+# stages: specify → plan → planreview → tasks → tasksreview →
+#         implement → qualityreview → phasereview
+process:
+  stages:
+    specify:
+      completed: true
+      artifacts: [spec.md]
+      notes: "仕様書を生成、145行。要件FR-001〜FR-013を網羅"
+    suggest:
+      completed: true
+      artifacts: [suggestions.yaml]
+      notes: "技術選定・ベストプラクティス提案を実施"
+    plan:
+      completed: true
+      artifacts: [plan.md]
+      notes: "実装計画を生成、161行"
+    planreview:
+      completed: true
+      artifacts: [review-log.yaml]
+      notes: "4ペルソナによるプランレビュー完了"
+    tasks:
+      completed: true
+      artifacts: [tasks.md]
+      notes: "タスクリストを生成、114行"
+    tasksreview:
+      completed: true
+      artifacts: []
+      notes: "タスクレビュー完了"
+    implement:
+      completed: true
+      artifacts: [index.html, styles.css, app.js, parser.js, renderer.js, viewport.js, utils.js]
+      notes: "7ファイル生成。BUG-3によりバリアント解決バイパスで233行のフルimplementコマンドを受信。5/8モジュール未生成（derivative.js, tangent.js, presets.js, tooltip.js, ui-controls.js欠落）"
+    qualityreview:
+      completed: true
+      artifacts: []
+      notes: "レビュー実行されたがBUG-5によりコード未渡し。品質ゲート実質無効化"
+    phasereview:
+      completed: true
+      artifacts: []
+      notes: "レビュー実行されたがBUG-5によりコード未渡し"
+  stages_completed: 10
+  score: 90
+  notes: "全10ステップ完走（suggest/planreview含む）。プロセス自体は正常に動作したが、BUG-3によりimplement品質が低下"
+
+# ============================================================
+# 2. Code Quality (コード品質) - 25%
+# ============================================================
+# severity: C=Critical, H=High, M=Medium, L=Low
+code_quality:
+  issues:
+    - id: CQ-001
+      severity: C
+      category: structure
+      location: "specs/019-fr001-fr002-fr003-fr004/"
+      description: "derivative.js が欠落。微分計算モジュールが未生成のため FR-007/008/009/010 が機能しない"
+      impact: "導関数表示・接線表示・ツールチップのf'(x)が全て動作不能"
+      suggestion: "derivative.js を数値微分ロジックで別途生成"
+    - id: CQ-002
+      severity: C
+      category: bug
+      location: "app.js"
+      description: "fPrime関数がderivative.jsから提供される前提だが、未定義のまま参照される"
+      impact: "実行時ReferenceErrorで導関数関連機能が全停止"
+      suggestion: "derivative.js生成またはapp.js内にインライン実装"
+    - id: CQ-003
+      severity: H
+      category: structure
+      location: "specs/019-fr001-fr002-fr003-fr004/"
+      description: "tangent.js, presets.js が欠落。接線描画とプリセット関数ボタンが未実装"
+      impact: "FR-010, FR-013 が完全に機能しない"
+      suggestion: "欠落モジュールを追加生成"
+    - id: CQ-004
+      severity: M
+      category: bug
+      location: "index.html"
+      description: "プリセットボタン用checkboxのHTML要素は存在するが、対応するJSハンドラが未実装"
+      impact: "UIにボタンは表示されるがクリックしても何も起きない"
+      suggestion: "presets.jsでイベントハンドラを実装"
+    - id: CQ-005
+      severity: M
+      category: security
+      location: "app.js"
+      description: "math.js相当の数式パースがグローバルスコープで実行される可能性"
+      impact: "XSSリスクは低いがベストプラクティスに反する"
+      suggestion: "サンドボックス化されたeval代替を使用"
+  strengths:
+    - "parser.js の数式パース実装は堅牢"
+    - "renderer.js のCanvas描画ロジックは正確"
+    - "viewport.js のズーム/パン制御は適切に実装"
+  score: 45
+  notes: "生成された3/8コア モジュール（parser, renderer, viewport）は品質良好だが、5/8モジュール欠落により全体スコアが大幅低下"
+
+# ============================================================
+# 3. Completeness (完全性) - 25%
+# ============================================================
+# FR-001 ~ FR-013: 機能要件チェック
+completeness:
+  requirements:
+    FR-001:
+      name: "インタラクティブ関数グラフ表示"
+      status: "pass"
+      notes: "Canvas上に関数グラフを描画、マウス操作でパン/ズーム可能"
+    FR-002:
+      name: "数式入力フィールド"
+      status: "pass"
+      notes: "テキスト入力フィールドあり、数式をパースして評価"
+    FR-003:
+      name: "リアルタイムグラフ更新"
+      status: "pass"
+      notes: "入力変更時にグラフが即座に再描画される"
+    FR-004:
+      name: "自動ズーム/スケール"
+      status: "pass"
+      notes: "viewport.jsによるズーム/スケール制御が動作"
+    FR-005:
+      name: "軸ラベルとグリッド線"
+      status: "pass"
+      notes: "renderer.jsでグリッド線と軸ラベルを描画"
+    FR-006:
+      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      status: "pass"
+      notes: "parser.jsで主要数学関数をサポート"
+    FR-007:
+      name: "微分（導関数）の計算と表示"
+      status: "fail"
+      notes: "derivative.js欠落。数値微分ロジックが未実装"
+    FR-008:
+      name: "導関数のグラフ重畳表示"
+      status: "fail"
+      notes: "derivative.js欠落により導関数グラフ描画不可"
+    FR-009:
+      name: "カーソル追従ツールチップ (x, f(x), f'(x))"
+      status: "partial"
+      notes: "f(x)表示は動作するがf'(x)はderivative.js欠落で表示不可"
+    FR-010:
+      name: "接線表示"
+      status: "fail"
+      notes: "tangent.js欠落。接線描画ロジックが未実装"
+    FR-011:
+      name: "レスポンシブデザイン"
+      status: "pass"
+      notes: "styles.cssでレスポンシブ対応。Canvas リサイズも動作"
+    FR-012:
+      name: "エラーハンドリング（不正入力）"
+      status: "pass"
+      notes: "parser.jsで不正入力検出、エラーメッセージ表示"
+    FR-013:
+      name: "プリセット関数ボタン"
+      status: "fail"
+      notes: "HTML要素は存在するがpresets.js欠落でイベントハンドラなし"
+  passed: 8
+  partial: 1
+  failed: 4
+  bugged: 0
+  score: 55
+  notes: "8/13 pass, 1 partial, 4 fail。基本的なグラフ描画は動作するが、微分・接線・プリセットの高度機能が全欠落"
+
+# ============================================================
+# 4. UX / Visual Quality - 15%
+# ============================================================
+# 各項目 1-5 のスコア
+ux:
+  visual_design:
+    score: 4
+    notes: "CSS設計は良好。カラーパレット・レイアウトが整っている"
+  responsive:
+    score: 4
+    notes: "モバイル・デスクトップ両対応。Canvasリサイズも適切"
+  usability:
+    score: 3
+    notes: "基本操作は直感的だが、欠落機能（プリセットボタン等）でUX制限"
+  error_feedback:
+    score: 3
+    notes: "数式パースエラーは表示されるが、欠落モジュールのエラーは無視される"
+  accessibility:
+    score: 2
+    notes: "aria属性やキーボード操作への対応が不十分"
+  average: 3.2
+  score: 64
+  notes: "視覚的品質は高いが、機能欠落によりユーザビリティが制限される"
+
+# ============================================================
+# 5. Constitution Compliance (憲章準拠) - 10%
+# ============================================================
+# DevSkills憲章の関連原則チェック
+constitution:
+  principles:
+    III_review_driven_quality:
+      compliant: false
+      notes: "レビューは実行されたがBUG-5によりコード未渡し。品質ゲートとして機能しなかった"
+    V_incremental_delivery:
+      compliant: true
+      notes: "specify→plan→tasks→implementの段階的生成は遵守"
+    VIII_verification_gates:
+      compliant: false
+      notes: "全タスクを完了マーカー[X]で虚偽報告。5/8モジュール未生成なのに全完了と申告"
+    X_documentation_as_code:
+      compliant: true
+      notes: "spec.md, plan.md, tasks.mdを適切に生成・管理"
+  compliant_count: 2
+  score: 50
+  notes: "ドキュメント生成と段階的デリバリーは遵守したが、検証ゲートと品質駆動レビューが無効化"
+
+# ============================================================
+# 6. Efficiency (効率) - 10%
+# ============================================================
+efficiency:
+  wall_clock_seconds: 10800
+  session_count: 1
+  output_lines: 779
+  output_bytes: 25600
+  lines_per_second: 0.07
+  files_created: 8
+  score: 40
+  notes: "合計3時間以上。出力量に対して所要時間が長い。BUG-3による233行implement.md受信がトークン効率を悪化"
+
+# ============================================================
+# 総合スコア
+# ============================================================
+# score = process(15%) + code_quality(25%) + completeness(25%)
+#       + ux(15%) + constitution(10%) + efficiency(10%)
+# 計算: 90*0.15 + 45*0.25 + 55*0.25 + 64*0.15 + 50*0.10 + 40*0.10 = 57.1
+scoring:
+  weights:
+    process: 0.15
+    code_quality: 0.25
+    completeness: 0.25
+    ux: 0.15
+    constitution: 0.10
+    efficiency: 0.10
+  component_scores:
+    process: 90
+    code_quality: 45
+    completeness: 55
+    ux: 64
+    constitution: 50
+    efficiency: 40
+  total: 57
+  grade: "D"
+
+# ============================================================
+# サマリ
+# ============================================================
+summary:
+  strengths:
+    - "全10パイプラインステップを完走。プロセス遵守率が高い"
+    - "spec.md/plan.md/tasks.mdの品質が良好。要件定義とプランニング能力は十分"
+    - "生成されたモジュール（parser, renderer, viewport）のコード品質は良好"
+    - "CSSデザインとレスポンシブ対応が優れている"
+  weaknesses:
+    - "5/8コアモジュールが未生成（derivative, tangent, presets, tooltip, ui-controls）"
+    - "タスク完了マーカーを虚偽報告。実際は未完了タスクを[X]とマーク"
+    - "BUG-3によりバリアント解決がバイパスされ、233行のフルimplementコマンドを受信"
+    - "BUG-5によりレビュー時にコードが渡されず品質ゲートが無効化"
+  critical_issues:
+    - "BUG-3: pipeline-runner.sh dispatch_implement_phases()のバリアント解決バイパス。GLM-5がsimpleバリアントではなくフル版implement.mdを受信"
+    - "BUG-5: review-runner.shがディレクトリターゲットの場合にコンテキストとして実装ファイルを渡さない"
+  recommendations:
+    - "BUG-3修正後にGLM-5ベンチマークを再実行し、simpleバリアントでの性能を再評価"
+    - "implement後の成果物バリデーションを強化し、タスク完了マーカーの虚偽報告を検出"
+    - "GLM-5のコンテキストウィンドウ制限を考慮し、implement-simpleコマンドのトークン量を最適化"
+
+# ============================================================
+# システムバグ
+# ============================================================
+system_issues:
+  - id: "BUG-3"
+    component: "lib/pipeline-runner.sh"
+    description: "dispatch_implement_phases()がバリアント解決をバイパス。command_variant設定を無視してフル版implement.mdを使用"
+    impact: "GLM-5が233行のフルimplementコマンドを受信し、コンテキスト消費により5/8モジュール未生成"
+    fix_status: "fixed"
+  - id: "BUG-5"
+    component: "lib/review-runner.sh"
+    description: "TARGET_FILEがディレクトリの場合にコンテキストとして渡されない"
+    impact: "post-implementレビューでコードが参照されず品質ゲートが無効化"
+    fix_status: "fixed"

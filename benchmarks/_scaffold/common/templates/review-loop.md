@@ -64,7 +64,6 @@ This reduces tokens while preserving regression detection capability.
 
 Loop STEP 1-4 until convergence. Convergence conditions:
 - 0 new C/H issues for 2 consecutive iterations (M/L accepted as advisory), OR
-- All active personas vote GO, OR
 - Total C + H == 0.
 Safety: confirm with user after MAX_ITERATIONS (depth-dependent).
 
@@ -74,7 +73,6 @@ Safety: confirm with user after MAX_ITERATIONS (depth-dependent).
   Instruction: "Review `$ARGUMENTS`. Review log: `${WINDOWED_LOG}`. Output compact English YAML."
 
   **Early termination** (2.2): During parallel persona dispatch:
-  - 3/4 (or 2/2 in light) returned GO with C/H=0 → cancel remaining, GO judgment
   - 2/4 returned NO-GO → cancel remaining, proceed to FIX
 
   **Execution routing** — MANDATORY dispatch per STEP 0 resolution:
@@ -109,7 +107,6 @@ Safety: confirm with user after MAX_ITERATIONS (depth-dependent).
 
 **STEP 3**: Convergence check.
   - 0 new C/H for last 2 iterations → DONE.
-  - All active personas GO → DONE.
   - C + H == 0 → DONE.
   - iteration >= MAX_ITERATIONS → CONFIRM with user.
   - ELSE → STEP 4.

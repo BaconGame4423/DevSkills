@@ -49,10 +49,110 @@ fi
 # --- JSON ヘルパー ---
 jval() { jq -r "$1" "$CONFIG"; }
 
+# --- スキャフォールドホワイトリスト ---
+SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules" "commands" "lib")
+SCAFFOLD_LINKS=()
+SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version" "CLAUDE.md" "AGENTS.md" ".bench-output.json" ".bench-metrics.json" ".bench-stderr.txt")
+
+_is_scaffold() {
+  local base="$1"
+  local s
+  for s in "${SCAFFOLD_DIRS[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  for s in "${SCAFFOLD_LINKS[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  for s in "${SCAFFOLD_FILES[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  return 1
+}
+
+# ============================================================
+# has_existing_run: 既存ランの有無を判定
+# ============================================================
+has_existing_run() {
+  local dir="$1"
+  [[ -f "$dir/.bench-complete" ]] && return 0
+  [[ -f "$dir/.bench-output.txt" ]] && return 0
+  [[ -f "$dir/.bench-output.json" ]] && return 0
+  [[ -f "$dir/.bench-metrics.json" ]] && return 0
+  [[ -f "$dir/.poor-dev/pipeline-state.json" ]] && return 0
+
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    return 0
+  done
+  return 1
+}
+
+# ============================================================
+# archive_run: 既存ランを _runs/<timestamp>/ にアーカイブ
+# ============================================================
+archive_run() {
+  local dir="$1"
+  local ts
+  ts=$(date +%Y%m%d-%H%M%S)
+  local archive="$dir/_runs/$ts"
+  mkdir -p "$archive"
+
+  # .poor-dev 内の生成物
+  [[ -f "$dir/.poor-dev/pipeline-state.json" ]] && mv "$dir/.poor-dev/pipeline-state.json" "$archive/"
+
+  # スキャフォールド以外を移動
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    mv "$item" "$archive/"
+  done
+
+  # git log 保存
+  if [[ -d "$dir/.git" ]]; then
+    git -C "$dir" log --oneline --all > "$archive/_git-log.txt" 2>/dev/null || true
+  fi
+
+  # _runs/ を .gitignore に追記
+  if ! grep -qx '_runs/' "$dir/.gitignore" 2>/dev/null; then
+    echo '_runs/' >> "$dir/.gitignore"
+  fi
+
+  echo "$archive"
+}
+
+# ============================================================
+# clean_run: 生成物を削除してクリーン状態にする（冪等）
+# ============================================================
+clean_run() {
+  local dir="$1"
+
+  # .poor-dev 内の生成物
+  rm -f "$dir/.poor-dev/pipeline-state.json"
+
+  # スキャフォールド以外を削除
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    rm -rf "$item"
+  done
+
+  # git commit
+  if [[ -d "$dir/.git" ]]; then
+    ( cd "$dir"
+      if [[ -n "$(git status --porcelain)" ]]; then
+        git add -A && git commit -q -m "clean state for new benchmark run"
+      fi
+    )
+  fi
+}
+
 # --- 引数解析 ---
 COLLECT_ONLY=false
 SETUP_ONLY=false
 POST_ONLY=false
+ARCHIVE_ONLY=false
+CLEAN_ONLY=false
 COMBO=""
 VERSION=""
 
@@ -60,12 +160,16 @@ case "${1:-}" in
   --collect) COLLECT_ONLY=true; COMBO="${2:-}" ;;
   --setup)   SETUP_ONLY=true;   COMBO="${2:-}"; VERSION="${3:-}" ;;
   --post)    POST_ONLY=true;    COMBO="${2:-}" ;;
+  --archive) ARCHIVE_ONLY=true; COMBO="${2:-}" ;;
+  --clean)   CLEAN_ONLY=true;   COMBO="${2:-}" ;;
   --help|-h)
     echo "Usage:"
     echo "  $0 <combo> [version]       セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
     echo "  $0 --setup <combo> [ver]   環境セットアップのみ"
     echo "  $0 --post <combo>          ポスト処理のみ（分析 + メトリクス + 完了マーカー）"
     echo "  $0 --collect <combo>       メトリクス収集のみ"
+    echo "  $0 --archive <combo>       既存ランを _runs/ にアーカイブ"
+    echo "  $0 --clean <combo>         生成物を削除してクリーン状態にする"
     echo ""
     echo "Arguments:"
     echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all, claude_all)"
@@ -105,7 +209,10 @@ if ! command -v "$ORCH_CLI" &>/dev/null; then
   exit 1
 fi
 
-info "CLI: $ORCH_CLI / モデル: $ORCH_MODEL"
+# --- mode 検出 ---
+MODE=$(jq -r --arg c "$COMBO" '.combinations[] | select(.dir_name == $c) | .mode // "pipeline"' "$CONFIG")
+
+info "CLI: $ORCH_CLI / モデル: $ORCH_MODEL / モード: $MODE"
 
 # --- バージョン解決 ---
 if [[ -z "$VERSION" ]]; then
@@ -132,6 +239,175 @@ ${requirements}"
 }
 
 # ============================================================
+# build_baseline_prompt: baseline 用プロンプト構築
+# ============================================================
+build_baseline_prompt() {
+  local task_name task_desc requirements
+
+  task_name=$(jval '.task.name')
+  task_desc=$(jval '.task.description')
+  requirements=$(jq -r '.task.requirements[] | "- \(.id): \(.name)"' "$CONFIG")
+
+  cat <<PROMPT_EOF
+${task_desc}「${task_name}」を開発してください。
+
+要件:
+${requirements}
+
+すべてのコードを実装し、動作する状態で完成させてください。
+実装が完了したら git commit してください。
+PROMPT_EOF
+}
+
+# ============================================================
+# setup_baseline_environment: baseline 用最小環境セットアップ
+# ============================================================
+setup_baseline_environment() {
+  info "=== ベースライン環境セットアップ: $COMBO ==="
+  echo ""
+
+  # ディレクトリ作成（インラインセットアップ）
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    mkdir -p "$TARGET_DIR"
+
+    # .gitignore
+    cat > "$TARGET_DIR/.gitignore" <<'GITIGNORE_EOF'
+node_modules/
+dist/
+*.log
+_runs/
+GITIGNORE_EOF
+
+    # CLAUDE.md（git push 禁止のみ）
+    cat > "$TARGET_DIR/CLAUDE.md" <<'CLAUDE_EOF'
+# CLAUDE.md (Baseline Benchmark)
+
+## 制約
+- `git push` は絶対に実行しないでください
+- 実装が完了したら `git commit` してください
+CLAUDE_EOF
+
+    # opencode.json（OpenCode CLI の場合）
+    if [[ "$ORCH_CLI" == "opencode" ]]; then
+      cat > "$TARGET_DIR/opencode.json" <<ENDJSON
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "model": "$ORCH_MODEL"
+}
+ENDJSON
+      ok "opencode.json を生成"
+    fi
+
+    ok "baseline ディレクトリを作成"
+  fi
+
+  # .git がなければ初期化
+  if [[ ! -d "$TARGET_DIR/.git" ]]; then
+    (
+      cd "$TARGET_DIR"
+      git init -q
+      mkdir -p .git/hooks
+      cat > .git/hooks/pre-push <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+      chmod +x .git/hooks/pre-push
+      git add -A
+      git commit -q -m "initial scaffold for $COMBO (baseline)"
+    )
+    ok "git 初期化完了"
+  fi
+
+  echo ""
+  ok "ベースライン環境セットアップ完了"
+}
+
+# ============================================================
+# run_baseline: baseline 実行（CLI 自動分岐）
+# - claude: claude -p --output-format json → 単一 JSON
+# - opencode: opencode run --format json → JSONL (1行1イベント)
+# ============================================================
+run_baseline() {
+  local prompt="$1"
+  local start_ts end_ts
+
+  start_ts=$(date +%s%3N)
+
+  if [[ "$ORCH_CLI" == "claude" ]]; then
+    # --- Claude CLI: 単一 JSON 出力 ---
+    info "claude -p で baseline 実行中..."
+    (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
+      --model "$ORCH_MODEL" \
+      --output-format json \
+      --dangerously-skip-permissions \
+      --no-session-persistence \
+      <<< "$prompt") > "$TARGET_DIR/.bench-output.json" 2>"$TARGET_DIR/.bench-stderr.txt" || true
+
+    end_ts=$(date +%s%3N)
+
+    # JSON から metrics 抽出
+    local input_tokens cache_creation cache_read output_tokens cost_usd duration_ms duration_api_ms num_turns is_error wall_clock_ms
+    input_tokens=$(jq -r '.usage.input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_creation=$(jq -r '.usage.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    output_tokens=$(jq -r '.usage.output_tokens // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cost_usd=$(jq -r '.total_cost_usd // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    duration_ms=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    duration_api_ms=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    num_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    is_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo false)
+    wall_clock_ms=$((end_ts - start_ts))
+
+  else
+    # --- OpenCode CLI: JSONL 出力 (1行1イベント) ---
+    info "opencode run で baseline 実行中..."
+    (cd "$TARGET_DIR" && opencode run \
+      --model "$ORCH_MODEL" \
+      --format json \
+      "$prompt") > "$TARGET_DIR/.bench-output.json" 2>"$TARGET_DIR/.bench-stderr.txt" || true
+
+    end_ts=$(date +%s%3N)
+
+    # JSONL から step_finish イベントを集約して metrics 抽出
+    local input_tokens cache_creation cache_read output_tokens cost_usd reasoning_tokens num_turns is_error wall_clock_ms duration_ms duration_api_ms
+    input_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.input // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    output_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.output // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_creation=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.cache.write // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cache_read=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.cache.read // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    cost_usd=$(jq -s '[.[] | select(.type == "step_finish") | .part.cost // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    reasoning_tokens=$(jq -s '[.[] | select(.type == "step_finish") | .part.tokens.reasoning // 0] | add // 0' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    num_turns=$(jq -s '[.[] | select(.type == "step_finish")] | length' "$TARGET_DIR/.bench-output.json" 2>/dev/null || echo 0)
+    is_error=false
+    wall_clock_ms=$((end_ts - start_ts))
+    # JSONL には duration_ms/duration_api_ms がないため 0 固定（wall_clock_ms で代替）
+    duration_ms=0
+    duration_api_ms=0
+  fi
+
+  # .bench-metrics.json に書き出し
+  jq -n --arg model "$ORCH_MODEL" --arg cli "$ORCH_CLI" \
+    --argjson in "$input_tokens" --argjson cache_create "$cache_creation" \
+    --argjson cache_rd "$cache_read" --argjson out "$output_tokens" \
+    --argjson cost "$cost_usd" --argjson dur "$duration_ms" \
+    --argjson dur_api "$duration_api_ms" \
+    --argjson wall "$wall_clock_ms" --argjson turns "$num_turns" \
+    --argjson err "$is_error" \
+    --argjson reasoning "${reasoning_tokens:-0}" \
+    '{mode:"baseline", model:$model, cli:$cli,
+      input_tokens:$in, cache_creation_input_tokens:$cache_create,
+      cache_read_input_tokens:$cache_rd, output_tokens:$out,
+      reasoning_tokens:$reasoning,
+      total_tokens:($in+$cache_create+$cache_rd+$out),
+      cost_usd:$cost, duration_ms:$dur, duration_api_ms:$dur_api,
+      wall_clock_ms:$wall, num_turns:$turns, is_error:$err,
+      timestamp:now|todate}' \
+    > "$TARGET_DIR/.bench-metrics.json"
+
+  ok "baseline 実行完了 (wall: ${wall_clock_ms}ms, tokens: $((input_tokens + cache_creation + cache_read + output_tokens)), cost: \$${cost_usd})"
+}
+
+# ============================================================
 # setup_environment: 環境セットアップ
 # ============================================================
 setup_environment() {
@@ -154,7 +430,13 @@ setup_environment() {
     ok "スキルファイル更新完了"
   fi
 
-  # 3) .poor-dev-version をターゲットにも反映
+  # 3) baseline モードの場合はパイプライン補完不要
+  if [[ "$MODE" == "baseline" ]]; then
+    ok "環境セットアップ完了 (baseline)"
+    return 0
+  fi
+
+  # 3b) .poor-dev-version をターゲットにも反映
   echo "$VERSION" > "$TARGET_DIR/.poor-dev-version"
 
   # 4) パイプライン補完: setup-benchmarks.sh が除外しているファイルを補完
@@ -179,17 +461,19 @@ setup_environment() {
     warn "pipeline.md が見つかりません"
   fi
 
-  # lib/ symlink（存在しない場合のみ）
-  if [[ ! -e "$TARGET_DIR/lib" ]]; then
-    ln -s "$DEVSKILLS_DIR/lib" "$TARGET_DIR/lib"
-    ok "lib/ symlink を作成"
-  fi
+  # lib/ 読み取り専用コピー（symlink ではなく実体コピー + 書き込み不可）
+  chmod -R u+w "$TARGET_DIR/lib" 2>/dev/null || true
+  rm -rf "$TARGET_DIR/lib"
+  cp -rL "$DEVSKILLS_DIR/lib" "$TARGET_DIR/lib"
+  chmod -R a-w "$TARGET_DIR/lib"
+  ok "lib/ を読み取り専用コピー"
 
-  # commands/ symlink（存在しない場合のみ）
-  if [[ ! -e "$TARGET_DIR/commands" ]]; then
-    ln -s "$DEVSKILLS_DIR/commands" "$TARGET_DIR/commands"
-    ok "commands/ symlink を作成"
-  fi
+  # commands/ 読み取り専用コピー
+  chmod -R u+w "$TARGET_DIR/commands" 2>/dev/null || true
+  rm -rf "$TARGET_DIR/commands"
+  cp -rL "$DEVSKILLS_DIR/commands" "$TARGET_DIR/commands"
+  chmod -R a-w "$TARGET_DIR/commands"
+  ok "commands/ を読み取り専用コピー"
 
   # 5) git commit（.git が存在する場合のみ）
   if [[ -d "$TARGET_DIR/.git" ]]; then
@@ -219,26 +503,20 @@ run_pipeline() {
     attempt=$((attempt + 1))
     info "パイプライン実行 (attempt $attempt/$max_retries)"
 
-    # プロンプトをファイルに書き出し
-    local prompt_file="/tmp/poor-dev-bench-prompt-$$.txt"
-    echo "$prompt" > "$prompt_file"
-
-    # CLI に応じた非対話実行
+    # CLI に応じた非対話実行（プロンプトは直接渡す）
     if [[ "$ORCH_CLI" == "claude" ]]; then
       (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
         --model "$ORCH_MODEL" \
         --output-format text \
-        < "$prompt_file" \
+        <<< "$prompt" \
         > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
     else
       (cd "$TARGET_DIR" && opencode run \
         --model "$ORCH_MODEL" \
         --format json \
-        "$(cat "$prompt_file")" \
+        "$prompt" \
         > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
     fi
-
-    rm -f "$prompt_file"
 
     # pipeline-state.json で完了判定
     local state_file="$TARGET_DIR/.poor-dev/pipeline-state.json"
@@ -280,9 +558,9 @@ run_pipeline() {
 analyze_poordev() {
   info "=== PoorDevSkills 分析フェーズ ==="
 
-  # 分析プロンプト構築
-  local analysis_prompt_file="/tmp/poor-dev-analysis-prompt-$$.txt"
-  cat > "$analysis_prompt_file" <<'ANALYSIS_EOF'
+  # 分析プロンプト構築（変数に直接格納）
+  local analysis_prompt
+  analysis_prompt=$(cat <<'ANALYSIS_EOF'
 このディレクトリは PoorDevSkills パイプラインのベンチマーク実行結果です。
 成果物を分析し、PoorDevSkills 自体の問題点と改善案を特定してください。
 
@@ -339,21 +617,20 @@ summary:
   quick_wins: []      # すぐ修正できる改善 3 件
   strategic: []       # 中長期的な改善提案
 ANALYSIS_EOF
+  )
 
-  # 分析実行（同じ CLI/モデル）
+  # 分析実行（同じ CLI/モデル、プロンプトは直接渡す）
   if [[ "$ORCH_CLI" == "claude" ]]; then
     (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
       --model "$ORCH_MODEL" \
       --output-format text \
-      < "$analysis_prompt_file") || warn "分析フェーズ失敗"
+      <<< "$analysis_prompt") || warn "分析フェーズ失敗"
   else
     (cd "$TARGET_DIR" && opencode run \
       --model "$ORCH_MODEL" \
       --format json \
-      "$(cat "$analysis_prompt_file")") || warn "分析フェーズ失敗"
+      "$analysis_prompt") || warn "分析フェーズ失敗"
   fi
-
-  rm -f "$analysis_prompt_file"
 
   # 結果確認
   if [[ -f "$TARGET_DIR/poordev-analysis.yaml" ]]; then
@@ -412,29 +689,33 @@ collect_and_summarize() {
   echo -e "${BOLD}============================================================${NC}"
   echo ""
 
-  # 成果物一覧
+  # 成果物一覧（再帰検索）
   echo -e "${CYAN}--- 成果物 ---${NC}"
   for artifact in spec.md plan.md tasks.md review-log.yaml poordev-analysis.yaml; do
-    if [[ -f "$TARGET_DIR/$artifact" ]]; then
-      echo -e "  ${GREEN}[x]${NC} $artifact"
+    local found
+    found=$(find "$TARGET_DIR" -name "$artifact" -not -path '*/_runs/*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    if [[ -n "$found" ]]; then
+      local relpath="${found#$TARGET_DIR/}"
+      echo -e "  ${GREEN}[x]${NC} $artifact ($relpath)"
     else
       echo -e "  ${RED}[ ]${NC} $artifact"
     fi
   done
   echo ""
 
-  # ファイル統計
+  # ファイル統計（再帰検索）
   echo -e "${CYAN}--- ファイル統計 ---${NC}"
   local file_count=0
   local total_lines=0
-  for f in "$TARGET_DIR"/*.html "$TARGET_DIR"/*.js "$TARGET_DIR"/*.css "$TARGET_DIR"/*.ts "$TARGET_DIR"/*.py; do
+  while IFS= read -r f; do
     [[ -f "$f" ]] || continue
     file_count=$((file_count + 1))
     local lines
     lines=$(wc -l < "$f")
     total_lines=$((total_lines + lines))
-    printf "  %-40s %6d lines\n" "$(basename "$f")" "$lines"
-  done
+    local relpath="${f#$TARGET_DIR/}"
+    printf "  %-40s %6d lines\n" "$relpath" "$lines"
+  done < <(find "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/*' 2>/dev/null | sort)
   echo "  合計: ${file_count} ファイル, ${total_lines} 行"
   echo ""
 
@@ -470,6 +751,37 @@ collect_and_summarize() {
     echo ""
   fi
 
+  # トークン/コストメトリクス（baseline の場合）
+  if [[ -f "$TARGET_DIR/.bench-metrics.json" ]]; then
+    echo -e "${CYAN}--- トークン/コストメトリクス ---${NC}"
+    local m_in m_cache_create m_cache_read m_out m_total m_cost m_dur m_dur_api m_wall m_turns m_model m_error
+    m_in=$(jq -r '.input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_cache_create=$(jq -r '.cache_creation_input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_cache_read=$(jq -r '.cache_read_input_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_out=$(jq -r '.output_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_total=$(jq -r '.total_tokens // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_cost=$(jq -r '.cost_usd // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_dur=$(jq -r '.duration_ms // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_dur_api=$(jq -r '.duration_api_ms // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_wall=$(jq -r '.wall_clock_ms // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_turns=$(jq -r '.num_turns // 0' "$TARGET_DIR/.bench-metrics.json")
+    m_model=$(jq -r '.model // "unknown"' "$TARGET_DIR/.bench-metrics.json")
+    m_error=$(jq -r '.is_error // false' "$TARGET_DIR/.bench-metrics.json")
+    echo "  モデル:                $m_model"
+    echo "  入力トークン:          $m_in"
+    echo "  キャッシュ作成トークン: $m_cache_create"
+    echo "  キャッシュ読取トークン: $m_cache_read"
+    echo "  出力トークン:          $m_out"
+    echo "  合計トークン:          $m_total"
+    echo "  コスト (USD):          \$$m_cost"
+    echo "  API時間 (ms):          $m_dur"
+    echo "  API時間(api) (ms):     $m_dur_api"
+    echo "  壁時計 (ms):           $m_wall"
+    echo "  ターン数:              $m_turns"
+    echo "  エラー:                $m_error"
+    echo ""
+  fi
+
   # 次のステップ
   echo -e "${CYAN}--- 次のステップ ---${NC}"
   if [[ -f "$TARGET_DIR/poordev-analysis.yaml" ]]; then
@@ -497,7 +809,11 @@ fi
 
 if [[ "$SETUP_ONLY" == true ]]; then
   # --setup モード: 環境セットアップのみ
-  setup_environment
+  if [[ "$MODE" == "baseline" ]]; then
+    setup_baseline_environment
+  else
+    setup_environment
+  fi
   exit 0
 fi
 
@@ -508,37 +824,100 @@ if [[ "$POST_ONLY" == true ]]; then
     exit 1
   fi
   collect_and_summarize 0
-  analyze_poordev
+  if [[ "$MODE" != "baseline" ]]; then
+    analyze_poordev
+  else
+    info "baseline モード: PoorDevSkills 分析スキップ"
+  fi
   date +%s > "$TARGET_DIR/.bench-complete"
   ok "ポスト処理完了: $COMBO"
+  exit 0
+fi
+
+if [[ "$ARCHIVE_ONLY" == true ]]; then
+  # --archive モード: 既存ランをアーカイブ
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  if has_existing_run "$TARGET_DIR"; then
+    ARCHIVE_PATH=$(archive_run "$TARGET_DIR")
+    ok "アーカイブ完了: $ARCHIVE_PATH"
+  else
+    info "アーカイブ対象なし: $COMBO"
+  fi
+  exit 0
+fi
+
+if [[ "$CLEAN_ONLY" == true ]]; then
+  # --clean モード: 生成物を削除してクリーン状態に
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  clean_run "$TARGET_DIR"
+  ok "クリーン完了: $COMBO"
   exit 0
 fi
 
 # --- フル実行モード ---
 START_TS=$(date +%s)
 
-# Phase 1: 環境セットアップ
-setup_environment
+if [[ "$MODE" == "baseline" ]]; then
+  # === baseline フロー ===
 
-# Phase 2: プロンプト構築
-PROMPT=$(build_prompt)
+  # Phase 1: 環境セットアップ
+  setup_baseline_environment
 
-echo ""
-echo -e "${BOLD}============================================================${NC}"
-echo -e "${BOLD}  非対話パイプライン実行: $COMBO${NC}"
-echo -e "${BOLD}  CLI: $ORCH_CLI / モデル: $ORCH_MODEL${NC}"
-echo -e "${BOLD}============================================================${NC}"
-echo ""
+  # Phase 2: プロンプト構築
+  PROMPT=$(build_baseline_prompt)
 
-# Phase 3: パイプライン実行
-run_pipeline "$PROMPT"
+  echo ""
+  echo -e "${BOLD}============================================================${NC}"
+  echo -e "${BOLD}  ベースライン実行: $COMBO${NC}"
+  echo -e "${BOLD}  CLI: $ORCH_CLI / モデル: $ORCH_MODEL${NC}"
+  echo -e "${BOLD}============================================================${NC}"
+  echo ""
 
-# Phase 4: メトリクス収集
-collect_and_summarize "$START_TS"
+  # Phase 3: baseline 実行
+  run_baseline "$PROMPT"
 
-# Phase 5: PoorDevSkills 分析
-analyze_poordev
+  # Phase 4: メトリクス収集
+  collect_and_summarize "$START_TS"
 
-# Phase 6: 完了マーカー
-date +%s > "$TARGET_DIR/.bench-complete"
-ok "ベンチマーク全工程完了: $COMBO"
+  # Phase 5: PoorDevSkills 分析スキップ（baseline）
+
+  # Phase 6: 完了マーカー
+  date +%s > "$TARGET_DIR/.bench-complete"
+  ok "ベースラインベンチマーク完了: $COMBO"
+
+else
+  # === pipeline フロー ===
+
+  # Phase 1: 環境セットアップ
+  setup_environment
+
+  # Phase 2: プロンプト構築
+  PROMPT=$(build_prompt)
+
+  echo ""
+  echo -e "${BOLD}============================================================${NC}"
+  echo -e "${BOLD}  非対話パイプライン実行: $COMBO${NC}"
+  echo -e "${BOLD}  CLI: $ORCH_CLI / モデル: $ORCH_MODEL${NC}"
+  echo -e "${BOLD}============================================================${NC}"
+  echo ""
+
+  # Phase 3: パイプライン実行
+  run_pipeline "$PROMPT"
+
+  # Phase 4: メトリクス収集
+  collect_and_summarize "$START_TS"
+
+  # Phase 5: PoorDevSkills 分析
+  analyze_poordev
+
+  # Phase 6: 完了マーカー
+  date +%s > "$TARGET_DIR/.bench-complete"
+  ok "ベンチマーク全工程完了: $COMBO"
+
+fi

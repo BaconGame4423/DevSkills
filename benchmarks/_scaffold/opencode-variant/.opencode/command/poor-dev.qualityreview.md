@@ -33,6 +33,13 @@ Run automated quality gates before persona review:
 
 If gates fail, record failures as C or H severity and proceed to fix loop.
 
+If any gate returns `skip` (tool not available), record as:
+  `gates: {lint: skip-unavailable, ...}`
+and prepend to STEP 1 persona instructions:
+  `"WARNING: Quality gate '${GATE}' was skipped (tool unavailable). Increase scrutiny for ${GATE_AREA}."`
+
+Gate-to-area mapping: lint→code style/patterns, format→formatting, test→correctness/edge cases, typecheck→type safety.
+
 After running gates, output a progress marker on its own line:
   `[REVIEW-PROGRESS: qualityreview [gates]: ${PASS}/${TOTAL} passed]`
 This marker MUST be output in all execution modes (interactive and Non-Interactive).

@@ -220,6 +220,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | コマンド | 用途 |
 |---------|------|
 | `/poor-dev` | 入力の受付（全フロー自動分類・ルーティング + specify オーケストレーション） |
+| `/poor-dev-simple` | GLM5 用簡略版 intake（1コマンド + spec 承認で全パイプライン自動実行） |
 | `/poor-dev.pipeline` | パイプライン実行 sub-agent（`/poor-dev` から自動 dispatch。直接呼び出し不要） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 | `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
@@ -287,6 +288,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `poor-dev benchmark run <combo> [version]` | ベンチマーク一括実行（セットアップ→非対話パイプライン→分析→メトリクス収集） |
 | `/bench <combo>` | ベンチマーク全自動実行（右 tmux ペイン） + PoorDevSkills 分析 |
 | `/bench --results <combo>` | ベンチマーク分析結果の表示 |
+| `/bench.repair <combo>` | 前回ベンチの失敗診断・修正・smoke test + フルベンチ誘導 |
 
 ---
 
@@ -355,6 +357,24 @@ Plan-and-Execute モデルに基づき、各ステップに最適なモデルを
 ```
 
 設定はプロジェクトルートの `.poor-dev/config.json` に保存され、`npx github:BaconGame4423/PoorDevSkills update` で上書きされません。
+
+### GLM5 対応設定
+
+小規模モデル（GLM5 等）で安定動作させるための追加設定:
+
+```json
+{
+  "command_variant": "simple",
+  "review_mode": "bash"
+}
+```
+
+| 設定 | 値 | 説明 |
+|------|-----|------|
+| `command_variant` | `"simple"` | 各ステップで `-simple` 版コマンドを優先使用。LLM はコンテンツ生成のみ、ループ・状態管理は bash が担当 |
+| `review_mode` | `"bash"` | レビューループを bash で駆動。persona dispatch → aggregate → fix を bash スクリプトが制御 |
+
+未設定時は従来の LLM 駆動モードにフォールバックし、後方互換性を維持します。
 
 ### 利用可能モデルの確認
 
