@@ -251,7 +251,7 @@ if [[ "$MODE" == "update" ]]; then
     orch_cli=$(model_cli "$orch")
     target="$SCRIPT_DIR/$dir_name"
 
-    local mode
+    mode=""
     mode=$(jval ".combinations[$i].mode // \"pipeline\"")
 
     echo ""
