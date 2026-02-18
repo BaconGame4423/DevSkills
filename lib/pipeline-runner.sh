@@ -521,7 +521,9 @@ CTX_EOF
     if [[ -n "$phase_files" ]]; then
       git -C "$project_dir" add -A 2>/dev/null || true
       git -C "$project_dir" reset HEAD -- agents/ commands/ lib/ .poor-dev/ .opencode/ .claude/ 2>/dev/null || true
-      git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null || true
+      if ! git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null; then
+        echo "{\"phase\":$phase_num,\"warning\":\"git commit failed for phase ${phase_num}, artifacts remain uncommitted\"}"
+      fi
     fi
 
     # Update phase state
@@ -670,6 +672,8 @@ for STEP in $PIPELINE_STEPS; do
           bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "paused" "NO-GO verdict at $STEP" > /dev/null
           echo "{\"action\":\"pause\",\"step\":\"$STEP\",\"reason\":\"NO-GO verdict\"}"
           exit 2
+        else
+          echo "{\"step\":\"$STEP\",\"warning\":\"review-runner.sh exited with code $REVIEW_EXIT\"}"
         fi
       }
       echo "$REVIEW_RESULT"

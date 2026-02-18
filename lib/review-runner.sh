@@ -146,9 +146,8 @@ while [[ $ITER -lt $MAX_ITER ]]; do
       COMPOSE_ARGS+=(--context "target=$TARGET_FILE")
     elif [[ -d "$TARGET_FILE" ]]; then
       # ディレクトリターゲット: 実装ファイルを個別に追加（最大 20 件）
-      local impl_files
       impl_files=$(find "$TARGET_FILE" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null || true)
-      local impl_idx=0
+      impl_idx=0
       while IFS= read -r impl_file; do
         [[ -z "$impl_file" ]] && continue
         impl_idx=$((impl_idx + 1))

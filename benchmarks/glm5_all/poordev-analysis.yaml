@@ -1,163 +1,152 @@
 workflow:
   pipeline_adherence:
-    completed_steps: [specify, suggest, plan, planreview, tasks, tasksreview, implement]
-    skipped_steps: [architecturereview, qualityreview, phasereview]
+    completed_steps:
+      - specify
+      - suggest
+      - plan
+      - planreview
+      - tasks
+      - tasksreview
+      - implement (8 phases)
+      - architecturereview
+      - qualityreview
+      - phasereview
+    skipped_steps: []
     notes: |
-      パイプラインは specify→suggest→plan→planreview→tasks→tasksreview→implement まで進行。
-      implement 後のレビューステップ3種（architecture/quality/phase）がスキップされている。
-      git log から、実装は4フェーズ（Setup/Foundational/US1/US2）でコミットされている。
+      パイプラインは全10ステップが実行され、implementフェーズは8フェーズすべて完了。
+      ただし git commit が全く作成されていない (ISSUE-1)、post-implement レビューログが
+      未生成 (ISSUE-3/4) という重大な基盤問題が発見された。
+    discovered_issues:
+      - id: ISSUE-1
+        severity: critical
+        title: "implement フェーズの git commit が全く作成されていない"
+        description: |
+          pipeline-state.json は 8 フェーズ全完了を報告し、ソースファイル 11 個が正しく生成されている。
+          しかし git 上では全ファイルが untracked (`??`) のまま。
+          根本原因: pipeline-runner.sh:522-524 の `|| true` で git commit エラーが消音されている。
+          新ランで spec ディレクトリ番号が変わった影響で commit が失敗した可能性。
+        impact: |
+          - 前フェーズ成果物の git 保護が無効化（git clean -fd による破壊リスク）
+          - post-implement レビューの diff ベースコンテキスト生成が機能しない
+          - ベンチマーク分析でフェーズ別の変更量を計測できない
+        fix: "pipeline-runner.sh:524 の || true を除去し、失敗時は警告ログ出力 + 続行に変更"
+        fix_commit: "本コミットで修正済み"
+      - id: ISSUE-2
+        severity: low
+        title: "planreview CONDITIONAL 判定が無視されている"
+        description: |
+          14 件の指摘（M:10, L:4）が全て無視され、plan/tasks/code に反映されていない。
+          auto_approve: true 設定による既知の動作。
+        impact: "レビュー指摘が実装に反映されない"
+        fix: "auto_approve 時でもレビュー指摘を構造化してパイプラインに反映する仕組みが必要（将来対応）"
+      - id: ISSUE-3
+        severity: medium
+        title: "tasksreview のレビューログが存在しない"
+        description: |
+          specs/001-*/ に review-log-tasksreview.yaml が存在しない。
+          tasksreview ステップは completed だが、レビューログが生成されていない。
+          推定原因: 全ペルソナ dispatch が失敗し exit 3 → パイプライン再開時にスキップされた。
+        impact: "tasksreview の指摘内容が記録されていない"
+      - id: ISSUE-4
+        severity: medium
+        title: "architecturereview/qualityreview/phasereview のレビューログが存在しない"
+        description: |
+          post-implement の 3 レビューの review-log.yaml が全て未生成。
+          根本原因: review-runner.sh:149-150 で `local` を関数外で使用しており、
+          set -e によりスクリプトが即座に exit 1 で終了。ディレクトリターゲット
+          （architecturereview/qualityreview/phasereview）でのみ発生。
+          さらに pipeline-runner.sh:658-674 が exit 1 を無視して step_complete にマークしている。
+        impact: "post-implement レビューが実質的に実行されていない"
+        fix: |
+          1. review-runner.sh:149-150 の `local` を除去（関数外での使用はバグ）
+          2. pipeline-runner.sh:658-674 で exit 1 もログ出力するように修正
+        fix_commit: "本コミットで修正済み"
   information_flow:
     gaps:
-      - step: tasksreview→implement
-        description: "tasks.md のタスクが全て [ ]（未完了）のまま、実装が完了している。タスク完了マーカーの更新が欠落"
-      - step: implement→review
-        description: "implement 完了後の3種レビュー（architecturereview/qualityreview/phasereview）が実行されていない"
+      - gap: planreview指摘事項のフィードバックループ不在
+        description: "planreviewで14件の指摘（PR001-PR014）があったが、plan.mdやtasks.mdへの反映が見られない"
+      - gap: レビュー指摘の重要度と処理結果の追跡不在
+        description: "CONDITIONAL判定の指摘がどのように処理されたか不明"
     notes: |
-      spec→plan→tasks→code の論理的整合は保たれているが、
-      実装完了のフィードバックループ（tasks.md 更新、レビュー実行）が機能していない。
+      spec → plan → tasks → code の基本フローは機能しているが、レビューフィードバックの
+      実装への反映メカニズムが欠如。auto_approve: true 設定によりCONDITIONAL判定でも
+      自動進行している可能性。
   bottlenecks:
-    issues:
-      - phase: implement
-        description: "4フェーズ実行中にパイプラインが中断された可能性。_runs/ には phase_3 までの記録"
-      - phase: review
-        description: "レビューログが空（iterations: []、issues: 空）。実質的にレビューが実行されなかった可能性"
-    notes: |
-      planreview/tasksreview のログは作成されているが中身が空。
-      実際にペルソナがディスパッチされたか、結果が記録されたかが不明。
+    issues: []
+    notes: "ボトルネックや不要な再実行は見られない。8フェーズがスムーズに進行。"
   review_effectiveness:
     useful_fixes: 0
     noise_fixes: 0
     notes: |
-      review-log-planreview.yaml と review-log-tasksreview.yaml の両方が空。
-      これは以下のいずれかを示唆:
-      1) 実際に指摘ゼロ（品質が完璧）
-      2) ペルソナディスパッチが失敗
-      3) 結果の書き込みが失敗
-      GLM-5 の能力を考慮すると (2) or (3) の可能性が高い。
+      planreviewで14件の指摘があったが、実際の成果物への反映が確認できない。
+      主な指摘: 競合分析不在(PR001)、テスト戦略不足(PR002)、アクセシビリティ未対応(PR003)、
+      デプロイ戦略不在(PR004)、XSS対策不在(PR005)等。これらは重要な指摘だが、
+      最終成果物には反映されていない。
 
 commands:
   issues:
-    - command: poor-dev.planreview.md / poor-dev.tasksreview.md
+    - command: pipeline-runner.sh (L522-524)
+      severity: C
+      description: "implement フェーズの git commit が || true で消音されており、コミット失敗が検知できない (ISSUE-1)"
+      suggestion: "|| true を除去し、失敗時は警告ログ + 続行。修正済み"
+    - command: review-runner.sh (L149-150)
+      severity: C
+      description: "local を関数外で使用。ディレクトリターゲットのレビュー (arch/quality/phase) が set -e で即死 (ISSUE-4 根本原因)"
+      suggestion: "local を除去して通常変数に変更。修正済み"
+    - command: pipeline-runner.sh (L658-674)
       severity: H
-      description: |
-        レビュー結果が空として記録されている。review-loop.md テンプレートは詳細だが、
-        実際のペルソナディスパッチと結果収集のフローが機能していない可能性。
-      suggestion: |
-        review-runner.sh のログ出力を強化し、ペルソナごとのディスパッチ結果を
-        明示的に記録するよう修正。空結果の場合は警告を出力すべき。
-    - command: poor-dev.implement.md
+      description: "review-runner.sh が exit 1 で失敗した場合、エラーが無視されて step_complete にマークされる (ISSUE-4 増幅原因)"
+      suggestion: "exit 1 のケースでもログ出力。修正済み"
+    - command: poor-dev.md (Step 3)
+      severity: H
+      description: "レビュー指摘のフィードバックループ不在。planreviewでCONDITIONAL判定が出ても指摘が反映されず次に進む (ISSUE-2)"
+      suggestion: "auto_approve: trueの場合でもCONDITIONAL指摘の重要度に応じて一時停止または強制修正を検討"
+    - command: planreview
       severity: M
-      description: |
-        タスク完了時に tasks.md の `[ ]` を `[X]` に更新する指示があるが、
-        実際には更新されていない（tasks.md は全て `[ ]` のまま）。
-      suggestion: |
-        実装完了後の tasks.md 更新を強制するチェックを追加。
-        または pipeline-runner.sh 側で自動更新フックを実装。
-    - command: poor-dev.md (Step 3b)
-      severity: M
-      description: |
-        pipeline-runner.sh --next ループの終了判定が複雑で、
-        step_complete vs pipeline_complete の区別が曖昧。
-      suggestion: |
-        JSON 出力を標準化し、終了判定をより明確に。
-        `{"status": "step_complete", "step": "implement"}` のような形式に統一。
-    - command: templates/review-loop.md
+      description: "レビュー指摘（PR001-PR014）の多くが実装に反映されていない。特にテスト戦略、アクセシビリティ、デプロイ戦略"
+      suggestion: "レビュー指摘を自動的にtasks.mdに追加するか、修正確認をパイプラインに組み込む"
+    - command: tasks.md
       severity: L
-      description: |
-        テンプレートが119行と長く、複雑な条件分岐が多い。
-        GLM-5 のような低コンテキストモデルでは理解が困難な可能性。
-      suggestion: |
-        review-loop.md を分割: 基本フロー + 詳細設定 + 例外処理。
-        各セクションを独立した include 可能な形式に。
-    - command: poor-dev.implement.md
-      severity: L
-      description: |
-        実装コマンドが233行と非常に長い。Ignore file 作成等の詳細指示が
-        実装の本質ではない情報でプロンプトを圧迫している。
-      suggestion: |
-        共通設定（ignore files 等）を別テンプレートに抽出。
-        実装コマンドはタスク実行に集中した形に短縮。
+      description: "テストタスク（T029: 手動検証のみ）が不十分。自動テストタスクが存在しない"
+      suggestion: "planreview指摘に基づき、unit/integrationテストタスクを自動追加"
   strengths:
-    - "spec.md のフォーマットが優秀: User Story + Acceptance Scenarios + Edge Cases が明確"
-    - "plan.md のデータフロー図とインターフェース定義が実装に直結"
-    - "suggestions.yaml による事前調査結果の活用が効果的"
-    - "生成コードの品質が高い: ES6 modules, 適切なエラーハンドリング, 日本語メッセージ"
+    - "パイプライン全体のフロー制御が明確（Step 1-3の分類、実行ループ）"
+    - "フェーズごとのコミット粒度が適切（各phaseが独立コミット）"
+    - "spec → plan → tasks の情報引き継ぎが論理的に整合"
 
 model_fit:
-  difficult_steps:
-    - step: planreview / tasksreview
-      reason: |
-        review-loop.md テンプレートが複雑（119行、多層的条件分岐）。
-        GLM-5 のコンテキスト理解能力では、ペルソナ並列ディスパッチ、
-        結果集約、重複排除、収束判定を正確に実行することが困難だった可能性。
-      suggestion: |
-        レビューはより単純な逐次処理に変更、または Claude/GPT-4 に委譲。
-        config.json で `step_tiers.planreview: "high"` を設定し、
-        高性能モデルを強制的に使用させる。
-    - step: implement (task tracking)
-      reason: |
-        実装自体は成功しているが、tasks.md の完了マーカー更新が漏れている。
-        これは指示の理解よりも、複数ファイルの同時編集というタスク管理の限界。
-      suggestion: |
-        タスク完了マーカーの更新を別ステップとして自動化、
-        またはコミット前に tasks.md の整合性をチェックする validation を追加。
-  prompt_issues:
-    - issue: "review-loop.md の STEP 0.3 (Risk-Based Depth) は GLM-5 には過剰に複雑"
-    - issue: "cross-CLI routing の条件分岐（claude/opencode 判定）が理解しにくい"
-    - issue: "implement.md の ignore file パターン一覧がプロンプトトークンを浪費"
+  difficult_steps: []
+  prompt_issues: []
   context_window_pressure:
-    worst_step: "tasksreview / planreview"
-    estimated_tokens: 15000
-    notes: |
-      review-loop.md (119行) + 対象ファイル (tasks.md: 137行 / plan.md: 152行) +
-      review-log + ペルソナ出力を処理する必要がある。
-      GLM-5 の実効コンテキストでは限界に近い。
+    worst_step: "implement"
+    estimated_tokens: 8000
+    notes: "生成コード量は適度（JS約1400行、CSS約680行）。コンテキスト圧迫は見られない"
   tier_recommendations:
-    specify: "low"
-    suggest: "medium"
-    plan: "medium"
-    planreview: "high"
-    tasks: "low"
-    tasksreview: "high"
-    implement: "medium"
-    architecturereview: "high"
-    qualityreview: "high"
-    phasereview: "high"
+    current_model: "zai-coding-plan/glm-5"
+    assessment: "適切。複雑なシンボリック微分実装、レスポンシブCSS等を問題なく処理"
+    suggestion: "現状維持で問題なし"
 
 summary:
   top_issues:
-    - priority: 1
-      issue: "レビューステップ（planreview/tasksreview）が実質的にスキップされている"
-      impact: "品質ゲートが機能せず、バグや設計問題が見逃される可能性"
-    - priority: 2
-      issue: "tasks.md のタスク完了マーカーが更新されていない"
-      impact: "進捗追跡が不可能、再開時に重複作業や欠落が発生"
-    - priority: 3
-      issue: "生成コードがルートディレクトリと specs/ に重複配置"
-      impact: "どちらが正か不明、メンテナンス混乱の原因"
+    - issue: "ISSUE-1: implement の git commit が全く作成されていない [重大]"
+      description: "pipeline-runner.sh:524 の || true で git commit エラーが消音。全成果物が untracked のまま。修正済み"
+    - issue: "ISSUE-4: post-implement レビューログが未生成 [重大]"
+      description: "review-runner.sh:149 の local outside function バグ + pipeline-runner.sh の exit 1 無視。3レビュー (arch/quality/phase) が実質未実行。修正済み"
+    - issue: "ISSUE-2: レビューフィードバックループの不在"
+      description: "planreviewで14件の指摘があったが、それらがplan.md/tasks.md/コードに反映されていない。auto_approveによりCONDITIONAL判定でも自動進行"
+    - issue: "ISSUE-3: tasksreview のレビューログ不在"
+      description: "tasksreview ステップは completed だが review-log-tasksreview.yaml が未生成。全ペルソナ dispatch 失敗の可能性"
   quick_wins:
-    - action: "review-runner.sh に空結果時の警告ログ追加"
-      effort: "低"
-      impact: "レビュー失敗の早期検出"
-    - action: "implement 完了後に tasks.md の [ ]→[X] 自動更新フック追加"
-      effort: "中"
-      impact: "進捗追跡の正確性向上"
-    - action: "生成コードの出力先を specs/*/ に統一（ルートディレクトリにコピーしない）"
-      effort: "低"
-      impact: "ファイル重複の解消"
+    - fix: "auto_approve時のCONDITIONAL指摘ハンドリング改善"
+      description: "重要度M以上のCONDITIONAL指摘がある場合、確認プロンプトまたは自動タスク追加"
+    - fix: "レビュー指摘のtasks.md自動追加"
+      description: "planreview/tasksreviewの指摘を自動的にtasks.mdに追加タスクとして反映"
+    - fix: "pipeline-state.jsonへのレビュー結果記録"
+      description: "各レビューの指摘件数、処理状況をstateに記録し追跡可能に"
   strategic:
-    - action: "レビューパイプラインの簡素化"
-      description: |
-        review-loop.md を GLM-5 でも実行可能な形に再設計。
-        逐次処理 + 明確な終了条件に変更。
-      timeline: "中期的（2-4週間）"
-    - action: "ステップ別モデル設定の強制適用"
-      description: |
-        config.json の step_tiers で高性能モデルを指定したステップは、
-        現在のモデルに関わらず強制的に切り替える仕組みを実装。
-      timeline: "短期的（1-2週間）"
-    - action: "パイプライン状態の可視化ダッシュボード"
-      description: |
-        docs/progress.md を自動更新し、各ステップの成功/失敗/スキップを
-        ユーザーが即座に確認できる仕組み。
-      timeline: "中期的（2-4週間）"
+    - recommendation: "レビューサイクルの閉ループ化"
+      description: "レビュー指摘 → タスク追加 → 実装 → 再レビュー のサイクルを実装し、指摘が確実に処理される仕組みを構築"
+    - recommendation: "品質ゲートの強化"
+      description: "セキュリティ(XSS)、アクセシビリティ、テストカバレッジに対する必須ゲートを導入"
+    - recommendation: "成果物品質メトリクスの導入"
+      description: "レビュー指摘反映率、テストカバレッジ等の定量指標を導入し、パイプライン効果を測定可能に"

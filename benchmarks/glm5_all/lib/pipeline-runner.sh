@@ -16,6 +16,9 @@ source "$SCRIPT_DIR/retry-helpers.sh"
 
 cleanup_temp_files() {
   rm -f /tmp/poor-dev-result-*-$$.json 2>/dev/null || true
+  rm -f /tmp/poor-dev-prompt-*-$$.txt 2>/dev/null || true
+  rm -f /tmp/poor-dev-phase-scope-*-$$.txt 2>/dev/null || true
+  rm -f /tmp/poor-dev-pipeline-ctx-*-$$.txt 2>/dev/null || true
 }
 trap cleanup_temp_files EXIT INT TERM
 
@@ -265,8 +268,9 @@ check_rate_limit() {
 # --- Post-implement source protection ---
 
 protect_sources() {
+  local project_dir="${1:-$PROJECT_DIR}"
   local protected_files
-  protected_files=$(git diff --name-only HEAD 2>/dev/null || true)
+  protected_files=$(git -C "$project_dir" diff --name-only HEAD 2>/dev/null || true)
   if [[ -n "$protected_files" ]]; then
     local to_restore=""
     while IFS= read -r f; do
@@ -278,7 +282,7 @@ protect_sources() {
     done <<< "$protected_files"
     if [[ -n "$to_restore" ]]; then
       # shellcheck disable=SC2086
-      git checkout HEAD -- $to_restore 2>/dev/null || true
+      git -C "$project_dir" checkout HEAD -- $to_restore 2>/dev/null || true
       echo '{"warning":"Protected files were modified by implement step and have been restored","files":"'"$(echo "$to_restore" | xargs)"'"}'
     fi
   fi
@@ -494,7 +498,7 @@ CTX_EOF
 
     # Post-phase source protection
     local protection_result
-    protection_result=$(protect_sources)
+    protection_result=$(protect_sources "$project_dir")
     if [[ -n "$protection_result" ]]; then
       echo "$protection_result"
     fi
@@ -516,7 +520,10 @@ CTX_EOF
     # Commit phase artifacts to protect from subsequent retry cleanup
     if [[ -n "$phase_files" ]]; then
       git -C "$project_dir" add -A 2>/dev/null || true
-      git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null || true
+      git -C "$project_dir" reset HEAD -- agents/ commands/ lib/ .poor-dev/ .opencode/ .claude/ 2>/dev/null || true
+      if ! git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null; then
+        echo "{\"phase\":$phase_num,\"warning\":\"git commit failed for phase ${phase_num}, artifacts remain uncommitted\"}"
+      fi
     fi
 
     # Update phase state
@@ -603,7 +610,7 @@ for STEP in $PIPELINE_STEPS; do
 
   if [[ "$STEP" == "implement" ]]; then
     # L3: Clean up any impl files leaked from prior steps (skip on phase-split resume)
-    local _impl_completed=""
+    _impl_completed=""
     if [[ -f "$STATE_FILE" ]]; then
       _impl_completed=$(jq -r '.implement_phases_completed[]?' "$STATE_FILE" 2>/dev/null || true)
     fi
@@ -617,7 +624,7 @@ for STEP in $PIPELINE_STEPS; do
     # Attempt phase-split dispatch
     if dispatch_implement_phases "$FD" "$PROJECT_DIR" "$FEATURE_DIR" "$BRANCH" "$SUMMARY" "$STEP_COUNT" "$TOTAL_STEPS"; then
       # Phase-split succeeded — run post-implement protection and mark complete
-      PROTECTION_RESULT=$(protect_sources)
+      PROTECTION_RESULT=$(protect_sources "$PROJECT_DIR")
       if [[ -n "$PROTECTION_RESULT" ]]; then
         echo "$PROTECTION_RESULT"
       fi
@@ -665,6 +672,8 @@ for STEP in $PIPELINE_STEPS; do
           bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "paused" "NO-GO verdict at $STEP" > /dev/null
           echo "{\"action\":\"pause\",\"step\":\"$STEP\",\"reason\":\"NO-GO verdict\"}"
           exit 2
+        else
+          echo "{\"step\":\"$STEP\",\"warning\":\"review-runner.sh exited with code $REVIEW_EXIT\"}"
         fi
       }
       echo "$REVIEW_RESULT"
@@ -858,7 +867,7 @@ CTX_EOF
   # --- Conditional step processing ---
 
   if is_conditional "$STEP"; then
-    OUTPUT_FILE="/tmp/poor-dev-output-${STEP}-$$.txt"
+    OUTPUT_FILE=$(ls -t /tmp/poor-dev-output-${STEP}-*.txt 2>/dev/null | head -1 || true)
 
     case "$STEP" in
       bugfix)
@@ -924,7 +933,7 @@ CTX_EOF
   # --- Post-implement source protection ---
 
   if [[ "$STEP" == "implement" ]]; then
-    PROTECTION_RESULT=$(protect_sources)
+    PROTECTION_RESULT=$(protect_sources "$PROJECT_DIR")
     if [[ -n "$PROTECTION_RESULT" ]]; then
       echo "$PROTECTION_RESULT"
     fi
