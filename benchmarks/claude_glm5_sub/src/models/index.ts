@@ -1,7 +1,0 @@
-export type { FunctionExpression } from './FunctionExpression'
-export type { Derivative } from './Derivative'
-export type { GraphState, Domain, TangentLine } from './GraphState'
-export { defaultGraphState } from './GraphState'
-export type { TooltipData } from './TooltipData'
-export type { PresetFunction } from './PresetFunction'
-export { presets } from './PresetFunction'

@@ -102,7 +102,7 @@ Every task MUST strictly follow this format:
 5. **Description**: Clear action with exact file path
 6. **Metadata** (optional, indented under task):
    - `depends: [T001, T002]` — explicit dependency on other tasks
-   - `files: src/server/**, src/api/**` — file scope for parallel collision detection
+   - `files: src/server/**, src/api/**` — file scope for parallel collision detection。パスはリポジトリルートからの相対パスで記述する（例: `src/models/**`）。`specs/` 内のパスは使用しない
 
 **[P:group] Grammar (BNF)**:
 ```
