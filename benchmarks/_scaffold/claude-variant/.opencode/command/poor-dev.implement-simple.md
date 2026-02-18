@@ -25,6 +25,13 @@ tasks.md のタスクを実行してコードを書く。
    - Phase Scope Directive がある場合は指定された Phase のタスクのみ実行する
    - **必須**: タスク完了後に即座に tasks.md の該当行を `- [X]` に Edit で更新すること。更新漏れは禁止。
    - `depends:` が指定されているタスクは依存タスクの完了を確認してから実行する
+   - **中間コミット**: 各タスクの実装 + tasks.md の `[X]` 更新が完了したら、即座にコミットする。ソースコードと tasks.md のみをステージし、以下のディレクトリは絶対に含めないこと: `agents/`, `commands/`, `lib/`, `.poor-dev/`, `.opencode/`, `.claude/`
+     ```bash
+     git add -A -- . ':!agents/' ':!commands/' ':!lib/' ':!.poor-dev/' ':!.opencode/' ':!.claude/'
+     git commit -m "implement: T0XX complete" --no-verify
+     ```
+     - git push は禁止（ローカルコミットのみ）
+     - コミットに失敗してもタスク実行を続行する
 
 3. **実装ルール**:
    - plan.md の技術スタック・アーキテクチャに従う
@@ -47,7 +54,6 @@ tasks.md のタスクを実行してコードを書く。
 ## 禁止事項
 
 - git push は禁止
-- `.git/` ディレクトリの削除・変更は禁止
 - `lib/`, `commands/`, `.poor-dev/`, `.opencode/` 配下のファイル変更は禁止
 - `/tmp/` ファイルの操作は禁止
 - パイプライン基盤の分析・修正は禁止
