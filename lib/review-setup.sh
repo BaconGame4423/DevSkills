@@ -98,27 +98,32 @@ FIXER_MODEL=$(json_get "$FIXER_RESOLVED" '.model')
 
 # --- Calculate review depth ---
 
-DIFF_STATS=""
 DEPTH="standard"
 MAX_ITERATIONS=3
+TOTAL_CHANGES=0
+FILES_CHANGED=0
 
-if command -v git > /dev/null 2>&1; then
+if [[ -d "$TARGET_FILE" ]]; then
+  # ディレクトリターゲット: impl ファイル合計行数で判定 (git diff は commit 後に 0)
+  TOTAL_CHANGES=$(find "$TARGET_FILE" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+  FILES_CHANGED=$(find "$TARGET_FILE" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null | wc -l || echo "0")
+elif command -v git > /dev/null 2>&1; then
+  # ファイルターゲット: git diff stats で判定
   DIFF_STATS=$(cd "$PROJECT_DIR" && git diff --stat HEAD 2>/dev/null || true)
   if [[ -n "$DIFF_STATS" ]]; then
     FILES_CHANGED=$(echo "$DIFF_STATS" | tail -1 | grep -oP '\d+ file' | grep -oP '\d+' || echo "0")
     INSERTIONS=$(echo "$DIFF_STATS" | tail -1 | grep -oP '\d+ insertion' | grep -oP '\d+' || echo "0")
     DELETIONS=$(echo "$DIFF_STATS" | tail -1 | grep -oP '\d+ deletion' | grep -oP '\d+' || echo "0")
-
     TOTAL_CHANGES=$((INSERTIONS + DELETIONS))
-
-    if [[ "$TOTAL_CHANGES" -gt 500 || "$FILES_CHANGED" -gt 20 ]]; then
-      DEPTH="deep"
-      MAX_ITERATIONS=5
-    elif [[ "$TOTAL_CHANGES" -lt 50 && "$FILES_CHANGED" -lt 5 ]]; then
-      DEPTH="light"
-      MAX_ITERATIONS=2
-    fi
   fi
+fi
+
+if [[ "$TOTAL_CHANGES" -gt 500 || "$FILES_CHANGED" -gt 20 ]]; then
+  DEPTH="deep"
+  MAX_ITERATIONS=5
+elif [[ "$TOTAL_CHANGES" -lt 50 && "$FILES_CHANGED" -lt 5 ]]; then
+  DEPTH="light"
+  MAX_ITERATIONS=2
 fi
 
 # Override from config

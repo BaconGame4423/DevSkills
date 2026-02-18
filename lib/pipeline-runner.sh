@@ -197,6 +197,15 @@ context_args_for_step() {
       ;;
     architecturereview*|qualityreview*|phasereview*)
       [[ -f "$fd/spec.md" ]] && args="$args --context spec=$fd/spec.md"
+      # impl ファイルを context に追加 (bash mode の review-runner.sh:147-157 と同じ)
+      local _impl_files _impl_idx=0
+      _impl_files=$(find "$fd" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null || true)
+      while IFS= read -r _impl_file; do
+        [[ -z "$_impl_file" ]] && continue
+        _impl_idx=$((_impl_idx + 1))
+        [[ $_impl_idx -gt 20 ]] && break
+        args="$args --context impl_${_impl_idx}=$_impl_file"
+      done <<< "$_impl_files"
       # レビュータイプ別ログがあれば使用、なければ旧形式にフォールバック
       local _rl="$fd/review-log-${step}.yaml"
       [[ ! -f "$_rl" ]] && _rl="$fd/review-log.yaml"

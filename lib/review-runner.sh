@@ -79,6 +79,7 @@ echo "{\"review\":\"$REVIEW_TYPE\",\"status\":\"initialized\",\"depth\":\"$DEPTH
 ITER=0
 CONVERGED=false
 FINAL_VERDICT=""
+FIXED_IDS=""
 
 while [[ $ITER -lt $MAX_ITER ]]; do
   ITER=$((ITER + 1))
@@ -225,13 +226,14 @@ while [[ $ITER -lt $MAX_ITER ]]; do
 
   # --- Step 3: Update log ---
 
-  FIXED_IDS=""
   bash "$SCRIPT_DIR/review-log-update.sh" \
     --log "$LOG_PATH" \
     --issues-file "$ISSUES_FILE" \
     --verdicts "$VERDICTS" \
     --iteration "$ITER" \
     ${FIXED_IDS:+--fixed "$FIXED_IDS"} > /dev/null
+
+  FIXED_IDS=""   # log-update に渡した後にリセット
 
   # --- Step 4: Convergence check ---
 
@@ -259,9 +261,6 @@ while [[ $ITER -lt $MAX_ITER ]]; do
 
   echo "{\"review\":\"$REVIEW_TYPE\",\"iteration\":$ITER,\"status\":\"fixing\",\"issues\":$TOTAL}"
 
-  FIXER_CLI=$(json_get "$SETUP" '.fixer.cli')
-  FIXER_MODEL=$(json_get "$SETUP" '.fixer.model')
-
   # Build fixer prompt
   FIX_PROMPT_FILE="/tmp/poor-dev-prompt-fixer-$$.txt"
 
@@ -273,15 +272,45 @@ while [[ $ITER -lt $MAX_ITER ]]; do
     [[ -f "$candidate" ]] && FIX_CMD_FILE="$candidate" && break
   done
 
-  if [[ -n "$FIX_CMD_FILE" ]]; then
+  # Resolve agent file (unconditional — consistent with persona dispatch L126-134)
+  FIX_AGENT_FILE=""
+  FIXER_AGENT_NAME=$(json_get "$SETUP" '.fixer.agent_name')
+  for candidate in \
+    "$PROJECT_DIR/agents/opencode/${FIXER_AGENT_NAME}.md" \
+    "$PROJECT_DIR/agents/claude/${FIXER_AGENT_NAME}.md" \
+    "$PROJECT_DIR/.opencode/agents/${FIXER_AGENT_NAME}.md" \
+    "$PROJECT_DIR/.claude/agents/${FIXER_AGENT_NAME}.md"; do
+    [[ -f "$candidate" ]] && FIX_AGENT_FILE="$candidate" && break
+  done
+
+  # Gate check: need at least one source file
+  if [[ -n "$FIX_CMD_FILE" || -n "$FIX_AGENT_FILE" ]]; then
     COMPOSE_ARGS=(
-      "$FIX_CMD_FILE"
+      "${FIX_AGENT_FILE:-$FIX_CMD_FILE}"   # Prefer agent file (consistent with L139)
       "$FIX_PROMPT_FILE"
       --header non_interactive
     )
+
+    # Add issues file
     [[ -f "$ISSUES_FILE" ]] && COMPOSE_ARGS+=(--context "issues=$ISSUES_FILE")
-    [[ -f "$TARGET_FILE" ]] && COMPOSE_ARGS+=(--context "target=$TARGET_FILE")
+
+    # Add target file/directory (consistent with persona dispatch L144-157)
+    if [[ -f "$TARGET_FILE" ]]; then
+      COMPOSE_ARGS+=(--context "target=$TARGET_FILE")
+    elif [[ -d "$TARGET_FILE" ]]; then
+      impl_files=$(find "$TARGET_FILE" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null || true)
+      impl_idx=0
+      while IFS= read -r impl_file; do
+        [[ -z "$impl_file" ]] && continue
+        impl_idx=$((impl_idx + 1))
+        [[ $impl_idx -gt 20 ]] && break
+        COMPOSE_ARGS+=(--context "impl_${impl_idx}=$impl_file")
+      done <<< "$impl_files"
+    fi
+
+    # Add spec and review log (consistent with persona dispatch L160-163)
     [[ -f "$FD/spec.md" ]] && COMPOSE_ARGS+=(--context "spec=$FD/spec.md")
+    [[ -f "$LOG_PATH" ]] && COMPOSE_ARGS+=(--context "review_log=$LOG_PATH")
 
     bash "$SCRIPT_DIR/compose-prompt.sh" "${COMPOSE_ARGS[@]}" 2>/dev/null || true
 
@@ -293,11 +322,11 @@ while [[ $ITER -lt $MAX_ITER ]]; do
       }
       rm -f "$FIX_PROMPT_FILE" "$FIX_RESULT_FILE"
 
-      # Track fixed issues for next iteration's log
+      # Track fixed issues for next iteration's log (all-as-fixed: 暫定)
       FIXED_IDS=$(cut -d'|' -f1 "$ISSUES_FILE" 2>/dev/null | tr '\n' ',' | sed 's/,$//' || true)
     fi
   else
-    echo "{\"review\":\"$REVIEW_TYPE\",\"iteration\":$ITER,\"warning\":\"fixer command file not found\"}"
+    echo "{\"review\":\"$REVIEW_TYPE\",\"iteration\":$ITER,\"warning\":\"fixer command/agent file not found\"}"
   fi
 
   rm -rf "$OUTPUT_DIR"
