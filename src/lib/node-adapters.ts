@@ -61,4 +61,16 @@ export class NodeFileSystem implements FileSystem {
   removeDir(dirPath: string): void {
     fs.rmSync(dirPath, { recursive: true, force: true });
   }
+
+  readdir(dirPath: string): Array<{ name: string; isFile: boolean; isDirectory: boolean }> {
+    try {
+      return fs.readdirSync(dirPath, { withFileTypes: true }).map((e) => ({
+        name: e.name,
+        isFile: e.isFile(),
+        isDirectory: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  }
 }

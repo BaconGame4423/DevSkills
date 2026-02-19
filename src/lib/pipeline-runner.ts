@@ -180,12 +180,12 @@ function checkRateLimit(): number {
 export function validateNoImplFiles(
   fd: string,
   step: string,
-  fileSystem: Pick<FileSystem, "exists" | "removeFile">
+  fileSystem: Pick<FileSystem, "exists" | "removeFile" | "readdir">
 ): string | null {
   const found: string[] = [];
   for (const ext of IMPL_EXTENSIONS) {
     // glob相当: find fd -maxdepth 3 -name "*.ext" -type f
-    const globResults = globImplFiles(fd, ext, 3);
+    const globResults = globImplFiles(fd, ext, 3, fileSystem);
     for (const f of globResults) {
       // インフラディレクトリはスキップ
       const rel = path.relative(fd, f);
@@ -206,22 +206,22 @@ export function validateNoImplFiles(
   });
 }
 
-/** find コマンド相当の実装 */
-function globImplFiles(dir: string, ext: string, maxDepth: number): string[] {
+/** find コマンド相当の実装（Gap-2: FileSystem インターフェース経由） */
+function globImplFiles(
+  dir: string,
+  ext: string,
+  maxDepth: number,
+  fileSystem: Pick<FileSystem, "readdir">
+): string[] {
   const results: string[] = [];
   function walk(d: string, depth: number) {
     if (depth > maxDepth) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(d, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = fileSystem.readdir(d);
     for (const entry of entries) {
       const full = path.join(d, entry.name);
-      if (entry.isDirectory()) {
+      if (entry.isDirectory) {
         walk(full, depth + 1);
-      } else if (entry.isFile() && entry.name.endsWith(`.${ext}`)) {
+      } else if (entry.isFile && entry.name.endsWith(`.${ext}`)) {
         results.push(full);
       }
     }
@@ -338,7 +338,7 @@ function resolveCommandFile(
 function contextArgsForStep(
   step: string,
   fd: string,
-  fileSystem: Pick<FileSystem, "exists">
+  fileSystem: Pick<FileSystem, "exists" | "readdir">
 ): Record<string, string> {
   const ctx: Record<string, string> = {};
   const has = (f: string) => fileSystem.exists(path.join(fd, f));
@@ -358,6 +358,10 @@ function contextArgsForStep(
       if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
       if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
       break;
+    case "implement":
+      if (has("tasks.md")) ctx["tasks"] = path.join(fd, "tasks.md");
+      if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
+      break;
     default:
       if (step.startsWith("planreview")) {
         if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
@@ -376,6 +380,16 @@ function contextArgsForStep(
         const reviewLogGeneric = path.join(fd, "review-log.yaml");
         if (fileSystem.exists(reviewLogType)) ctx["review_log"] = reviewLogType;
         else if (fileSystem.exists(reviewLogGeneric)) ctx["review_log"] = reviewLogGeneric;
+        // Bug-2 fix: implement ステップが生成した実装ファイルをコンテキストに追加
+        const MAX_IMPL_CTX = 20;
+        let implIdx = 1;
+        outer: for (const ext of IMPL_EXTENSIONS) {
+          for (const f of globImplFiles(fd, ext, 3, fileSystem)) {
+            if (implIdx > MAX_IMPL_CTX) break outer;
+            ctx[`impl_${implIdx}`] = f;
+            implIdx++;
+          }
+        }
       } else if (step === "bugfix") {
         if (has("bug-report.md")) ctx["bug_report"] = path.join(fd, "bug-report.md");
       } else if (["concept", "goals", "milestones", "roadmap"].includes(step)) {
@@ -590,10 +604,10 @@ export class PipelineRunner {
       // =========================================================
 
       if (isReview(step)) {
-        const reviewMode = config ? "bash" : "llm"; // bash mode は config.review_mode で制御（簡略化）
-        // NOTE: 実際の review_mode 設定は PoorDevConfig に未定義のため llm デフォルト
-        // bash mode は review-runner.ts 移植後に統合
-        void reviewMode; // 現時点は LLM mode のみ、bash mode は P2 で実装
+        const reviewMode = config?.review_mode ?? "llm";
+        // TODO: bash mode dispatch は review-runner.ts 統合後に実装 (P4)
+        // 現時点は LLM mode のみ有効。bash mode は通常 dispatch でバイパスされる。
+        void reviewMode;
       }
 
       // =========================================================
@@ -996,7 +1010,7 @@ export class PipelineRunner {
     stepCount: number,
     totalSteps: number,
     config: PoorDevConfig | null,
-    fileSystem: Pick<FileSystem, "exists" | "writeFile">,
+    fileSystem: Pick<FileSystem, "exists" | "writeFile" | "readdir">,
     emit: EventEmitter
   ): void {
     const scriptDir = path.join(process.cwd(), "lib");

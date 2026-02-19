@@ -59,6 +59,9 @@ export interface FileSystem {
 
   /** ディレクトリを再帰的に削除 */
   removeDir(path: string): void;
+
+  /** ディレクトリの内容を一覧する。存在しない場合は空配列を返す */
+  readdir(dir: string): Array<{ name: string; isFile: boolean; isDirectory: boolean }>;
 }
 
 // --- Dispatcher ---

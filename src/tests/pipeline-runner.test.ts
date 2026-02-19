@@ -90,10 +90,24 @@ describe("validateNoImplFiles", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // Gap-2 修正: globImplFiles が FileSystem.readdir 経由になったため、
+  // テスト用 readdir は実際の fs.readdirSync で読む
+  const realReaddir = (d: string) => {
+    try {
+      return fs.readdirSync(d, { withFileTypes: true }).map((e) => ({
+        name: e.name,
+        isFile: e.isFile(),
+        isDirectory: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  };
+
   it("実装ファイルが存在しない場合は null を返す", () => {
     // specs/ のみのディレクトリ
     const removeFile = vi.fn();
-    const fileSystem = { exists: vi.fn(() => true), removeFile };
+    const fileSystem = { exists: vi.fn(() => true), removeFile, readdir: realReaddir };
 
     const result = validateNoImplFiles(tmpDir, "plan", fileSystem);
     expect(result).toBeNull();
@@ -106,7 +120,7 @@ describe("validateNoImplFiles", () => {
     fs.writeFileSync(jsFile, "console.log('hello')");
 
     const removeFile = vi.fn();
-    const fileSystem = { exists: vi.fn(() => true), removeFile };
+    const fileSystem = { exists: vi.fn(() => true), removeFile, readdir: realReaddir };
 
     const result = validateNoImplFiles(tmpDir, "plan", fileSystem);
     expect(result).not.toBeNull();
@@ -121,7 +135,7 @@ describe("validateNoImplFiles", () => {
     fs.writeFileSync(path.join(libDir, "utils.ts"), "export {}");
 
     const removeFile = vi.fn();
-    const fileSystem = { exists: vi.fn(() => true), removeFile };
+    const fileSystem = { exists: vi.fn(() => true), removeFile, readdir: realReaddir };
 
     const result = validateNoImplFiles(tmpDir, "plan", fileSystem);
     expect(result).toBeNull();
@@ -134,7 +148,7 @@ describe("validateNoImplFiles", () => {
     fs.writeFileSync(path.join(nmDir, "index.js"), "module.exports = {}");
 
     const removeFile = vi.fn();
-    const fileSystem = { exists: vi.fn(() => true), removeFile };
+    const fileSystem = { exists: vi.fn(() => true), removeFile, readdir: realReaddir };
 
     const result = validateNoImplFiles(tmpDir, "plan", fileSystem);
     expect(result).toBeNull();

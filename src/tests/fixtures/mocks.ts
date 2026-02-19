@@ -37,6 +37,7 @@ export function makeFileSystem(initialFiles?: Record<string, string>): FileSyste
       store.delete(p);
     }),
     removeDir: vi.fn(),
+    readdir: vi.fn(() => []),
   };
 }
 
