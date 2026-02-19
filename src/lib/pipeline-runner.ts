@@ -671,17 +671,12 @@ export class PipelineRunner {
       const stepIdleTimeout = resolveStepTimeout(config, step, "idle_timeout", idleTimeout);
       const stepMaxTimeout = resolveStepTimeout(config, step, "max_timeout", maxTimeout);
 
-      // compose-prompt.sh 呼び出し
+      // compose-prompt.ts 呼び出し（失敗時は警告のみ。dispatchImplementPhases と同様にチェックしない）
       this.composePrompt(
         commandFile, promptFile, step,
         fd, opts.featureDir, opts.branch, opts.summary ?? "",
         stepCount, totalSteps, config, fileSystem, emitEvent
       );
-
-      if (!fileSystem.exists(promptFile)) {
-        emitEvent({ step, error: "compose-prompt.sh failed to generate prompt file" });
-        return { exitCode: 1, events };
-      }
 
       // implement step のリトライ前フック (git cleanup)
       const retryOpts: RetryOptions = {
