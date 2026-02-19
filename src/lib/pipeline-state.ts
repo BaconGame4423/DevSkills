@@ -107,7 +107,7 @@ export class FilePipelineStateManager implements PipelineStateManager {
     const updated: PipelineState = {
       ...state,
       status: status as PipelineStatus,
-      pauseReason: reason ?? null,
+      pauseReason: reason || null,
       updated: this.now(),
     };
     return this.write(stateFile, updated);

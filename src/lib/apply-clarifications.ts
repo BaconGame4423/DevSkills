@@ -147,6 +147,9 @@ export function applyClarificationsFromStdin(featureDir: string): ApplyResult {
         }));
       } catch { return []; }
     },
+    isDirectory: (p) => {
+      try { return fs.statSync(p).isDirectory(); } catch { return false; }
+    },
   };
 
   return applyClarifications({

@@ -141,28 +141,27 @@ function composePrompt(
 /**
  * ターゲットファイルの実装ファイル一覧を取得する（ディレクトリの場合）。
  * review-runner.sh L147-157 に対応。
+ * FileSystem インターフェース経由で exists/isDirectory/readdir を使用。
  */
-function collectImplFiles(targetFile: string): string[] {
-  if (!fs.existsSync(targetFile)) return [];
-  if (!fs.statSync(targetFile).isDirectory()) return [targetFile];
+function collectImplFiles(
+  targetFile: string,
+  fileSystem: Pick<FileSystem, "exists" | "isDirectory" | "readdir">
+): string[] {
+  if (!fileSystem.exists(targetFile)) return [];
+  if (!fileSystem.isDirectory(targetFile)) return [targetFile];
 
   const results: string[] = [];
   const implExts = /\.(html|js|ts|css|py)$/;
 
   function walk(d: string, depth: number) {
     if (depth > 3) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(d, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = fileSystem.readdir(d);
     for (const entry of entries) {
       if (entry.name === "node_modules" || entry.name === "_runs") continue;
       const full = path.join(d, entry.name);
-      if (entry.isDirectory()) {
+      if (entry.isDirectory) {
         walk(full, depth + 1);
-      } else if (entry.isFile() && implExts.test(entry.name)) {
+      } else if (entry.isFile && implExts.test(entry.name)) {
         results.push(full);
         if (results.length >= 20) return;
       }
@@ -209,8 +208,8 @@ async function dispatchPersona(
   // コンテキスト構築
   const ctxFiles: Record<string, string> = {};
 
-  const implFiles = collectImplFiles(targetFile);
-  if (!fs.statSync(targetFile).isDirectory()) {
+  const implFiles = collectImplFiles(targetFile, fileSystem);
+  if (!fileSystem.isDirectory(targetFile)) {
     // 単一ファイル
     if (implFiles[0]) ctxFiles["target"] = implFiles[0];
   } else {
@@ -248,22 +247,27 @@ async function dispatchPersona(
   // プロンプトクリーンアップ
   fileSystem.removeFile(promptFile);
 
-  // output ファイルを outputDir にコピー
+  // output ファイルを outputDir にコピー（NodeDispatcher が決定するパスを解決）
   let outputFile: string | undefined;
   if (exitCode === 0) {
-    const pattern = `/tmp/poor-dev-output-${personaName}-`;
+    // NodeDispatcher は /tmp/poor-dev-output-${step}-${pid}.txt に書き込む
+    const expectedOutput = `/tmp/poor-dev-output-${personaName}-${process.pid}.txt`;
     try {
-      const tmpFiles = fs.readdirSync("/tmp")
-        .filter((f) => f.startsWith(`poor-dev-output-${personaName}-`) && f.endsWith(".txt"))
-        .map((f) => ({ f: path.join("/tmp", f), mt: fs.statSync(path.join("/tmp", f)).mtimeMs }))
-        .sort((a, b) => b.mt - a.mt);
-      if (tmpFiles[0]) {
+      // fileSystem.readdir("/tmp") 経由で対象ファイルを探す
+      const tmpEntries = fileSystem.readdir("/tmp");
+      const prefix = `poor-dev-output-${personaName}-`;
+      const matched = tmpEntries
+        .filter((e) => e.isFile && e.name.startsWith(prefix) && e.name.endsWith(".txt"))
+        .map((e) => path.join("/tmp", e.name));
+      // 期待されるパスを優先、なければ最初のマッチを使用
+      const srcFile = matched.find((f) => f === expectedOutput) ?? matched[0];
+      if (srcFile && fileSystem.exists(srcFile)) {
         const destFile = path.join(outputDir, `${personaName}.txt`);
-        fs.copyFileSync(tmpFiles[0].f, destFile);
+        const content = fileSystem.readFile(srcFile);
+        fileSystem.writeFile(destFile, content);
         outputFile = destFile;
       }
     } catch { /* no-op */ }
-    void pattern;
   }
 
   if (exitCode === 0) {
@@ -578,8 +582,8 @@ export class ReviewRunner {
     const ctxFiles: Record<string, string> = {};
     if (fileSystem.exists(issuesFile)) ctxFiles["issues"] = issuesFile;
 
-    const implFiles = collectImplFiles(targetFile);
-    if (!fs.statSync(targetFile).isDirectory()) {
+    const implFiles = collectImplFiles(targetFile, fileSystem);
+    if (!fileSystem.isDirectory(targetFile)) {
       if (implFiles[0]) ctxFiles["target"] = implFiles[0];
     } else {
       implFiles.forEach((f, i) => {

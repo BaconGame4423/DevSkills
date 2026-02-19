@@ -938,6 +938,12 @@ export class PipelineRunner {
   ): Promise<RunResult | null> {
     const { gitOps, fileSystem, stateManager, dispatcher } = this.deps;
 
+    const phaseEvents: unknown[] = [];
+    const phaseEmit = (e: unknown) => {
+      phaseEvents.push(e);
+      emit(e);
+    };
+
     const tasksFile = path.join(fd, "tasks.md");
     if (!fileSystem.exists(tasksFile)) return null;
 
@@ -945,11 +951,11 @@ export class PipelineRunner {
     const phases = parseTasksPhases(tasksContent);
 
     if (phases.length === 0) {
-      emit({ implement: "fallback", reason: "no phases found in tasks.md" });
+      phaseEmit({ implement: "fallback", reason: "no phases found in tasks.md" });
       return null;
     }
 
-    emit({ implement: "phase-split", phase_count: phases.length });
+    phaseEmit({ implement: "phase-split", phase_count: phases.length });
 
     // 完了済みフェーズを pipeline-state.json から取得
     const currentState = fileSystem.exists(stateFile)
@@ -968,7 +974,7 @@ export class PipelineRunner {
 
       // resume: 完了済みフェーズをスキップ
       if (completedPhases.has(phaseKey)) {
-        emit({
+        phaseEmit({
           phase: phaseNum,
           name: phaseName,
           status: "skipped",
@@ -977,7 +983,7 @@ export class PipelineRunner {
         continue;
       }
 
-      emit({
+      phaseEmit({
         phase: phaseNum,
         name: phaseName,
         status: "starting",
@@ -987,8 +993,8 @@ export class PipelineRunner {
       // コマンドファイル解決
       const commandFile = resolveCommandFile(projectDir, "implement", cmdVariant, fileSystem);
       if (!commandFile) {
-        emit({ implement: "error", reason: "implement command file not found" });
-        return { exitCode: 1, events: [] };
+        phaseEmit({ implement: "error", reason: "implement command file not found" });
+        return { exitCode: 1, events: phaseEvents };
       }
 
       // Phase Scope Directive コンテキストファイル生成
@@ -1075,29 +1081,29 @@ export class PipelineRunner {
             "rate-limited",
             `Rate limit at implement phase ${phaseNum}`
           );
-          emit({ phase: phaseNum, status: "rate-limited", rate_limit_count: rateCount });
-          return { exitCode: 3, events: [] };
+          phaseEmit({ phase: phaseNum, status: "rate-limited", rate_limit_count: rateCount });
+          return { exitCode: 3, events: phaseEvents };
         }
-        emit({ phase: phaseNum, status: "error", exit_code: dispatchExit });
-        return { exitCode: 1, events: [] };
+        phaseEmit({ phase: phaseNum, status: "error", exit_code: dispatchExit });
+        return { exitCode: 1, events: phaseEvents };
       }
 
       // post-phase: protect_sources
       const protection = protectSources(projectDir, gitOps);
-      if (protection) emit(JSON.parse(protection));
+      if (protection) phaseEmit(JSON.parse(protection));
 
       // 生成ファイル検出 + コミット
       const phaseFiles = this.detectPhaseFiles(projectDir, prePhaseHead, gitOps);
       if (phaseFiles.length === 0) {
-        emit({ phase: phaseNum, warning: "no new files detected after phase completion" });
+        phaseEmit({ phase: phaseNum, warning: "no new files detected after phase completion" });
       } else {
-        this.commitPhaseArtifacts(projectDir, phaseNum, phaseName, phaseFiles, gitOps, emit);
+        this.commitPhaseArtifacts(projectDir, phaseNum, phaseName, phaseFiles, gitOps, phaseEmit);
       }
 
       // フェーズ状態更新
       stateManager.addImplementPhase(stateFile, phaseKey);
 
-      emit({
+      phaseEmit({
         phase: phaseNum,
         name: phaseName,
         status: "complete",
@@ -1105,7 +1111,7 @@ export class PipelineRunner {
       });
     }
 
-    return { exitCode: 0, events: [] };
+    return { exitCode: 0, events: phaseEvents };
   }
 
   /**

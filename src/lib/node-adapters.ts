@@ -75,6 +75,14 @@ export class NodeFileSystem implements FileSystem {
       return [];
     }
   }
+
+  isDirectory(filePath: string): boolean {
+    try {
+      return fs.statSync(filePath).isDirectory();
+    } catch {
+      return false;
+    }
+  }
 }
 
 // --- NodeDispatcher ---

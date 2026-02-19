@@ -38,6 +38,7 @@ export function makeFileSystem(initialFiles?: Record<string, string>): FileSyste
     }),
     removeDir: vi.fn(),
     readdir: vi.fn(() => []),
+    isDirectory: vi.fn(() => false),
   };
 }
 

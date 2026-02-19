@@ -62,6 +62,9 @@ export interface FileSystem {
 
   /** ディレクトリの内容を一覧する。存在しない場合は空配列を返す */
   readdir(dir: string): Array<{ name: string; isFile: boolean; isDirectory: boolean }>;
+
+  /** パスがディレクトリかどうか確認。存在しない場合は false */
+  isDirectory(path: string): boolean;
 }
 
 // --- Dispatcher ---
