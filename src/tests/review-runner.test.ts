@@ -280,24 +280,28 @@ describe("ReviewRunner", () => {
   // ---------------------------------------------------------------
 
   it("review-runner は RetryOptions に stateManager を渡さない（logRetry no-op 保証）", async () => {
-    // compose-prompt.sh (まだ bash) の execFileSync を用途別にモック:
-    mockedExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
-      const argsArr = args as string[];
-      const script = argsArr[0] ?? "";
-      if (script.includes("compose-prompt.sh")) {
-        // promptFile (argsArr[2]) を実際に書き出す
-        if (argsArr[2]) nodeFs.writeFileSync(argsArr[2], "mock prompt");
-        return "" as unknown as ReturnType<typeof execFileSync>;
-      }
-      return "" as unknown as ReturnType<typeof execFileSync>;
-    });
-
     // デフォルト: setup=2 personas, aggregate=converged
     // (beforeEach で設定済み)
 
     const fileSystem = makeFileSystem({
       "/project/commands/poor-dev.qualityreview-code.md": "# code review",
       "/project/commands/poor-dev.qualityreview-security.md": "# security review",
+    });
+
+    // compose-prompt.sh (まだ bash) の execFileSync を用途別にモック:
+    // fileSystem.exists() 経由でチェックされるため、モック fileSystem にも登録する
+    mockedExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      const script = argsArr[0] ?? "";
+      if (script.includes("compose-prompt.sh")) {
+        // promptFile (argsArr[2]) を実ファイルシステムとモック両方に書き出す
+        if (argsArr[2]) {
+          nodeFs.writeFileSync(argsArr[2], "mock prompt");
+          fileSystem.writeFile(argsArr[2], "mock prompt");
+        }
+        return "" as unknown as ReturnType<typeof execFileSync>;
+      }
+      return "" as unknown as ReturnType<typeof execFileSync>;
     });
 
     const runner = new ReviewRunner({ ...makeDeps(), fileSystem });

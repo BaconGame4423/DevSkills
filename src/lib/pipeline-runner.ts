@@ -579,7 +579,7 @@ export class PipelineRunner {
         );
 
         if (phaseResult !== null) {
-          if (phaseResult.exitCode !== 0) return phaseResult;
+          if (phaseResult.exitCode !== 0) return { exitCode: phaseResult.exitCode, events };
 
           // フェーズ成功 → protect + complete
           const protection = protectSources(projectDir, gitOps);

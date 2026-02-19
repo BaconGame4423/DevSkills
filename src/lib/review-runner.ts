@@ -119,7 +119,8 @@ function composePrompt(
   scriptDir: string,
   sourceFile: string,
   promptFile: string,
-  contextFiles: Record<string, string>
+  contextFiles: Record<string, string>,
+  fileSystem: Pick<FileSystem, "exists">
 ): boolean {
   const args = [
     path.join(scriptDir, "compose-prompt.sh"),
@@ -132,7 +133,7 @@ function composePrompt(
   }
   try {
     execFileSync("bash", args, { stdio: "pipe" });
-    return fs.existsSync(promptFile);
+    return fileSystem.exists(promptFile);
   } catch {
     return false;
   }
@@ -225,7 +226,7 @@ async function dispatchPersona(
 
   // プロンプト生成
   const promptFile = `/tmp/poor-dev-prompt-${personaName}-${process.pid}.txt`;
-  const composed = composePrompt(scriptDir, sourceFile, promptFile, ctxFiles);
+  const composed = composePrompt(scriptDir, sourceFile, promptFile, ctxFiles, fileSystem);
   if (!composed) {
     return { personaName, success: false };
   }
@@ -597,7 +598,7 @@ export class ReviewRunner {
 
     // プロンプト生成
     const fixPromptFile = `/tmp/poor-dev-prompt-fixer-${process.pid}.txt`;
-    const composed = composePrompt(scriptDir, sourceFile, fixPromptFile, ctxFiles);
+    const composed = composePrompt(scriptDir, sourceFile, fixPromptFile, ctxFiles, fileSystem);
 
     if (!composed) {
       emit({ review: reviewType, iteration: iter, warning: "fixer prompt composition failed" });
