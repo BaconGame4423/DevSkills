@@ -3,13 +3,15 @@
  *
  * ReviewRunner のテスト。
  *
- * 注意: ReviewRunner.run() は runReviewSetup / runReviewAggregate 等で
- * execFileSync を呼ぶため、外部スクリプト依存部分は vi.mock でスタブ化する。
+ * Task #3 で review-setup.sh / review-aggregate.sh / review-log-update.sh が
+ * TypeScript 関数に移植され、review-runner.ts が execFileSync を使わなくなった。
+ * そのため、これらの新 TS モジュールを vi.mock でスタブ化する方式に変更。
  *
  * カバレッジ:
  * - ReviewRunner の構築とインターフェース準拠
- * - runReviewSetup 失敗時 → verdict=NO-GO, exitCode=1
+ * - setupReview 失敗時 → verdict=NO-GO, exitCode=1
  * - 全ペルソナ失敗時 → exitCode=3（rate-limit）
+ * - 収束チェック → GO / CONDITIONAL / NO-GO
  * - dispatchWithRetry に maxRetriesOverride=1 が渡されること（review は 1 retry のみ）
  * - stateManager が RetryOptions に含まれないこと（logRetry no-op 保証）
  */
@@ -20,10 +22,22 @@ import type { ReviewRunnerDeps } from "../lib/review-runner.js";
 import { makeDispatcher, makeFileSystem } from "./fixtures/mocks.js";
 import * as nodeFs from "node:fs";
 
-// --- execFileSync を vi.mock でスタブ化 ---
-// review-runner.ts は node:child_process の execFileSync を直接使用するため、
-// モジュールレベルでモックする
+// --- 新 TS モジュールを vi.mock でスタブ化 ---
+// Task #3 で外部 bash 呼び出しが廃止された。
 
+vi.mock("../lib/review-setup.js", () => ({
+  setupReview: vi.fn(),
+}));
+
+vi.mock("../lib/review-aggregate.js", () => ({
+  aggregateReviews: vi.fn(),
+}));
+
+vi.mock("../lib/review-log-update.js", () => ({
+  updateReviewLog: vi.fn(),
+}));
+
+// execFileSync は compose-prompt.sh (まだ bash) のみ使用
 vi.mock("node:child_process", () => ({
   execFileSync: vi.fn(),
 }));
@@ -41,49 +55,45 @@ vi.mock("../lib/retry-helpers.js", async (importOriginal) => {
 
 import { execFileSync } from "node:child_process";
 import { dispatchWithRetry } from "../lib/retry-helpers.js";
+import { setupReview } from "../lib/review-setup.js";
+import { aggregateReviews } from "../lib/review-aggregate.js";
 const mockedExecFileSync = vi.mocked(execFileSync);
 const dispatchWithRetrySpy = vi.mocked(dispatchWithRetry);
+const mockedSetupReview = vi.mocked(setupReview);
+const mockedAggregateReviews = vi.mocked(aggregateReviews);
 
-// --- ReviewSetup のデフォルトレスポンス ---
+// --- デフォルトモック返値 ---
 
-function makeSetupOutput(overrides?: Partial<{
-  max_iterations: number;
-  next_id: number;
-  log_path: string;
-  id_prefix: string;
-  depth: string;
-  personas: Array<{ name: string; cli: string; model: string }>;
-  fixer: { agent_name: string };
-}>) {
-  return JSON.stringify({
-    max_iterations: 2,
-    next_id: 1,
-    log_path: "/tmp/review-log.yaml",
-    id_prefix: "QR",
+function makeDefaultSetup(overrides?: object) {
+  return {
     depth: "standard",
+    maxIterations: 2,
+    nextId: 1,
+    logPath: "/tmp/review-log-qualityreview.yaml",
+    idPrefix: "QR",
+    reviewType: "qualityreview",
     personas: [
-      { name: "qualityreview-code", cli: "claude", model: "claude-sonnet-4-6" },
-      { name: "qualityreview-security", cli: "claude", model: "claude-sonnet-4-6" },
+      { name: "qualityreview-code", cli: "claude", model: "claude-sonnet-4-6", agentName: "qualityreview-code" },
+      { name: "qualityreview-security", cli: "claude", model: "claude-sonnet-4-6", agentName: "qualityreview-security" },
     ],
-    fixer: { agent_name: "review-fixer" },
+    fixer: { cli: "claude", model: "sonnet", agentName: "review-fixer" },
     ...overrides,
-  });
+  };
 }
 
-function makeAggregateOutput(overrides?: Partial<{
-  total: number; C: number; H: number; next_id: number;
-  issues_file: string; converged: boolean; verdicts: string;
-}>) {
-  return JSON.stringify({
+function makeDefaultAggregate(overrides?: object) {
+  return {
     total: 0,
     C: 0,
     H: 0,
-    next_id: 2,
-    issues_file: "/tmp/issues.yaml",
+    M: 0,
+    L: 0,
+    nextId: 2,
+    issuesFile: "/tmp/review-issues-qualityreview.txt",
     converged: true,
-    verdicts: "GO,GO",
+    verdicts: "",
     ...overrides,
-  });
+  };
 }
 
 function makeDeps(overrides?: Partial<ReviewRunnerDeps>): ReviewRunnerDeps {
@@ -105,6 +115,12 @@ describe("ReviewRunner", () => {
     vi.useFakeTimers();
     mockedExecFileSync.mockReset();
     dispatchWithRetrySpy.mockClear();
+
+    // デフォルト: setup 成功 (2 personas), aggregate 収束
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedSetupReview.mockReturnValue(makeDefaultSetup() as any);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedAggregateReviews.mockReturnValue(makeDefaultAggregate() as any);
   });
 
   afterEach(() => {
@@ -122,13 +138,13 @@ describe("ReviewRunner", () => {
   });
 
   // ---------------------------------------------------------------
-  // runReviewSetup 失敗 → NO-GO / exitCode=1
+  // setupReview 失敗 → NO-GO / exitCode=1
   // ---------------------------------------------------------------
 
   it("runReviewSetup が例外を投げた場合 verdict=NO-GO, exitCode=1 を返す", async () => {
-    // execFileSync が例外を投げる（review-setup.sh が失敗）
-    mockedExecFileSync.mockImplementation(() => {
-      throw new Error("review-setup.sh not found");
+    // setupReview が例外を投げる（Unknown review type など）
+    mockedSetupReview.mockImplementation(() => {
+      throw new Error("review-setup failed");
     });
 
     const runner = new ReviewRunner(makeDeps());
@@ -157,14 +173,11 @@ describe("ReviewRunner", () => {
   // ---------------------------------------------------------------
 
   it("1イテレーションで収束した場合 verdict=GO, exitCode=0 を返す", async () => {
-    // setup + aggregate を成功として返す
-    // personas: [] にしてペルソナ dispatch をスキップし、aggregate まで到達させる
-    mockedExecFileSync
-      .mockReturnValueOnce(makeSetupOutput({ personas: [] }) as unknown as ReturnType<typeof execFileSync>)
-      .mockReturnValueOnce(
-        makeAggregateOutput({ converged: true }) as unknown as ReturnType<typeof execFileSync>
-      )
-      .mockReturnValue("" as unknown as ReturnType<typeof execFileSync>);  // log-update
+    // personas: [] → ペルソナ dispatch をスキップし aggregate まで到達
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedSetupReview.mockReturnValue(makeDefaultSetup({ personas: [] }) as any);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedAggregateReviews.mockReturnValue(makeDefaultAggregate({ converged: true }) as any);
 
     const fileSystem = makeFileSystem({});
 
@@ -188,10 +201,6 @@ describe("ReviewRunner", () => {
   // ---------------------------------------------------------------
 
   it("全ペルソナが失敗した場合 exitCode=3 を返す（rate-limit）", async () => {
-    mockedExecFileSync
-      .mockReturnValueOnce(makeSetupOutput() as unknown as ReturnType<typeof execFileSync>)
-      .mockReturnValue("" as unknown as ReturnType<typeof execFileSync>);
-
     // 常に失敗するディスパッチャー
     const dispatcher = makeDispatcher(1);
 
@@ -223,14 +232,10 @@ describe("ReviewRunner", () => {
   // ---------------------------------------------------------------
 
   it("MAX_ITER 到達時、C=0 なら CONDITIONAL を返す", async () => {
-    mockedExecFileSync
-      .mockReturnValueOnce(
-        makeSetupOutput({ max_iterations: 1, personas: [] }) as unknown as ReturnType<typeof execFileSync>
-      )
-      .mockReturnValueOnce(
-        makeAggregateOutput({ converged: false, C: 0, H: 2 }) as unknown as ReturnType<typeof execFileSync>
-      )
-      .mockReturnValue("" as unknown as ReturnType<typeof execFileSync>);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedSetupReview.mockReturnValue(makeDefaultSetup({ maxIterations: 1, personas: [] }) as any);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedAggregateReviews.mockReturnValue(makeDefaultAggregate({ converged: false, C: 0, H: 2 }) as any);
 
     const fileSystem = makeFileSystem();
     const runner = new ReviewRunner({ ...makeDeps(), fileSystem });
@@ -249,14 +254,10 @@ describe("ReviewRunner", () => {
   });
 
   it("MAX_ITER 到達時、C>0 なら NO-GO を返す", async () => {
-    mockedExecFileSync
-      .mockReturnValueOnce(
-        makeSetupOutput({ max_iterations: 1, personas: [] }) as unknown as ReturnType<typeof execFileSync>
-      )
-      .mockReturnValueOnce(
-        makeAggregateOutput({ converged: false, C: 3, H: 1 }) as unknown as ReturnType<typeof execFileSync>
-      )
-      .mockReturnValue("" as unknown as ReturnType<typeof execFileSync>);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedSetupReview.mockReturnValue(makeDefaultSetup({ maxIterations: 1, personas: [] }) as any);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+    mockedAggregateReviews.mockReturnValue(makeDefaultAggregate({ converged: false, C: 3, H: 1 }) as any);
 
     const fileSystem = makeFileSystem();
     const runner = new ReviewRunner({ ...makeDeps(), fileSystem });
@@ -279,27 +280,20 @@ describe("ReviewRunner", () => {
   // ---------------------------------------------------------------
 
   it("review-runner は RetryOptions に stateManager を渡さない（logRetry no-op 保証）", async () => {
-    // execFileSync を用途別にモックして composePrompt を成功させる:
-    // - review-setup.sh → JSON レスポンス
-    // - compose-prompt.sh → promptFile を実際に /tmp へ書き込む（fs.existsSync が true になる）
-    // - review-aggregate.sh → JSON レスポンス
-    // - その他 → ""
+    // compose-prompt.sh (まだ bash) の execFileSync を用途別にモック:
     mockedExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
       const argsArr = args as string[];
       const script = argsArr[0] ?? "";
-      if (script.includes("review-setup.sh")) {
-        return makeSetupOutput() as unknown as ReturnType<typeof execFileSync>;
-      }
       if (script.includes("compose-prompt.sh")) {
         // promptFile (argsArr[2]) を実際に書き出す
         if (argsArr[2]) nodeFs.writeFileSync(argsArr[2], "mock prompt");
         return "" as unknown as ReturnType<typeof execFileSync>;
       }
-      if (script.includes("review-aggregate.sh")) {
-        return makeAggregateOutput({ converged: true }) as unknown as ReturnType<typeof execFileSync>;
-      }
       return "" as unknown as ReturnType<typeof execFileSync>;
     });
+
+    // デフォルト: setup=2 personas, aggregate=converged
+    // (beforeEach で設定済み)
 
     const fileSystem = makeFileSystem({
       "/project/commands/poor-dev.qualityreview-code.md": "# code review",
@@ -325,7 +319,7 @@ describe("ReviewRunner", () => {
     expect(dispatchWithRetrySpy).toHaveBeenCalled();
 
     // 全ての呼び出しで RetryOptions に stateManager が含まれていないことを確認
-    // review-runner.ts L347-350: retryOpts = { config, maxRetriesOverride } のみ
+    // review-runner.ts: retryOpts = { config, maxRetriesOverride } のみ
     for (const call of dispatchWithRetrySpy.mock.calls) {
       const retryOpts = call[8]; // 9番目の引数 (options: RetryOptions)
       expect(retryOpts).not.toHaveProperty("stateManager");
