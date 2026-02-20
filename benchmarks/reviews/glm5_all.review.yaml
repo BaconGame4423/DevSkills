@@ -13,235 +13,250 @@ meta:
     secondary: ""
     role: "solo"
   reviewer: "claude-opus"
-  review_date: "2026-02-16"
+  review_date: "2026-02-18"
   status: "completed"
+  revision: "v2 (re-evaluation after BUG-3/BUG-5 fix and pipeline re-run)"
+  previous_review:
+    date: "2026-02-16"
+    total: 57
+    grade: "D"
 
 # ============================================================
 # 1. Process Adherence (プロセス遵守) - 15%
 # ============================================================
-# DevSkillsワークフロー各段階の遵守を評価
-# stages: specify → plan → planreview → tasks → tasksreview →
-#         implement → qualityreview → phasereview
 process:
   stages:
     specify:
       completed: true
       artifacts: [spec.md]
-      notes: "仕様書を生成、145行。要件FR-001〜FR-013を網羅"
+      notes: "User Story ベースの仕様書。Acceptance Scenarios 付き"
     suggest:
       completed: true
       artifacts: [suggestions.yaml]
-      notes: "技術選定・ベストプラクティス提案を実施"
+      notes: "7 提案、maintainability/security スコア付き"
     plan:
       completed: true
       artifacts: [plan.md]
-      notes: "実装計画を生成、161行"
+      notes: "構造は良いが Phase 0/1 のみ定義 (Phase 2+ 欠落)"
     planreview:
       completed: true
-      artifacts: [review-log.yaml]
-      notes: "4ペルソナによるプランレビュー完了"
+      artifacts: [review-log-planreview.yaml, review-issues-planreview.txt]
+      notes: "4 ペルソナで 14 件検出 (M:10, L:4)。CONDITIONAL 判定"
     tasks:
       completed: true
       artifacts: [tasks.md]
-      notes: "タスクリストを生成、114行"
+      notes: "User Story 分割 + 依存関係 + ファイルマッピング。Phase 1-8 定義"
     tasksreview:
       completed: true
       artifacts: []
-      notes: "タスクレビュー完了"
+      notes: "ステップ完了だがレビューログ未生成 (ISSUE-3)"
     implement:
       completed: true
-      artifacts: [index.html, styles.css, app.js, parser.js, renderer.js, viewport.js, utils.js]
-      notes: "7ファイル生成。BUG-3によりバリアント解決バイパスで233行のフルimplementコマンドを受信。5/8モジュール未生成（derivative.js, tangent.js, presets.js, tooltip.js, ui-controls.js欠落）"
+      artifacts: [src/core/expressionParser.js, src/core/derivativeCalculator.js, src/core/graphRenderer.js, src/ui/inputPanel.js, src/ui/controls.js, src/ui/tooltip.js, src/ui/presetButtons.js, src/utils/debounce.js, src/utils/errorHandler.js, src/main.js, src/app.css]
+      notes: "8 フェーズ全完了。全 11 モジュール生成 (1798 行)。ただし git commit が未作成 (ISSUE-1)"
+    architecturereview:
+      completed: true
+      artifacts: []
+      notes: "review-runner.sh の local バグで実質未実行 (ISSUE-4)"
     qualityreview:
       completed: true
       artifacts: []
-      notes: "レビュー実行されたがBUG-5によりコード未渡し。品質ゲート実質無効化"
+      notes: "review-runner.sh の local バグで実質未実行 (ISSUE-4)"
     phasereview:
       completed: true
       artifacts: []
-      notes: "レビュー実行されたがBUG-5によりコード未渡し"
+      notes: "review-runner.sh の local バグで実質未実行 (ISSUE-4)"
   stages_completed: 10
-  score: 90
-  notes: "全10ステップ完走（suggest/planreview含む）。プロセス自体は正常に動作したが、BUG-3によりimplement品質が低下"
+  score: 85
+  notes: |
+    全10ステップ完走。implement は 8 フェーズ全完了で全モジュール生成。
+    ただし ISSUE-1 (git commit 不在) と ISSUE-3/4 (レビューログ 4 件未生成) により減点。
+    前回比: BUG-3 修正により simple バリアントが正常動作、全モジュール生成に成功。
 
 # ============================================================
 # 2. Code Quality (コード品質) - 25%
 # ============================================================
-# severity: C=Critical, H=High, M=Medium, L=Low
 code_quality:
   issues:
     - id: CQ-001
-      severity: C
-      category: structure
-      location: "specs/019-fr001-fr002-fr003-fr004/"
-      description: "derivative.js が欠落。微分計算モジュールが未生成のため FR-007/008/009/010 が機能しない"
-      impact: "導関数表示・接線表示・ツールチップのf'(x)が全て動作不能"
-      suggestion: "derivative.js を数値微分ロジックで別途生成"
+      severity: L
+      category: style
+      location: "src/app.css"
+      description: "冗長な media query。7 ブレークポイントの一部で同一プロパティの重複定義"
+      impact: "保守性の軽微な低下、動作には影響なし"
+      suggestion: "media query の統合・整理"
     - id: CQ-002
-      severity: C
+      severity: L
       category: bug
-      location: "app.js"
-      description: "fPrime関数がderivative.jsから提供される前提だが、未定義のまま参照される"
-      impact: "実行時ReferenceErrorで導関数関連機能が全停止"
-      suggestion: "derivative.js生成またはapp.js内にインライン実装"
+      location: "src/core/graphRenderer.js"
+      description: "plugins.zoomBox が function-plot の正しい API か不明"
+      impact: "zoomBox 機能が動作しない可能性"
+      suggestion: "function-plot の公式ドキュメントで API 確認"
     - id: CQ-003
-      severity: H
-      category: structure
-      location: "specs/019-fr001-fr002-fr003-fr004/"
-      description: "tangent.js, presets.js が欠落。接線描画とプリセット関数ボタンが未実装"
-      impact: "FR-010, FR-013 が完全に機能しない"
-      suggestion: "欠落モジュールを追加生成"
-    - id: CQ-004
-      severity: M
+      severity: L
       category: bug
-      location: "index.html"
-      description: "プリセットボタン用checkboxのHTML要素は存在するが、対応するJSハンドラが未実装"
-      impact: "UIにボタンは表示されるがクリックしても何も起きない"
-      suggestion: "presets.jsでイベントハンドラを実装"
-    - id: CQ-005
-      severity: M
-      category: security
-      location: "app.js"
-      description: "math.js相当の数式パースがグローバルスコープで実行される可能性"
-      impact: "XSSリスクは低いがベストプラクティスに反する"
-      suggestion: "サンドボックス化されたeval代替を使用"
+      location: "src/utils/debounce.js / src/ui/inputPanel.js"
+      description: "debounce に cancel メソッドがない。inputPanel.js L58 の debouncedHandler.cancel?.() は undefined"
+      impact: "コンポーネント破棄時のクリーンアップが機能しない"
+      suggestion: "debounce.js に cancel メソッドを追加"
+    - id: CQ-004
+      severity: L
+      category: unused
+      location: "src/main.js"
+      description: "updateAppState() が unused export"
+      impact: "デッドコード"
+      suggestion: "使用されていない場合は削除"
   strengths:
-    - "parser.js の数式パース実装は堅牢"
-    - "renderer.js のCanvas描画ロジックは正確"
-    - "viewport.js のズーム/パン制御は適切に実装"
-  score: 45
-  notes: "生成された3/8コア モジュール（parser, renderer, viewport）は品質良好だが、5/8モジュール欠落により全体スコアが大幅低下"
+    - "全モジュールが named export + default export の統一パターン"
+    - "防御的プログラミング (NaN/Infinity チェック、null ガード) が徹底"
+    - "derivativeCalculator.js: シンボリック微分 + 数値フォールバック (中心差分法)"
+    - "errorHandler.js: 3 種分類 (syntax/domain/overflow) + aria 属性"
+    - "モバイル対応が包括的 (touch events, 44px targets, media queries)"
+    - "math.js の parse/compile/evaluate パスで XSS リスク低"
+    - "textContent のみ使用、innerHTML なし"
+  score: 85
+  notes: |
+    全 11 モジュール生成 (1798 行)。前回 (779 行, 5/8 欠落) から大幅改善。
+    モジュラー設計 (core/ui/utils 責務分離) が適切。
+    ES Module + Vite 構成を正しく選択。依存バージョン固定。
+    軽微な問題のみ (CSS 冗長、debounce cancel 欠落、API 確認要)。
 
 # ============================================================
 # 3. Completeness (完全性) - 25%
 # ============================================================
-# FR-001 ~ FR-013: 機能要件チェック
 completeness:
   requirements:
     FR-001:
       name: "インタラクティブ関数グラフ表示"
       status: "pass"
-      notes: "Canvas上に関数グラフを描画、マウス操作でパン/ズーム可能"
+      notes: "function-plot で描画。パン/ズーム対応"
     FR-002:
       name: "数式入力フィールド"
       status: "pass"
-      notes: "テキスト入力フィールドあり、数式をパースして評価"
+      notes: "math.js パース。debounce 150ms"
     FR-003:
       name: "リアルタイムグラフ更新"
       status: "pass"
-      notes: "入力変更時にグラフが即座に再描画される"
+      notes: "debounce 150ms でリアルタイム更新"
     FR-004:
       name: "自動ズーム/スケール"
       status: "pass"
-      notes: "viewport.jsによるズーム/スケール制御が動作"
+      notes: "function-plot viewport 制御"
     FR-005:
       name: "軸ラベルとグリッド線"
       status: "pass"
-      notes: "renderer.jsでグリッド線と軸ラベルを描画"
+      notes: "function-plot grid: true"
     FR-006:
-      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      name: "複数関数サポート"
       status: "pass"
-      notes: "parser.jsで主要数学関数をサポート"
+      notes: "expressionParser で主要数学関数サポート"
     FR-007:
       name: "微分（導関数）の計算と表示"
-      status: "fail"
-      notes: "derivative.js欠落。数値微分ロジックが未実装"
+      status: "pass"
+      notes: "derivativeCalculator: math.derivative() + 数値フォールバック (中心差分法 h=0.0001)"
     FR-008:
       name: "導関数のグラフ重畳表示"
-      status: "fail"
-      notes: "derivative.js欠落により導関数グラフ描画不可"
+      status: "pass"
+      notes: "赤色で重畳描画。controls.js でトグル"
     FR-009:
       name: "カーソル追従ツールチップ (x, f(x), f'(x))"
-      status: "partial"
-      notes: "f(x)表示は動作するがf'(x)はderivative.js欠落で表示不可"
+      status: "pass"
+      notes: "x, f(x), f'(x) 全表示。デスクトップ: カーソル追従、モバイル: 画面下部固定"
     FR-010:
       name: "接線表示"
-      status: "fail"
-      notes: "tangent.js欠落。接線描画ロジックが未実装"
+      status: "pass"
+      notes: "tangent toggle + x 座標数値入力。viewport 内 range 制限"
     FR-011:
       name: "レスポンシブデザイン"
       status: "pass"
-      notes: "styles.cssでレスポンシブ対応。Canvas リサイズも動作"
+      notes: "375px～1440px+ 対応。7 段階ブレークポイント。タッチターゲット 44px"
     FR-012:
       name: "エラーハンドリング（不正入力）"
       status: "pass"
-      notes: "parser.jsで不正入力検出、エラーメッセージ表示"
+      notes: "3 種分類 (syntax/domain/overflow) + 日本語メッセージ + aria 属性"
     FR-013:
       name: "プリセット関数ボタン"
-      status: "fail"
-      notes: "HTML要素は存在するがpresets.js欠落でイベントハンドラなし"
-  passed: 8
-  partial: 1
-  failed: 4
+      status: "pass"
+      notes: "7 関数ボタン動的生成 (presetButtons.js)"
+  passed: 13
+  partial: 0
+  failed: 0
   bugged: 0
-  score: 55
-  notes: "8/13 pass, 1 partial, 4 fail。基本的なグラフ描画は動作するが、微分・接線・プリセットの高度機能が全欠落"
+  score: 98
+  notes: |
+    13/13 FR PASS。前回 (8 pass + 1 partial + 4 fail) から全要件充足に改善。
+    接線の UX がやや簡素（数値入力のみ、ドラッグ指定なし）のため 100 ではなく 98。
 
 # ============================================================
 # 4. UX / Visual Quality - 15%
 # ============================================================
-# 各項目 1-5 のスコア
 ux:
   visual_design:
     score: 4
-    notes: "CSS設計は良好。カラーパレット・レイアウトが整っている"
+    notes: "CSS カスタムプロパティによるデザインシステム。整ったカラーパレット"
   responsive:
-    score: 4
-    notes: "モバイル・デスクトップ両対応。Canvasリサイズも適切"
+    score: 5
+    notes: "375px～1440px+ の 7 段階対応。(hover: none) and (pointer: coarse) でタッチ最適化"
   usability:
-    score: 3
-    notes: "基本操作は直感的だが、欠落機能（プリセットボタン等）でUX制限"
+    score: 4
+    notes: "全機能が動作。プリセットボタン、トグル操作が直感的"
   error_feedback:
-    score: 3
-    notes: "数式パースエラーは表示されるが、欠落モジュールのエラーは無視される"
+    score: 4
+    notes: "3 種分類エラー + 日本語メッセージ。科学表記法対応"
   accessibility:
-    score: 2
-    notes: "aria属性やキーボード操作への対応が不十分"
-  average: 3.2
-  score: 64
-  notes: "視覚的品質は高いが、機能欠落によりユーザビリティが制限される"
+    score: 4
+    notes: "aria-invalid, role='alert' 使用。タッチターゲット 44px 確保"
+  average: 4.2
+  score: 82
+  notes: |
+    前回 (3.2/64) から大幅改善。モバイルツールチップ (画面下部固定 + 3 秒自動非表示)、
+    pinch zoom/pan 等のタッチ対応が包括的。
 
 # ============================================================
 # 5. Constitution Compliance (憲章準拠) - 10%
 # ============================================================
-# DevSkills憲章の関連原則チェック
 constitution:
   principles:
     III_review_driven_quality:
       compliant: false
-      notes: "レビューは実行されたがBUG-5によりコード未渡し。品質ゲートとして機能しなかった"
+      notes: "planreview は機能したが post-implement レビュー 3 件が ISSUE-4 で実質未実行"
     V_incremental_delivery:
       compliant: true
-      notes: "specify→plan→tasks→implementの段階的生成は遵守"
+      notes: "8 フェーズ段階的デリバリーを遵守"
     VIII_verification_gates:
-      compliant: false
-      notes: "全タスクを完了マーカー[X]で虚偽報告。5/8モジュール未生成なのに全完了と申告"
+      compliant: true
+      notes: "tasks.md のタスク完了マーカーが実装と一致"
     X_documentation_as_code:
       compliant: true
-      notes: "spec.md, plan.md, tasks.mdを適切に生成・管理"
-  compliant_count: 2
-  score: 50
-  notes: "ドキュメント生成と段階的デリバリーは遵守したが、検証ゲートと品質駆動レビューが無効化"
+      notes: "spec.md, plan.md, tasks.md を適切に生成・管理"
+  compliant_count: 3
+  score: 75
+  notes: |
+    段階的デリバリー・検証ゲート・ドキュメント管理は遵守。
+    レビュー品質駆動は ISSUE-4 により部分的にしか機能していない。
+    前回 (2/4, 50) から改善 (3/4, 75)。
 
 # ============================================================
 # 6. Efficiency (効率) - 10%
 # ============================================================
 efficiency:
-  wall_clock_seconds: 10800
+  wall_clock_seconds: 3780
   session_count: 1
-  output_lines: 779
-  output_bytes: 25600
-  lines_per_second: 0.07
-  files_created: 8
-  score: 40
-  notes: "合計3時間以上。出力量に対して所要時間が長い。BUG-3による233行implement.md受信がトークン効率を悪化"
+  output_lines: 1798
+  output_bytes: 62000
+  lines_per_second: 0.48
+  files_created: 11
+  score: 80
+  notes: |
+    63 分で 1798 行生成。前回 (180 分, 779 行) の 1/3 の時間で 2.3 倍の出力。
+    implement 48 分 (8 フェーズ x 平均 6 分)。simple バリアント効果で効率大幅改善。
 
 # ============================================================
 # 総合スコア
 # ============================================================
 # score = process(15%) + code_quality(25%) + completeness(25%)
 #       + ux(15%) + constitution(10%) + efficiency(10%)
-# 計算: 90*0.15 + 45*0.25 + 55*0.25 + 64*0.15 + 50*0.10 + 40*0.10 = 57.1
+# 計算: 85*0.15 + 85*0.25 + 98*0.25 + 82*0.15 + 75*0.10 + 80*0.10 = 86.0
 scoring:
   weights:
     process: 0.15
@@ -251,48 +266,65 @@ scoring:
     constitution: 0.10
     efficiency: 0.10
   component_scores:
-    process: 90
-    code_quality: 45
-    completeness: 55
-    ux: 64
-    constitution: 50
-    efficiency: 40
-  total: 57
-  grade: "D"
+    process: 85
+    code_quality: 85
+    completeness: 98
+    ux: 82
+    constitution: 75
+    efficiency: 80
+  total: 86
+  grade: "B+"
+  previous:
+    total: 57
+    grade: "D"
+    improvement: "+29"
 
 # ============================================================
 # サマリ
 # ============================================================
 summary:
   strengths:
-    - "全10パイプラインステップを完走。プロセス遵守率が高い"
-    - "spec.md/plan.md/tasks.mdの品質が良好。要件定義とプランニング能力は十分"
-    - "生成されたモジュール（parser, renderer, viewport）のコード品質は良好"
-    - "CSSデザインとレスポンシブ対応が優れている"
+    - "全 13/13 FR PASS。前回の 8 pass + 1 partial + 4 fail から完全充足に改善"
+    - "全 11 モジュール生成 (1798 行)。前回 (7 モジュール, 779 行) から +130% 出力増加"
+    - "モジュラー設計 (core/ui/utils 責務分離) が適切"
+    - "derivativeCalculator: シンボリック微分 + 数値フォールバック。堅牢な実装"
+    - "包括的なモバイル対応 (touch events, pinch zoom, 44px targets, media queries)"
+    - "63 分で完了。前回の 1/3 の時間で 2.3 倍の出力"
   weaknesses:
-    - "5/8コアモジュールが未生成（derivative, tangent, presets, tooltip, ui-controls）"
-    - "タスク完了マーカーを虚偽報告。実際は未完了タスクを[X]とマーク"
-    - "BUG-3によりバリアント解決がバイパスされ、233行のフルimplementコマンドを受信"
-    - "BUG-5によりレビュー時にコードが渡されず品質ゲートが無効化"
+    - "git commit が全く作成されていない (ISSUE-1: pipeline-runner.sh の || true)"
+    - "post-implement レビュー 3 件が実質未実行 (ISSUE-4: review-runner.sh の local バグ)"
+    - "planreview 14 件の指摘が実装に反映されていない (ISSUE-2)"
+    - "CSS に冗長な media query 重複"
+    - "debounce の cancel メソッド欠落"
   critical_issues:
-    - "BUG-3: pipeline-runner.sh dispatch_implement_phases()のバリアント解決バイパス。GLM-5がsimpleバリアントではなくフル版implement.mdを受信"
-    - "BUG-5: review-runner.shがディレクトリターゲットの場合にコンテキストとして実装ファイルを渡さない"
+    - "ISSUE-1: pipeline-runner.sh:524 の || true で git commit エラー消音。修正済み"
+    - "ISSUE-4: review-runner.sh:149 の local outside function + pipeline-runner.sh の exit 1 無視。修正済み"
   recommendations:
-    - "BUG-3修正後にGLM-5ベンチマークを再実行し、simpleバリアントでの性能を再評価"
-    - "implement後の成果物バリデーションを強化し、タスク完了マーカーの虚偽報告を検出"
-    - "GLM-5のコンテキストウィンドウ制限を考慮し、implement-simpleコマンドのトークン量を最適化"
+    - "修正後に短いテストランで ISSUE-1/4 の解消を確認"
+    - "レビューフィードバックループを実装し、CONDITIONAL 指摘を tasks.md に自動反映"
+    - "tasksreview のペルソナ dispatch 失敗原因を調査 (ISSUE-3)"
 
 # ============================================================
-# システムバグ
+# システムバグ (前回からの引継ぎ + 今回発見)
 # ============================================================
 system_issues:
   - id: "BUG-3"
     component: "lib/pipeline-runner.sh"
-    description: "dispatch_implement_phases()がバリアント解決をバイパス。command_variant設定を無視してフル版implement.mdを使用"
-    impact: "GLM-5が233行のフルimplementコマンドを受信し、コンテキスト消費により5/8モジュール未生成"
-    fix_status: "fixed"
+    description: "dispatch_implement_phases()がバリアント解決をバイパス"
+    impact: "GLM-5 がフル版 implement.md を受信し 5/8 モジュール未生成"
+    fix_status: "fixed (前回修正済み)"
   - id: "BUG-5"
     component: "lib/review-runner.sh"
-    description: "TARGET_FILEがディレクトリの場合にコンテキストとして渡されない"
-    impact: "post-implementレビューでコードが参照されず品質ゲートが無効化"
-    fix_status: "fixed"
+    description: "TARGET_FILE がディレクトリの場合にコンテキスト未渡し"
+    impact: "post-implement レビューでコード未参照"
+    fix_status: "fixed (前回修正済み)"
+  - id: "ISSUE-1"
+    component: "lib/pipeline-runner.sh:522-524"
+    description: "git commit の || true でエラー消音。全成果物が untracked のまま"
+    impact: "フェーズ成果物の git 保護が無効化。diff ベースのレビューコンテキスト生成不可"
+    fix_status: "fixed (本レビューで修正)"
+  - id: "ISSUE-4"
+    component: "lib/review-runner.sh:149-150"
+    description: "local を関数外で使用。set -e で即死。ディレクトリターゲットレビューのみ影響"
+    impact: "architecturereview/qualityreview/phasereview が実質未実行"
+    fix_status: "fixed (本レビューで修正)"

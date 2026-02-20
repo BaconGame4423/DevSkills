@@ -47,9 +47,20 @@ done
 
 declare -A FIXED_ISSUES
 if [[ -n "$LOG_PATH" && -f "$LOG_PATH" ]]; then
+  IN_FIXED_BLOCK=false
   while IFS= read -r line; do
-    if [[ "$line" =~ fixed:.*([A-Z]+[0-9]+) ]]; then
-      FIXED_ISSUES["${BASH_REMATCH[1]}"]=1
+    # "fixed:" ブロック開始を検知
+    if [[ "$line" =~ ^[[:space:]]*fixed: ]]; then
+      IN_FIXED_BLOCK=true
+      continue
+    fi
+    # fixed ブロック内の "- ID" 行をパース
+    if [[ "$IN_FIXED_BLOCK" == true ]]; then
+      if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([A-Z]+[0-9]+) ]]; then
+        FIXED_ISSUES["${BASH_REMATCH[1]}"]=1
+      elif [[ ! "$line" =~ ^[[:space:]]*- ]] && [[ -n "$line" ]]; then
+        IN_FIXED_BLOCK=false  # ブロック終了
+      fi
     fi
   done < "$LOG_PATH"
 fi
@@ -90,14 +101,16 @@ for output_file in "$OUTPUT_DIR"/*.txt "$OUTPUT_DIR"/*.json; do
       DESCRIPTION=$(echo "${BASH_REMATCH[2]}" | xargs)
       LOCATION=$(echo "${BASH_REMATCH[3]}" | xargs)
 
-      # Deduplicate: check if description matches a fixed issue
+      # --- Dedup 1: Fixed-issue (ID ベース。location ベース比較は review-log に
+      # location 情報が保存されるようになるまで保留) ---
       SKIP=false
-      for fixed_id in "${!FIXED_ISSUES[@]}"; do
-        # Simple dedup: exact description match (could be improved)
-        if [[ -n "${FIXED_ISSUES[$fixed_id]:-}" ]]; then
-          : # placeholder for more sophisticated dedup
+
+      # --- Dedup 2: Cross-persona (同一 iteration 内の location 重複をスキップ) ---
+      if [[ "$SKIP" == "false" && -s "$ISSUES_FILE" ]]; then
+        if cut -d'|' -f4 "$ISSUES_FILE" 2>/dev/null | grep -qxF "$LOCATION"; then
+          SKIP=true
         fi
-      done
+      fi
 
       if [[ "$SKIP" == "false" ]]; then
         ISSUE_ID="${ID_PREFIX}$(printf '%03d' "$NEXT_ID")"

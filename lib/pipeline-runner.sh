@@ -12,10 +12,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=retry-helpers.sh
 source "$SCRIPT_DIR/retry-helpers.sh"
 
+# --- Safe git wrapper (prevents parent repo fallthrough) ---
+
+_safe_git() {
+  local dir="$1"; shift
+  if [[ ! -d "$dir/.git" ]]; then
+    echo "{\"warning\":\"git skipped: no .git in $dir\"}" >&2
+    return 1
+  fi
+  git -C "$dir" "$@"
+}
+
 # --- Cleanup trap ---
 
 cleanup_temp_files() {
   rm -f /tmp/poor-dev-result-*-$$.json 2>/dev/null || true
+  rm -f /tmp/poor-dev-prompt-*-$$.txt 2>/dev/null || true
+  rm -f /tmp/poor-dev-phase-scope-*-$$.txt 2>/dev/null || true
+  rm -f /tmp/poor-dev-pipeline-ctx-*-$$.txt 2>/dev/null || true
 }
 trap cleanup_temp_files EXIT INT TERM
 
@@ -53,6 +67,13 @@ if [[ -z "$FLOW" || -z "$FEATURE_DIR" || -z "$BRANCH" || -z "$PROJECT_DIR" ]]; t
 fi
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+
+# --- Validate .git exists (prevent parent repo fallthrough) ---
+if [[ ! -d "$PROJECT_DIR/.git" ]]; then
+  echo '{"error":"FATAL: .git not found in project_dir. Aborting to prevent parent repo fallthrough.","project_dir":"'"$PROJECT_DIR"'"}'
+  exit 1
+fi
+
 FD="$PROJECT_DIR/$FEATURE_DIR"
 
 # --- Pipeline step lookup ---
@@ -176,6 +197,15 @@ context_args_for_step() {
       ;;
     architecturereview*|qualityreview*|phasereview*)
       [[ -f "$fd/spec.md" ]] && args="$args --context spec=$fd/spec.md"
+      # impl ファイルを context に追加 (bash mode の review-runner.sh:147-157 と同じ)
+      local _impl_files _impl_idx=0
+      _impl_files=$(find "$fd" -maxdepth 3 \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" -o -name "*.py" \) -type f -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null || true)
+      while IFS= read -r _impl_file; do
+        [[ -z "$_impl_file" ]] && continue
+        _impl_idx=$((_impl_idx + 1))
+        [[ $_impl_idx -gt 20 ]] && break
+        args="$args --context impl_${_impl_idx}=$_impl_file"
+      done <<< "$_impl_files"
       # レビュータイプ別ログがあれば使用、なければ旧形式にフォールバック
       local _rl="$fd/review-log-${step}.yaml"
       [[ ! -f "$_rl" ]] && _rl="$fd/review-log.yaml"
@@ -265,8 +295,9 @@ check_rate_limit() {
 # --- Post-implement source protection ---
 
 protect_sources() {
+  local project_dir="${1:-$PROJECT_DIR}"
   local protected_files
-  protected_files=$(git diff --name-only HEAD 2>/dev/null || true)
+  protected_files=$(_safe_git "$project_dir" diff --name-only HEAD 2>/dev/null || true)
   if [[ -n "$protected_files" ]]; then
     local to_restore=""
     while IFS= read -r f; do
@@ -278,7 +309,7 @@ protect_sources() {
     done <<< "$protected_files"
     if [[ -n "$to_restore" ]]; then
       # shellcheck disable=SC2086
-      git checkout HEAD -- $to_restore 2>/dev/null || true
+      _safe_git "$project_dir" checkout HEAD -- $to_restore 2>/dev/null || true
       echo '{"warning":"Protected files were modified by implement step and have been restored","files":"'"$(echo "$to_restore" | xargs)"'"}'
     fi
   fi
@@ -451,12 +482,12 @@ CTX_EOF
 
     # --- Dispatch with retry ---
     local pre_phase_head
-    pre_phase_head=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
+    pre_phase_head=$(_safe_git "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
 
     # Pre-retry hook for implement: clean uncommitted changes
     _impl_phase_pre_retry() {
-      git -C "$project_dir" checkout -- . 2>/dev/null || true
-      git -C "$project_dir" clean -fd 2>/dev/null || true
+      _safe_git "$project_dir" checkout -- . 2>/dev/null || true
+      _safe_git "$project_dir" clean -fd --exclude='specs/' 2>/dev/null || true
     }
 
     local impl_result_file="/tmp/poor-dev-result-implement-phase${phase_num}-$$.json"
@@ -494,7 +525,7 @@ CTX_EOF
 
     # Post-phase source protection
     local protection_result
-    protection_result=$(protect_sources)
+    protection_result=$(protect_sources "$project_dir")
     if [[ -n "$protection_result" ]]; then
       echo "$protection_result"
     fi
@@ -502,15 +533,24 @@ CTX_EOF
     # Post-phase file generation check
     local phase_files=""
     if [[ -n "$pre_phase_head" ]]; then
-      phase_files=$(git -C "$project_dir" diff --name-only "$pre_phase_head" HEAD 2>/dev/null || true)
+      phase_files=$(_safe_git "$project_dir" diff --name-only "$pre_phase_head" HEAD 2>/dev/null || true)
     fi
     local uncommitted
-    uncommitted=$(git -C "$project_dir" diff --name-only 2>/dev/null || true)
-    uncommitted="${uncommitted}$(printf '\n')$(git -C "$project_dir" diff --name-only --cached 2>/dev/null || true)"
+    uncommitted=$(_safe_git "$project_dir" diff --name-only 2>/dev/null || true)
+    uncommitted="${uncommitted}$(printf '\n')$(_safe_git "$project_dir" diff --name-only --cached 2>/dev/null || true)"
     phase_files="${phase_files}${uncommitted}"
     phase_files=$(echo "$phase_files" | grep -vE '^$|^(agents/|commands/|lib/|\.poor-dev/|\.opencode/|\.claude/)' | sort -u || true)
     if [[ -z "$phase_files" ]]; then
       echo "{\"phase\":$phase_num,\"warning\":\"no new files detected after phase completion\"}"
+    fi
+
+    # Commit phase artifacts to protect from subsequent retry cleanup
+    if [[ -n "$phase_files" ]]; then
+      _safe_git "$project_dir" add -A 2>/dev/null || true
+      _safe_git "$project_dir" reset HEAD -- agents/ commands/ lib/ .poor-dev/ .opencode/ .claude/ 2>/dev/null || true
+      if ! _safe_git "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null; then
+        echo "{\"phase\":$phase_num,\"warning\":\"git commit failed for phase ${phase_num}, artifacts remain uncommitted\"}"
+      fi
     fi
 
     # Update phase state
@@ -596,16 +636,22 @@ for STEP in $PIPELINE_STEPS; do
   # --- L3: Pre-implement validation + Phase-split dispatch ---
 
   if [[ "$STEP" == "implement" ]]; then
-    # L3: Clean up any impl files leaked from prior steps
-    IMPL_CLEANUP=$(validate_no_impl_files "$FD" "pre-implement")
-    if [[ -n "$IMPL_CLEANUP" ]]; then
-      echo "$IMPL_CLEANUP"
+    # L3: Clean up any impl files leaked from prior steps (skip on phase-split resume)
+    _impl_completed=""
+    if [[ -f "$STATE_FILE" ]]; then
+      _impl_completed=$(jq -r '.implement_phases_completed[]?' "$STATE_FILE" 2>/dev/null || true)
+    fi
+    if [[ -z "$_impl_completed" ]]; then
+      IMPL_CLEANUP=$(validate_no_impl_files "$FD" "pre-implement")
+      if [[ -n "$IMPL_CLEANUP" ]]; then
+        echo "$IMPL_CLEANUP"
+      fi
     fi
 
     # Attempt phase-split dispatch
     if dispatch_implement_phases "$FD" "$PROJECT_DIR" "$FEATURE_DIR" "$BRANCH" "$SUMMARY" "$STEP_COUNT" "$TOTAL_STEPS"; then
       # Phase-split succeeded — run post-implement protection and mark complete
-      PROTECTION_RESULT=$(protect_sources)
+      PROTECTION_RESULT=$(protect_sources "$PROJECT_DIR")
       if [[ -n "$PROTECTION_RESULT" ]]; then
         echo "$PROTECTION_RESULT"
       fi
@@ -653,6 +699,8 @@ for STEP in $PIPELINE_STEPS; do
           bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "paused" "NO-GO verdict at $STEP" > /dev/null
           echo "{\"action\":\"pause\",\"step\":\"$STEP\",\"reason\":\"NO-GO verdict\"}"
           exit 2
+        else
+          echo "{\"step\":\"$STEP\",\"warning\":\"review-runner.sh exited with code $REVIEW_EXIT\"}"
         fi
       }
       echo "$REVIEW_RESULT"
@@ -750,8 +798,8 @@ CTX_EOF
   MAIN_PRE_RETRY_HOOK=""
   if [[ "$STEP" == "implement" ]]; then
     _main_impl_pre_retry() {
-      git -C "$PROJECT_DIR" checkout -- . 2>/dev/null || true
-      git -C "$PROJECT_DIR" clean -fd 2>/dev/null || true
+      _safe_git "$PROJECT_DIR" checkout -- . 2>/dev/null || true
+      _safe_git "$PROJECT_DIR" clean -fd --exclude='specs/' 2>/dev/null || true
     }
     MAIN_PRE_RETRY_HOOK="_main_impl_pre_retry"
   fi
@@ -846,7 +894,7 @@ CTX_EOF
   # --- Conditional step processing ---
 
   if is_conditional "$STEP"; then
-    OUTPUT_FILE="/tmp/poor-dev-output-${STEP}-$$.txt"
+    OUTPUT_FILE=$(ls -t /tmp/poor-dev-output-${STEP}-*.txt 2>/dev/null | head -1 || true)
 
     case "$STEP" in
       bugfix)
@@ -912,7 +960,7 @@ CTX_EOF
   # --- Post-implement source protection ---
 
   if [[ "$STEP" == "implement" ]]; then
-    PROTECTION_RESULT=$(protect_sources)
+    PROTECTION_RESULT=$(protect_sources "$PROJECT_DIR")
     if [[ -n "$PROTECTION_RESULT" ]]; then
       echo "$PROTECTION_RESULT"
     fi

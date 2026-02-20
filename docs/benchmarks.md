@@ -2,7 +2,7 @@
 
 ## 概要
 
-DevSkills のスキル（PoorDevSkill）が複数のLLMモデルで正しく動作するかを検証・比較するベンチマーク基盤。オーケストレーター×サブエージェントの組み合わせ（6パターン）で同一タスクを実行し、プロセス遵守・コード品質・完全性・UX・憲章準拠・効率の6次元で評価する。
+DevSkills のスキル（PoorDevSkill）が複数のLLMモデルで正しく動作するかを検証・比較するベンチマーク基盤。オーケストレーター×サブエージェントの組み合わせ（19パターン）で同一タスクを実行し、プロセス遵守・コード品質・完全性・UX・憲章準拠・効率の6次元で評価する。
 
 `benchmarks/` ディレクトリは配布パッケージ（npm）には含まれない開発専用ツール。
 
@@ -29,6 +29,7 @@ benchmarks/
 | キー | 表示名 | CLI | モデルID |
 |---|---|---|---|
 | `claude` | Claude | claude | opus |
+| `sonnet` | Claude Sonnet 4.6 | claude | sonnet |
 | `m2.5` | MiniMax M2.5 | opencode | opencode/minimax-m2.5-free |
 | `glm5` | GLM-5 | opencode | zai-coding-plan/glm-5 |
 
@@ -45,6 +46,33 @@ benchmarks/
 | `claude_baseline` | Claude | Claude | baseline |
 | `glm5_baseline` | GLM-5 | GLM-5 | baseline |
 | `m2.5_baseline` | MiniMax M2.5 | MiniMax M2.5 | baseline |
+| `glm5_claude_plan` | GLM-5 | GLM-5 | step-override (plan=Claude) |
+| `glm5_claude_specify` | GLM-5 | GLM-5 | step-override (specify=Claude) |
+| `glm5_claude_design` | GLM-5 | GLM-5 | step-override (specify,suggest,plan=Claude) |
+| `sonnet_all` | Claude Sonnet 4.6 | Claude Sonnet 4.6 | solo |
+| `sonnet_glm5_sub` | Claude Sonnet 4.6 | GLM-5 | orch+sub |
+| `sonnet_m2.5_sub` | Claude Sonnet 4.6 | MiniMax M2.5 | orch+sub |
+| `sonnet_baseline` | Claude Sonnet 4.6 | Claude Sonnet 4.6 | baseline |
+| `glm5_sonnet_plan` | GLM-5 | GLM-5 | step-override (plan=Sonnet) |
+| `glm5_sonnet_specify` | GLM-5 | GLM-5 | step-override (specify=Sonnet) |
+| `glm5_sonnet_design` | GLM-5 | GLM-5 | step-override (specify,suggest,plan=Sonnet) |
+
+## ステップオーバーライドパターン
+
+`step_overrides` を使うと、GLM-5 をベースモデルとしつつ特定のパイプラインステップだけ Claude（Opus / Sonnet）を使う組み合わせを定義できる。目的は「上流のどのステップに高性能モデルを投入するとコスパよく全体品質が向上するか」のデータ取得。
+
+| パターン | 対象ステップ | テスト仮説 |
+|---|---|---|
+| `glm5_claude_plan` | plan | plan の設計品質がボトルネック |
+| `glm5_claude_specify` | specify | 仕様品質が全体を決定（GIGO） |
+| `glm5_claude_design` | specify + suggest + plan | 上流の設計フェーズ全体がボトルネック |
+| `glm5_sonnet_plan` | plan | plan の設計品質がボトルネック（Sonnet版） |
+| `glm5_sonnet_specify` | specify | 仕様品質が全体を決定（Sonnet版） |
+| `glm5_sonnet_design` | specify + suggest + plan | 上流の設計フェーズ全体がボトルネック（Sonnet版） |
+
+`config-resolver.sh` の既存 5-level resolution chain がそのまま動作する。`overrides.<step>` にマッチするステップだけ Claude Opus が使われ、それ以外は GLM-5 がデフォルトとして使われる。
+
+`config_extras` フィールドにより、サブエージェントモデル固有のチューニング値（`command_variant`, `review_mode`, timeout 等）が base config に deep merge される。
 
 ## 使い方
 

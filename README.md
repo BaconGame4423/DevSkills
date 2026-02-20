@@ -221,6 +221,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|
 | `/poor-dev` | 入力の受付（全フロー自動分類・ルーティング + specify オーケストレーション） |
 | `/poor-dev-simple` | GLM5 用簡略版 intake（1コマンド + spec 承認で全パイプライン自動実行） |
+| `/poor-dev.team` | Agent Teams オーケストレーター（全フロー対応。Opus 仲介レビューループ） |
 | `/poor-dev.pipeline` | パイプライン実行 sub-agent（`/poor-dev` から自動 dispatch。直接呼び出し不要） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 | `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
@@ -236,6 +237,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `/poor-dev.investigate` | 原因不明の問題調査・分析 | 調査レポート + 次アクション推奨 |
 | `/poor-dev.plan` | 技術計画の作成 | plan.md |
 | `/poor-dev.tasks` | タスク分解 | tasks.md |
+| `/poor-dev.testdesign` | テスト計画・テストスケルトン設計 | test-plan.md |
 | `/poor-dev.implement` | タスクに従い実装 | 実装コード |
 | `/poor-dev.analyze` | 仕様・計画・タスクの整合性分析 | 分析レポート |
 | `/poor-dev.checklist` | ドメイン別チェックリスト生成 | チェックリスト |
@@ -384,6 +386,76 @@ opencode models
 
 # Claude Code のモデル（固定）
 # haiku, sonnet, opus
+```
+
+### Agent Teams で Teammate を GLM-5 に差し替える（非公式）
+
+> **WARNING**: この方法は非公式です
+> - `CLAUDE_CODE_TEAMMATE_COMMAND` は Anthropic 公式ドキュメントに記載されていない非公式の環境変数です（2026-02 時点）
+> - Claude Code のアップデートで予告なく動作しなくなる可能性があります
+> - Anthropic のサポート対象外です
+> - Z.AI API の利用は Z.AI (智谱AI) の利用規約に従います
+
+#### 概要
+
+Agent Teams で Teammate を起動する際、環境変数 `CLAUDE_CODE_TEAMMATE_COMMAND` に glm ラッパーのパスを指定すると、Teammate プロセスだけが Z.AI API 経由で GLM-5 を使用します。リーダー（Opus）は通常の Anthropic API を使い続けるため、**リーダーは高品質な判断、Teammate は低コストな実行**というハイブリッド構成が可能です。
+
+#### セットアップ
+
+```bash
+# Z.AI の API キーを用意して実行（対話的にキーを入力）
+bash scripts/setup-glm-teammate.sh
+```
+
+スクリプトが生成するもの:
+
+| 生成物 | パス | 用途 |
+|--------|------|------|
+| glm ラッパー | `/usr/local/bin/glm` | GLM-5 で Claude Code を起動。API キー埋め込み + model intercept |
+| glm-setup | `/usr/local/bin/glm-setup` | API キー変更後の再生成ヘルパー |
+| MCP 設定 | `~/.claude/glm-mcp.json` | Z.AI MCP サーバー（Web検索・Webリーダー・Vision） |
+| 環境変数 | `~/.bashrc` | `ZAI_API_KEY` + `CLAUDE_CODE_TEAMMATE_COMMAND` |
+| settings | `~/.claude/settings.json` | `env.CLAUDE_CODE_TEAMMATE_COMMAND` |
+
+#### 仕組み
+
+glm ラッパーは以下の 3 段階で動作します:
+
+1. **環境変数の設定** — `ANTHROPIC_BASE_URL` を Z.AI エンドポイントに、`ANTHROPIC_AUTH_TOKEN` を API キーに設定。`ANTHROPIC_DEFAULT_*_MODEL` で全モデルエイリアスを GLM-5 にマッピング
+2. **--model intercept** — Agent Teams は Teammate に `--model claude-opus-4-6` のようなリテラルモデル名を渡します。リテラル名は `ANTHROPIC_DEFAULT_*_MODEL` のエイリアスマッピングをバイパスするため、glm ラッパーが引数を書き換えてエイリアス（`opus`/`sonnet`/`haiku`）に変換します
+3. **exec claude** — `--mcp-config` で Z.AI MCP サーバーを有効化し、Claude Code を起動
+
+#### 既知の問題と対策
+
+| 問題 | 原因 | 対策 |
+|------|------|------|
+| settings.json だけでは Teammate に伝播しない | `env` ブロックが許可リスト外で `process.env` に入らない場合がある | `.bashrc` にも `CLAUDE_CODE_TEAMMATE_COMMAND` を export（ベルト＆サスペンダー方式） |
+| OAuth が優先され Anthropic API に接続 | `--model claude-opus-4-6` のリテラル名で OAuth フローが起動 | glm ラッパーの `--model` intercept でエイリアスに変換 |
+| API キー変更後に Teammate が認証失敗 | glm ラッパーにキーが埋め込まれている | `glm-setup` でラッパーと MCP 設定を再生成 |
+
+#### 検証方法
+
+```bash
+# Teammate プロセスの環境変数を確認（PID は実際の値に置換）
+cat /proc/<PID>/environ | tr '\0' '\n' | grep ANTHROPIC
+
+# ネットワーク接続先が api.z.ai であることを確認
+ss -tnp | grep <PID>
+
+# api.anthropic.com への推論接続がないことを確認
+# (api.z.ai: 128.14.69.x、api.anthropic.com: 160.79.104.x)
+```
+
+#### API キー変更時
+
+```bash
+# 1. 新しいキーを環境変数に設定
+export ZAI_API_KEY="new-key-here"
+
+# 2. glm-setup で glm ラッパーと MCP 設定を再生成
+glm-setup
+
+# 3. .bashrc のキーも更新（または setup-glm-teammate.sh を再実行）
 ```
 
 ---
