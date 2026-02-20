@@ -1,0 +1,16 @@
+{
+  "flow_type": "feature",
+  "discussion_context": {
+    "task_ref": "benchmarks.json の task セクション参照",
+    "scope": "HTML/JS/CSS の単一ページアプリ。外部ライブラリ最小限。"
+  },
+  "responses": [
+    { "pattern": "フロー|flow|分類|classify", "response": "feature フローでお願いします" },
+    { "pattern": "スコープ|scope|範囲", "response": "FR-001〜FR-013 の全要件を実装。HTML/JS/CSS 単一ページアプリ。" },
+    { "pattern": "確認|進めて|始め|proceed|start", "response": "はい、進めてください" },
+    { "pattern": "技術|ライブラリ|framework", "response": "バニラ JS + Canvas/SVG。外部ライブラリは最小限。" },
+    { "pattern": "テスト|test", "response": "手動テストのみで十分です" }
+  ],
+  "max_turns": 5,
+  "fallback": "お任せします。ベストな判断で進めてください。"
+}
