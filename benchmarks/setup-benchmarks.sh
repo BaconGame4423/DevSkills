@@ -138,7 +138,7 @@ sync_scaffold() {
 
 # --- update_skill: 既存ディレクトリの PoorDevSkill ファイルだけを更新 ---
 update_skill() {
-  local target="$1" orch_cli="$2" dir_name="$3"
+  local target="$1" orch_cli="$2" dir_name="$3" mode="${4:-pipeline}"
 
   if [[ ! -f "$target/.poor-dev/config.json" ]]; then
     echo "  SKIP: $dir_name/ はセットアップされていません（先に setup を実行してください）"
@@ -199,6 +199,18 @@ HOOK_EOF
       ln -s "../../.opencode/command/$local_name" "$target/.claude/commands/$local_name"
     done
     echo "  recreated .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
+  fi
+
+  # 4b) team モード: scaffold に含まれないスキルファイルを直接コピー
+  if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
+    for team_file in poor-dev.team.md poor-dev.pipeline.md; do
+      local src="$DEVSKILLS_DIR/.opencode/command/$team_file"
+      if [[ -f "$src" ]]; then
+        cp "$src" "$target/.opencode/command/"
+        ln -sf "../../.opencode/command/$team_file" "$target/.claude/commands/$team_file"
+      fi
+    done
+    echo "  added team-required skill files"
   fi
 
   # 5) git commit（変更がある場合のみ、.git が存在する場合のみ）
@@ -262,7 +274,7 @@ if [[ "$MODE" == "update" ]]; then
       continue
     fi
 
-    update_skill "$target" "$orch_cli" "$dir_name"
+    update_skill "$target" "$orch_cli" "$dir_name" "$mode"
   done
 
   echo ""
@@ -395,6 +407,18 @@ ENDJSON
         ln -s "../../.opencode/command/$local_name" "$target/.claude/commands/$local_name"
       done
       echo "  created .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
+    fi
+
+    # 7b) team モード: scaffold に含まれないスキルファイルを直接コピー
+    if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
+      for team_file in poor-dev.team.md poor-dev.pipeline.md; do
+        src="$DEVSKILLS_DIR/.opencode/command/$team_file"
+        if [[ -f "$src" ]]; then
+          cp "$src" "$target/.opencode/command/"
+          ln -sf "../../.opencode/command/$team_file" "$target/.claude/commands/$team_file"
+        fi
+      done
+      echo "  added team-required skill files"
     fi
 
     # 8) git init + 初期コミット（--no-git でなければ）

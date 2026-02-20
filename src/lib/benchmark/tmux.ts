@@ -1,12 +1,11 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 function execTmux(args: string[]): string {
-  const cmd = ["tmux", ...args];
   try {
-    return execSync(cmd.join(" "), { encoding: "utf-8" });
+    return execFileSync("tmux", args, { encoding: "utf-8" });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`tmux command failed: ${cmd.join(" ")}\n${msg}`);
+    throw new Error(`tmux command failed: tmux ${args.join(" ")}\n${msg}`);
   }
 }
 

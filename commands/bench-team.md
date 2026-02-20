@@ -99,10 +99,10 @@ tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --m
 
 ## Step 5: CLI 初期化待機 + プロンプト送信
 
-Claude CLI の READY_PATTERN は `">"`:
+Claude CLI の READY_PATTERN は `"❯"`:
 
 ```bash
-READY_PATTERN=">"
+READY_PATTERN="❯"
 WAIT_TIMEOUT=30; WAITED=0
 while [ $WAITED -lt $WAIT_TIMEOUT ]; do
   if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "$READY_PATTERN"; then
