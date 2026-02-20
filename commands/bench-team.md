@@ -124,11 +124,11 @@ sleep 1
 tmux send-keys -t $TARGET Enter
 ```
 
-送信確認（リトライ付き）— ペインに `esc to interrupt` が表示されれば処理開始済み:
+送信確認（リトライ付き）— ペインに `esc to inter` が表示されれば処理開始済み（行末 truncate 対策で部分一致）:
 ```bash
 SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
 while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
-  if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "esc to interrupt"; then
+  if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "esc to inter"; then
     echo "OK: プロンプト送信確認"
     break
   fi

@@ -160,11 +160,11 @@ tmux send-keys -t $TARGET Enter
 
 送信確認 — CLI 種別に応じた処理開始検知パターンで確認し、未送信なら Enter をリトライ:
 ```bash
-# claude: "esc to interrupt" / opencode: プロンプト行消失
+# claude: "esc to inter" / opencode: プロンプト行消失
 SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
 while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
   PANE=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-  if echo "$PANE" | grep -q "esc to interrupt"; then
+  if echo "$PANE" | grep -q "esc to inter"; then
     echo "OK: プロンプト送信確認"
     break
   fi
