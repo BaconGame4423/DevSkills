@@ -137,12 +137,20 @@ clean_run() {
     rm -rf "$item"
   done
 
-  # git commit
+  # git history をリセット（LLM が前回ランの履歴を参照する問題を防止）
   if [[ -d "$dir/.git" ]]; then
     ( cd "$dir"
-      if [[ -n "$(git status --porcelain)" ]]; then
-        git add -A && git commit -q -m "clean state for new benchmark run"
-      fi
+      rm -rf .git
+      git init -q
+      mkdir -p .git/hooks
+      cat > .git/hooks/pre-push <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+      chmod +x .git/hooks/pre-push
+      git add -A
+      git commit -q -m "clean state for new benchmark run"
     )
   fi
 }
@@ -825,8 +833,9 @@ if [[ "$SETUP_ONLY" == true ]]; then
   if has_existing_run "$TARGET_DIR"; then
     info "既存ランをアーカイブ..."
     archive_run "$TARGET_DIR"
-    clean_run "$TARGET_DIR"
   fi
+  # 常にクリーン（git history リセット含む）してからセットアップ
+  clean_run "$TARGET_DIR"
   # 環境セットアップのみ
   if [[ "$MODE" == "baseline" ]]; then
     setup_baseline_environment
