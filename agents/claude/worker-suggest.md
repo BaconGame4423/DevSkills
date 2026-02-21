@@ -1,7 +1,7 @@
 ---
 name: worker-suggest
 description: "Research best practices and suggest tools/libraries"
-tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch
+tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch, mcp__web-search-prime__.*, mcp__web-reader__.*, mcp__zread__.*
 ---
 
 ## Agent Teams Context
@@ -65,6 +65,15 @@ Output progress marker:
 ```
 [PROGRESS: Initializing exploration session: ${EXPLORATION_SESSION_ID}]
 ```
+
+### Web Search Tools
+
+Web 検索には以下のツールを使用する。利用可能なツールは実行環境によって異なる:
+
+- **Claude 組み込み**: `WebSearch`（検索）、`WebFetch`（URL 取得）
+- **Z.AI MCP**: `mcp__web-search-prime__*`（検索）、`mcp__web-reader__*`（URL 取得）、`mcp__zread__*`（記事読み取り）
+
+組み込みツールが利用不可の場合は MCP ツールを使用すること。どちらも利用可能な場合は組み込みツールを優先。
 
 ### STEP 3: Research Exploration
 

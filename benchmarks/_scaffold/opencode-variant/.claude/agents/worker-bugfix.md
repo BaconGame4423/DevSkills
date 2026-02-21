@@ -1,7 +1,7 @@
 ---
 name: worker-bugfix
 description: "Investigate and classify bug"
-tools: Read, Write, Edit, Grep, Glob, Bash
+tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch, mcp__web-search-prime__.*, mcp__web-reader__.*, mcp__zread__.*
 ---
 
 ## Agent Teams Context
@@ -64,6 +64,15 @@ Use Grep/Glob to identify relevant code paths. Trace error origin. Review relate
 git log --oneline --since="2 weeks ago" -- <relevant-paths>
 ```
 Identify behavior-changing commit (git bisect approach).
+
+### Web Search Tools
+
+Web 検索には以下のツールを使用する。利用可能なツールは実行環境によって異なる:
+
+- **Claude 組み込み**: `WebSearch`（検索）、`WebFetch`（URL 取得）
+- **Z.AI MCP**: `mcp__web-search-prime__*`（検索）、`mcp__web-reader__*`（URL 取得）、`mcp__zread__*`（記事読み取り）
+
+組み込みツールが利用不可の場合は MCP ツールを使用すること。どちらも利用可能な場合は組み込みツールを優先。
 
 ### 3c. Dependency & External Factor Analysis
 - Check lock files for dependency versions
