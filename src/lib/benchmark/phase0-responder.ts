@@ -21,6 +21,10 @@ const PHASE0_EXIT_PATTERNS = [
  */
 function detectUIType(recentContent: string): "text" | "selection" | "unknown" {
   const lines = recentContent.split("\n");
+  // Claude CLI selection UI: "Enter to select · ↑/↓ to navigate" hint or "❯ N." cursor
+  if (lines.some(l => l.includes("Enter to select"))) return "selection";
+  if (lines.some(l => /❯\s*\d+\./.test(l))) return "selection";
+  // opencode selection UI: indented bullet/marker characters
   const hasOptions = lines.some(l => /^\s{2,}[○●▸▹►◆◇>\[\(]/.test(l));
   if (hasOptions) return "selection";
   if (lines.some(l => l.trim().startsWith("❯"))) return "text";
@@ -62,8 +66,11 @@ function isWaitingForInput(paneContent: string): boolean {
     if (trimmed.length === 0) continue;
     // ❯ がプロンプト行にあるか
     if (trimmed.startsWith("❯") || trimmed === "❯") return true;
-    // bypass permissions やヒント行はスキップ
+    // bypass permissions やヒント行、selection UI ナビゲーション行はスキップ
     if (trimmed.includes("bypass permissions") || trimmed.includes("Tip:") || trimmed.includes("ctrl+")) continue;
+    if (trimmed.includes("Enter to select") || trimmed.includes("↑/↓ to navigate")) continue;
+    // "N. Chat about this" 等の selection UI 末尾行はスキップ
+    if (/^\d+\.\s/.test(trimmed)) continue;
     // それ以外の実質的な行がある = まだ出力中
     return false;
   }
