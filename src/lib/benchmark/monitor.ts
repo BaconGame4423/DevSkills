@@ -72,6 +72,46 @@ function checkPipelineState(comboDir: string): {
   }
 }
 
+export interface PipelineInfo {
+  flow: string;
+  current: string | null;
+  completed: string[];
+  pipeline: string[];
+  stateDir: string;
+}
+
+export function readPipelineInfo(comboDir: string): PipelineInfo | null {
+  const statePath = findPipelineState(comboDir);
+  if (!statePath) return null;
+  try {
+    const content = readFileSync(statePath, "utf-8");
+    const state = JSON.parse(content) as {
+      flow?: string;
+      current?: string | null;
+      completed?: string[];
+      pipeline?: string[];
+    };
+    const stateDir = path.relative(comboDir, path.dirname(statePath));
+    return {
+      flow: state.flow ?? "feature",
+      current: state.current ?? null,
+      completed: state.completed ?? [],
+      pipeline: state.pipeline ?? [],
+      stateDir: stateDir || ".",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function buildRecoveryMessage(info: PipelineInfo): string {
+  return [
+    `[MONITOR] TUI idle but pipeline incomplete (current: ${info.current}, ${info.completed.length}/${info.pipeline.length} steps done).`,
+    `Resume: node .poor-dev/dist/bin/poor-dev-next.js --flow ${info.flow} --state-dir ${info.stateDir} --project-dir .`,
+    `Parse JSON output and execute the action per poor-dev.team Core Loop.`,
+  ].join("\n");
+}
+
 function hasArtifacts(comboDir: string): boolean {
   try {
     const files = execSync(
@@ -85,12 +125,24 @@ function hasArtifacts(comboDir: string): boolean {
   }
 }
 
-export function discoverTeamTaskDirs(basePath?: string): string[] {
+export function discoverTeamTaskDirs(basePath?: string, createdAfter?: number): string[] {
   const dir = basePath ?? path.join(os.homedir(), ".claude", "tasks");
   try {
     const entries = readdirSync(dir, { withFileTypes: true });
     return entries
-      .filter((e) => e.isDirectory() && /^pd-/.test(e.name))
+      .filter((e) => {
+        if (!e.isDirectory()) return false;
+        if (createdAfter !== undefined) {
+          try {
+            const stat = statSync(path.join(dir, e.name));
+            const birthTime = stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.mtimeMs;
+            if (birthTime < createdAfter) return false;
+          } catch {
+            return false;
+          }
+        }
+        return true;
+      })
       .map((e) => path.join(dir, e.name));
   } catch {
     return [];
@@ -175,6 +227,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   let phase0Done = false;
   let lastPipelineCheck = 0;
   let lastIdleCheck = 0;
+  let idleWithArtifactsCount = 0;
 
   const intervalMs = 10_000;
   const pipelineCheckIntervalMs = 60_000;
@@ -271,15 +324,40 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
         lastIdleCheck = elapsed;
 
         if (paneContent.includes("❯")) {
-          if (hasArtifacts(options.comboDir)) {
-            return {
-              exitReason: "tui_idle",
-              elapsedSeconds,
-              combo: options.combo,
-              logs: [...logs, "TUI idle with artifacts present"],
-            };
+          const pipelineInfo = readPipelineInfo(options.comboDir);
+          const pipelineComplete = pipelineInfo === null
+            || pipelineInfo.current === null
+            || checkPipelineState(options.comboDir).complete;
+
+          if (pipelineComplete) {
+            if (hasArtifacts(options.comboDir)) {
+              return {
+                exitReason: "tui_idle",
+                elapsedSeconds,
+                combo: options.combo,
+                logs: [...logs, "TUI idle with artifacts present"],
+              };
+            }
+            logs.push("TUI idle but no artifacts yet");
+          } else {
+            idleWithArtifactsCount++;
+            if (idleWithArtifactsCount === 1) {
+              const msg = buildRecoveryMessage(pipelineInfo);
+              pasteBuffer(options.targetPane, "monitor-recovery", msg);
+              sendKeys(options.targetPane, "Enter");
+              logs.push(`Recovery message sent (current: ${pipelineInfo.current})`);
+            } else if (idleWithArtifactsCount >= 3) {
+              logs.push("Recovery failed after 3 attempts");
+              return {
+                exitReason: "tui_idle",
+                elapsedSeconds,
+                combo: options.combo,
+                logs,
+              };
+            }
           }
-          logs.push("TUI idle but no artifacts yet");
+        } else {
+          idleWithArtifactsCount = 0;
         }
       }
 
@@ -287,7 +365,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       if (options.enableTeamStallDetection && phase0Done && elapsed >= 180_000) {
         if (elapsed - lastTeamStallCheck >= teamStallCheckIntervalMs) {
           lastTeamStallCheck = elapsed;
-          const taskDirs = discoverTeamTaskDirs();
+          const taskDirs = discoverTeamTaskDirs(undefined, startTime);
           for (const dir of taskDirs) {
             const teamName = path.basename(dir);
             const stalledTasks = findStalledTasks(dir, stallConfig.stallThresholdMs);
@@ -332,8 +410,13 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
     }
 
     // Intermediate status on stderr for visibility
+    let stepLabel = "unknown";
+    if (phase0Done) {
+      const info = readPipelineInfo(options.comboDir);
+      if (info) stepLabel = `${info.current ?? "done"}(${info.completed.length}/${info.pipeline.length})`;
+    }
     process.stderr.write(
-      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s phase0=${phase0Done ? "done" : "active"} pipeline=polling\n`
+      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s phase0=${phase0Done ? "done" : "active"} step=${stepLabel}\n`
     );
 
     await sleep(intervalMs);

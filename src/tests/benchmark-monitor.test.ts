@@ -96,14 +96,15 @@ function mockExists(handler: (p: string) => boolean) {
   }) as typeof existsSync);
 }
 
-function setPipelineState(status: string, completed: string[] = []) {
+function setPipelineState(status: string, completed: string[] = [], current?: string | null, pipeline?: string[]) {
   mockReadFile((p) => {
     if (p.includes("pipeline-state.json")) {
       return JSON.stringify({
         flow: "feature",
         status,
         completed,
-        current: completed.length > 0 ? null : "specify",
+        current: current !== undefined ? current : (completed.length > 0 ? null : "specify"),
+        pipeline: pipeline ?? ["specify", "suggest", "plan", "tasks", "implement", "review"],
       });
     }
     if (p.includes("phase0")) {
@@ -220,14 +221,13 @@ describe("benchmark-monitor", () => {
     expect(result.elapsedSeconds).toBeGreaterThanOrEqual(10);
   });
 
-  it("TUI アイドル + 成果物ファイル存在 → tui_idle で終了", async () => {
+  it("TUI アイドル + パイプライン状態なし + 成果物ファイル存在 → tui_idle で終了", async () => {
     const { runMonitor } = await importMonitor();
-    // idleCheckStartMs = 120_000 なので短いタイムアウトで十分到達できるように
     const options = makeDefaultOptions({ timeoutSeconds: 300 });
 
-    setPipelineState("active");
-    mockExists((p) => p.includes("pipeline-state.json"));
-
+    // pipeline-state.json が存在しない → readPipelineInfo returns null → pipelineComplete = true
+    // checkPipelineState returns { complete: false } なので periodic check は終了しない
+    mockedExistsSync.mockReturnValue(false);
 
     // "❯" を含むコンテンツ = TUI アイドル状態
     mockedCapturePaneContent.mockReturnValue("❯ ");
@@ -242,6 +242,76 @@ describe("benchmark-monitor", () => {
     expect(result.exitReason).toBe("tui_idle");
   }, 10_000);
 
+  it("TUI アイドル + パイプライン未完了 → 回復メッセージ送信、3回で tui_idle", async () => {
+    const { runMonitor } = await importMonitor();
+    const options = makeDefaultOptions({ timeoutSeconds: 600 });
+    const mockedPasteBuffer = vi.mocked(pasteBuffer);
+    const mockedSendKeys = vi.mocked(sendKeys);
+
+    // pipeline active with current step
+    setPipelineState("active", ["specify", "suggest"], "plan", ["specify", "suggest", "plan", "tasks", "implement", "review"]);
+    mockExists((p) => p.includes("pipeline-state.json"));
+
+    // TUI idle
+    mockedCapturePaneContent.mockReturnValue("❯ ");
+    mockedExecSync.mockReturnValue("index.html\n");
+
+    const promise = runMonitor(options);
+    // idleCheckStartMs=120s + 3 idle checks at 60s intervals = 120 + 60*3 = 300s
+    await vi.advanceTimersByTimeAsync(360_000);
+    const result = await promise as MonitorResult;
+
+    // Recovery message should have been sent via pasteBuffer
+    expect(mockedPasteBuffer).toHaveBeenCalledWith(
+      "test-pane",
+      "monitor-recovery",
+      expect.stringContaining("[MONITOR] TUI idle but pipeline incomplete"),
+    );
+    expect(mockedSendKeys).toHaveBeenCalledWith("test-pane", "Enter");
+
+    // After 3 idle checks, should exit with tui_idle
+    expect(result.exitReason).toBe("tui_idle");
+    expect(result.logs.some((l: string) => l.includes("Recovery message sent"))).toBe(true);
+    expect(result.logs.some((l: string) => l.includes("Recovery failed after 3 attempts"))).toBe(true);
+  }, 10_000);
+
+  it("TUI 復帰後に idleWithArtifactsCount がリセットされる", async () => {
+    const { runMonitor } = await importMonitor();
+    const options = makeDefaultOptions({ timeoutSeconds: 600 });
+    const mockedPasteBuffer = vi.mocked(pasteBuffer);
+
+    // pipeline active
+    setPipelineState("active", ["specify"], "suggest", ["specify", "suggest", "plan"]);
+    mockExists((p) => p.includes("pipeline-state.json"));
+
+    // idle check runs at: 120s (call 13), 180s (call 19), 240s (call 25), 300s (call 31)
+    // The reset only occurs inside the idle check block when pane is NOT idle
+    let callCount = 0;
+    mockedCapturePaneContent.mockImplementation(() => {
+      callCount++;
+      // call 13 = 120s idle check → "❯" → recovery (count=1)
+      if (callCount === 13) return "❯ ";
+      // call 19 = 180s idle check → active → reset (count=0)
+      if (callCount === 19) return "Working...";
+      // call 25 = 240s idle check → "❯" → recovery again (count=1)
+      if (callCount === 25) return "❯ ";
+      return "Working...";
+    });
+
+    const promise = runMonitor(options);
+    // Advance past 240s idle check
+    await vi.advanceTimersByTimeAsync(260_000);
+
+    // Force timeout
+    await vi.advanceTimersByTimeAsync(500_000);
+    const result = await promise as MonitorResult;
+
+    // Recovery should have been sent twice (once at 120s, reset at 180s, once at 240s)
+    const recoveryLogs = result.logs.filter((l: string) => l.includes("Recovery message sent"));
+    expect(recoveryLogs.length).toBe(2);
+    expect(mockedPasteBuffer).toHaveBeenCalledTimes(2);
+  }, 10_000);
+
   it("Phase0 max_turns 後も監視を継続し、パイプライン完了で終了", async () => {
     const { runMonitor } = await importMonitor();
     const options = makeDefaultOptions({ timeoutSeconds: 30 });
@@ -253,9 +323,9 @@ describe("benchmark-monitor", () => {
         callCount++;
         // 2回目以降のチェックで completed にする
         if (callCount > 2) {
-          return JSON.stringify({ flow: "feature", status: "completed", completed: ["specify"], current: null });
+          return JSON.stringify({ flow: "feature", status: "completed", completed: ["specify"], current: null, pipeline: ["specify"] });
         }
-        return JSON.stringify({ flow: "feature", status: "active", completed: [], current: "specify" });
+        return JSON.stringify({ flow: "feature", status: "active", completed: [], current: "specify", pipeline: ["specify"] });
       }
       if (p.includes("phase0")) {
         return JSON.stringify({ flow_type: "feature", max_turns: 1, responses: [], fallback: "ok" });
@@ -346,8 +416,62 @@ describe("benchmark-monitor", () => {
     expect(result.logs.length).toBeGreaterThanOrEqual(0);
   });
 
+  describe("readPipelineInfo", () => {
+    it("pipeline-state.json から正しく情報を読む", async () => {
+      const { readPipelineInfo } = await importMonitor();
+      mockExists((p) => p.includes("pipeline-state.json"));
+      mockReadFile((p) => {
+        if (p.includes("pipeline-state.json")) {
+          return JSON.stringify({
+            flow: "feature",
+            current: "implement",
+            completed: ["specify", "suggest", "plan", "tasks"],
+            pipeline: ["specify", "suggest", "plan", "tasks", "implement", "review"],
+          });
+        }
+        return "{}";
+      });
+
+      const info = readPipelineInfo("/tmp/combo/test-combo");
+      expect(info).not.toBeNull();
+      expect(info!.flow).toBe("feature");
+      expect(info!.current).toBe("implement");
+      expect(info!.completed).toEqual(["specify", "suggest", "plan", "tasks"]);
+      expect(info!.pipeline).toEqual(["specify", "suggest", "plan", "tasks", "implement", "review"]);
+    });
+
+    it("pipeline-state.json が存在しない → null", async () => {
+      const { readPipelineInfo } = await importMonitor();
+      mockedExistsSync.mockReturnValue(false);
+
+      const info = readPipelineInfo("/tmp/combo/test-combo");
+      expect(info).toBeNull();
+    });
+  });
+
+  describe("buildRecoveryMessage", () => {
+    it("正しいフォーマットのメッセージを返す", async () => {
+      const { buildRecoveryMessage } = await importMonitor();
+
+      const msg = buildRecoveryMessage({
+        flow: "feature",
+        current: "implement",
+        completed: ["specify", "suggest", "plan"],
+        pipeline: ["specify", "suggest", "plan", "implement", "review"],
+        stateDir: "features/my-feature",
+      });
+
+      expect(msg).toContain("[MONITOR] TUI idle but pipeline incomplete");
+      expect(msg).toContain("current: implement");
+      expect(msg).toContain("3/5 steps done");
+      expect(msg).toContain("--flow feature");
+      expect(msg).toContain("--state-dir features/my-feature");
+      expect(msg).toContain("poor-dev.team Core Loop");
+    });
+  });
+
   describe("discoverTeamTaskDirs", () => {
-    it("pd-* ディレクトリを発見する", async () => {
+    it("全ディレクトリを発見する（pd-* フィルタなし）", async () => {
       const { discoverTeamTaskDirs } = await importMonitor();
       const mockedReaddirSync = vi.mocked(readdirSync);
       mockedReaddirSync.mockReturnValue([
@@ -357,9 +481,34 @@ describe("benchmark-monitor", () => {
         { name: "file.txt", isDirectory: () => false, isFile: () => true } as any,
       ] as any);
       const dirs = discoverTeamTaskDirs("/mock/tasks");
-      expect(dirs).toHaveLength(2);
+      expect(dirs).toHaveLength(3);
       expect(dirs[0]).toContain("pd-review-001");
       expect(dirs[1]).toContain("pd-implement-002");
+      expect(dirs[2]).toContain("other-team");
+    });
+
+    it("createdAfter フィルタで古いディレクトリが除外される", async () => {
+      const { discoverTeamTaskDirs } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+      const mockedStatSync = vi.mocked(statSync);
+
+      mockedReaddirSync.mockReturnValue([
+        { name: "pd-old-001", isDirectory: () => true, isFile: () => false } as any,
+        { name: "pd-new-002", isDirectory: () => true, isFile: () => false } as any,
+      ] as any);
+
+      const now = Date.now();
+      mockedStatSync.mockImplementation(((p: string) => {
+        if (String(p).includes("pd-old-001")) {
+          return { birthtimeMs: now - 600_000, mtimeMs: now - 600_000 } as any;
+        }
+        return { birthtimeMs: now - 10_000, mtimeMs: now - 10_000 } as any;
+      }) as typeof statSync);
+
+      // createdAfter = 5 minutes ago
+      const dirs = discoverTeamTaskDirs("/mock/tasks", now - 300_000);
+      expect(dirs).toHaveLength(1);
+      expect(dirs[0]).toContain("pd-new-002");
     });
 
     it("存在しないパス → 空配列", async () => {

@@ -422,6 +422,17 @@ setup_environment() {
   info "=== ベンチマーク環境セットアップ: $COMBO (v$VERSION) ==="
   echo ""
 
+  # Stale team/task ディレクトリをクリーンアップ
+  info "stale team/task ディレクトリをクリーンアップ"
+  local stale_count=0
+  for d in "$HOME/.claude/teams"/pd-* "$HOME/.claude/tasks"/pd-*; do
+    if [ -d "$d" ]; then
+      rm -rf "$d"
+      stale_count=$((stale_count + 1))
+    fi
+  done
+  [ "$stale_count" -gt 0 ] && info "  ${stale_count} 件削除" || info "  なし"
+
   # 1) .poor-dev-version 更新（scaffold 側）
   info ".poor-dev-version を $VERSION に更新"
   echo "$VERSION" > "$SCRIPT_DIR/_scaffold/common/.poor-dev-version"
