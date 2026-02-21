@@ -13,6 +13,8 @@ vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
   writeFileSync: vi.fn(),
+  readdirSync: vi.fn(() => []),
+  statSync: vi.fn(),
 }));
 
 // node:child_process をモック
@@ -29,6 +31,7 @@ vi.mock("../lib/benchmark/tmux.js", () => ({
   splitWindow: vi.fn(),
   listPanes: vi.fn(),
   killPane: vi.fn(),
+  paneExists: vi.fn(),
 }));
 
 // phase0-responder.ts をモック
@@ -37,9 +40,9 @@ vi.mock("../lib/benchmark/phase0-responder.js", () => ({
   respondToPhase0: vi.fn(),
 }));
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { capturePaneContent } from "../lib/benchmark/tmux.js";
+import { capturePaneContent, pasteBuffer, sendKeys } from "../lib/benchmark/tmux.js";
 import { respondToPhase0 } from "../lib/benchmark/phase0-responder.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
@@ -59,6 +62,7 @@ interface MonitorOptions {
   phase0ConfigPath: string;
   timeoutSeconds: number;
   projectRoot: string;
+  enableTeamStallDetection?: boolean;
 }
 
 interface MonitorResult {
@@ -340,5 +344,106 @@ describe("benchmark-monitor", () => {
     const result = await promise as MonitorResult;
 
     expect(result.logs.length).toBeGreaterThanOrEqual(0);
+  });
+
+  describe("discoverTeamTaskDirs", () => {
+    it("pd-* ディレクトリを発見する", async () => {
+      const { discoverTeamTaskDirs } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+      mockedReaddirSync.mockReturnValue([
+        { name: "pd-review-001", isDirectory: () => true, isFile: () => false } as any,
+        { name: "pd-implement-002", isDirectory: () => true, isFile: () => false } as any,
+        { name: "other-team", isDirectory: () => true, isFile: () => false } as any,
+        { name: "file.txt", isDirectory: () => false, isFile: () => true } as any,
+      ] as any);
+      const dirs = discoverTeamTaskDirs("/mock/tasks");
+      expect(dirs).toHaveLength(2);
+      expect(dirs[0]).toContain("pd-review-001");
+      expect(dirs[1]).toContain("pd-implement-002");
+    });
+
+    it("存在しないパス → 空配列", async () => {
+      const { discoverTeamTaskDirs } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+      mockedReaddirSync.mockImplementation(() => { throw new Error("ENOENT"); });
+      const dirs = discoverTeamTaskDirs("/nonexistent");
+      expect(dirs).toEqual([]);
+    });
+  });
+
+  describe("findStalledTasks", () => {
+    it("in_progress + mtime 超過 → スタックタスク検出", async () => {
+      const { findStalledTasks } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+      mockedReaddirSync.mockReturnValue(["1.json", "2.json"] as any);
+
+      const mockedStatSync = vi.mocked(statSync);
+      const oldMtime = new Date(Date.now() - 400_000); // 6.6min ago
+      mockedStatSync.mockReturnValue({ mtimeMs: oldMtime.getTime() } as any);
+
+      mockReadFile((p) => {
+        if (p.includes("1.json")) return JSON.stringify({ status: "in_progress", subject: "Review", owner: "phase-ux", id: "1" });
+        if (p.includes("2.json")) return JSON.stringify({ status: "completed", subject: "Done", owner: "phase-qa", id: "2" });
+        return "{}";
+      });
+
+      const stalled = findStalledTasks("/mock/tasks/pd-review-001", 300_000);
+      expect(stalled).toHaveLength(1);
+      expect(stalled[0]!.owner).toBe("phase-ux");
+    });
+
+    it("pending タスクはスタック対象外", async () => {
+      const { findStalledTasks } = await importMonitor();
+      vi.mocked(readdirSync).mockReturnValue(["1.json"] as any);
+      vi.mocked(statSync).mockReturnValue({ mtimeMs: Date.now() - 400_000 } as any);
+      mockReadFile(() => JSON.stringify({ status: "pending", subject: "Wait", owner: "", id: "1" }));
+      const stalled = findStalledTasks("/mock/tasks/pd-review-001", 300_000);
+      expect(stalled).toEqual([]);
+    });
+
+    it("mtime が閾値以内 → スタックなし", async () => {
+      const { findStalledTasks } = await importMonitor();
+      vi.mocked(readdirSync).mockReturnValue(["1.json"] as any);
+      vi.mocked(statSync).mockReturnValue({ mtimeMs: Date.now() - 100_000 } as any);
+      mockReadFile(() => JSON.stringify({ status: "in_progress", subject: "Working", owner: "test", id: "1" }));
+      const stalled = findStalledTasks("/mock/tasks/pd-review-001", 300_000);
+      expect(stalled).toEqual([]);
+    });
+  });
+
+  describe("sendNudgeToOrchestrator", () => {
+    it("正しいフォーマットで pasteBuffer が呼ばれる", async () => {
+      const { sendNudgeToOrchestrator } = await importMonitor();
+      const mockedPasteBuffer = vi.mocked(pasteBuffer);
+      const mockedSendKeys = vi.mocked(sendKeys);
+
+      sendNudgeToOrchestrator("test-pane", [
+        { taskId: "1", subject: "Phase review", owner: "phase-ux", stalledSinceMs: 360000, fileMtime: Date.now() - 360000 },
+      ], "pd-phasereview-001");
+
+      expect(mockedPasteBuffer).toHaveBeenCalledOnce();
+      const msg = mockedPasteBuffer.mock.calls[0]![2];
+      expect(msg).toContain("[MONITOR]");
+      expect(msg).toContain("pd-phasereview-001");
+      expect(msg).toContain("phase-ux");
+      expect(mockedSendKeys).toHaveBeenCalledWith("test-pane", "Enter");
+    });
+  });
+
+  it("enableTeamStallDetection 無効時はスタックチェックしない", async () => {
+    const { runMonitor } = await importMonitor();
+    // Don't pass enableTeamStallDetection
+    const options = makeDefaultOptions({ timeoutSeconds: 20 });
+
+    setPipelineState("active");
+    mockExists((p) => p.includes("pipeline-state.json"));
+    mockedRespondToPhase0.mockReturnValue({ responded: false, turnCount: 0, done: true });
+
+    const promise = runMonitor(options);
+    await vi.advanceTimersByTimeAsync(25_000);
+    const result = await promise as MonitorResult;
+
+    // Should not have any stall-related logs
+    expect(result.logs.every((l: string) => !l.includes("[stall]"))).toBe(true);
   });
 });

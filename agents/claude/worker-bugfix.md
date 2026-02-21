@@ -1,7 +1,7 @@
 ---
 name: worker-bugfix
 description: "Investigate and classify bug"
-tools: Read, Write, Edit, Grep, Glob, Bash
+tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch
 ---
 
 ## Agent Teams Context

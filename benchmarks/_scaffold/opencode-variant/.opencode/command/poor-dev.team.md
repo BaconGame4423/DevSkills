@@ -53,32 +53,51 @@ When the TS helper returns `user_gate`:
 
 ## Review Loop (Opus-Mediated, Parallel Reviewers)
 
-For `create_review_team` with multiple reviewers:
-1. TeamCreate with N reviewers + 1 fixer
-2. Assign review task to ALL N reviewers simultaneously (parallel)
-3. Wait for all N to respond (or timeout 5min each)
-4. Aggregate results:
-   a. Merge all ISSUE: lines into unified list
-   b. Deduplicate: same file:line + same severity → keep first
-   c. Combine VERDICT: take the WORST verdict (NO-GO > CONDITIONAL > GO)
-   d. If any reviewer returned no VERDICT → retry that reviewer (max 2)
-5. If C=0, H=0 across ALL reviewers → **append findings (including M/L) to review-log.yaml** → step complete → TeamDelete
-6. If C>0 or H>0 → summarize deduplicated issues → send to fixer
-7. Fixer reports fixed/rejected YAML → Opus reviews the diff:
-   a. Read the modified files
-   b. Verify: no new code duplication ≥10 lines introduced
-   c. Verify: no debug statements (console.*, debugger) added
-   d. If violations found: send back to fixer with specific rejection
-   e. If clean: update review-log and commit
-8. Loop back to step 2 (max iterations from config) → update review-log.yaml and commit
-9. Exceeded max → user_gate → TeamDelete
+For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set()`
+
+### Step 1: Dispatch
+- `iteration += 1`
+- Assign review tasks to ALL N reviewers simultaneously (TaskCreate per reviewer)
+- Include target files + previous review-log context in task description
+
+### Step 2: Collect & Parse
+- Reviewer メッセージ待ち。TaskList を使って完了状況を確認可能
+- 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
+- 各レビュアー出力から以下を抽出:
+  - `ISSUE: {C|H|M|L} | {description} | {file:line}`
+  - `VERDICT: {GO|CONDITIONAL|NO-GO}`
+- VERDICT 行なし → そのレビュアーに SendMessage で再出力依頼（最大2回）
+- Deduplicate: same file:line + same severity → keep first
+- Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
+
+### Step 3: Convergence Check
+- C=0 AND H=0 (fixed_ids 除外後) → review-log.yaml 更新 → commit → step complete → TeamDelete
+- iteration >= max_iterations → user_gate → TeamDelete
+- Otherwise → Step 4
+
+### Step 4: Fix
+- C/H イシューを fixer に SendMessage: `- [{id}] {severity} | {description} | {location}`
+- Fixer が fixed/rejected YAML を返す → fixed_ids に追加
+- Opus が修正ファイルを確認: コード重複 >=10行・debug 文混入 → fixer に差し戻し（最大2回）
+- clean → review-log.yaml 更新 → commit → Step 1 に戻る
 
 ## Error Handling
 
-- Teammate no response 5min → SendMessage ping → 2min grace → respawn (max 3)
-- All teammates fail simultaneously → rate limit suspected → 120s wait → retry (max 3)
+### Monitor Nudge Response
+`[MONITOR]` メッセージが入力に表示されたら:
+1. 名指しされた stalled teammate に SendMessage: "Are you still working? Please respond with status."
+2. 現在の作業を続行（ブロックしない）
+3. 応答あり → 問題なし
+4. 次のアクションサイクルでも応答なし:
+   a. shutdown_request 送信 → 確認待ち
+   b. 同じ agent spec で Task re-spawn → タスク再割当
+   c. respawn カウント（teammate 毎最大3回）
+5. 3回 respawn 後も失敗 → その reviewer なしで続行（graceful degradation）
+6. 全 teammate 同時失敗 → rate limit 疑い → 120s 待機 → リトライ（最大3回）
+
+### Other
 - Review loop > max_iterations → user confirmation required
-- Fixer output validation failure → retry (max 2) → user confirmation
+- Fixer validation failure → retry (max 2) → user confirmation
 - Crash recovery → pipeline-state.json + `node .poor-dev/dist/bin/poor-dev-next.js` to resume
 
 ## Team Naming

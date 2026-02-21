@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { runMonitor } from "../monitor.js";
+import { killPane, paneExists } from "../tmux.js";
 import type { MonitorOptions } from "../types.js";
 
 const { values } = parseArgs({
@@ -31,6 +33,10 @@ const { values } = parseArgs({
     "post-command": {
       type: "string",
     },
+    "enable-team-stall-detection": {
+      type: "boolean",
+      default: false,
+    },
   },
   strict: true,
 });
@@ -41,6 +47,24 @@ if (!values.combo || !values.target || !values["combo-dir"] || !values["phase0-c
   process.exit(1);
 }
 
+function cleanup(targetPane: string, combo: string): void {
+  try {
+    if (paneExists(targetPane)) killPane(targetPane);
+  } catch {
+    // best effort
+  }
+  try {
+    const stateFile = "/tmp/bench-active-panes.json";
+    if (existsSync(stateFile)) {
+      const data = JSON.parse(readFileSync(stateFile, "utf-8")) as Record<string, unknown>;
+      delete data[combo];
+      writeFileSync(stateFile, JSON.stringify(data, null, 2));
+    }
+  } catch {
+    // best effort
+  }
+}
+
 const options: MonitorOptions = {
   combo: values.combo,
   targetPane: values.target,
@@ -48,15 +72,21 @@ const options: MonitorOptions = {
   phase0ConfigPath: values["phase0-config"],
   timeoutSeconds: parseInt(values.timeout ?? "7200", 10),
   projectRoot: values["project-root"] ?? process.cwd(),
+  enableTeamStallDetection: values["enable-team-stall-detection"] ?? false,
   ...(values["post-command"] ? { postCommand: values["post-command"] } : {}),
 };
 
+process.on("SIGTERM", () => cleanup(options.targetPane, options.combo));
+process.on("SIGINT", () => cleanup(options.targetPane, options.combo));
+
 runMonitor(options)
   .then((result) => {
+    cleanup(options.targetPane, options.combo);
     console.log(JSON.stringify(result, null, 2));
     process.exit(0);
   })
   .catch((error) => {
+    cleanup(options.targetPane, options.combo);
     console.error("Monitor failed:", error);
     process.exit(1);
   });

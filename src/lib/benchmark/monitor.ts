@@ -1,9 +1,17 @@
-import type { MonitorOptions, MonitorResult, Phase0Config } from "./types.js";
-import { capturePaneContent } from "./tmux.js";
+import type {
+  MonitorOptions,
+  MonitorResult,
+  Phase0Config,
+  TeamStallCheckConfig,
+  TeamStallState,
+  StalledTask,
+} from "./types.js";
+import { capturePaneContent, pasteBuffer, sendKeys } from "./tmux.js";
 import { respondToPhase0 } from "./phase0-responder.js";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import path from "node:path";
+import os from "node:os";
 
 function loadPhase0Config(configPath: string): Phase0Config {
   const content = readFileSync(configPath, "utf-8");
@@ -77,6 +85,76 @@ function hasArtifacts(comboDir: string): boolean {
   }
 }
 
+export function discoverTeamTaskDirs(basePath?: string): string[] {
+  const dir = basePath ?? path.join(os.homedir(), ".claude", "tasks");
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isDirectory() && /^pd-/.test(e.name))
+      .map((e) => path.join(dir, e.name));
+  } catch {
+    return [];
+  }
+}
+
+export function findStalledTasks(
+  taskDir: string,
+  thresholdMs: number,
+): StalledTask[] {
+  const results: StalledTask[] = [];
+  try {
+    const files = readdirSync(taskDir) as unknown as string[];
+    for (const file of files) {
+      if (!String(file).endsWith(".json")) continue;
+      const filePath = path.join(taskDir, String(file));
+      try {
+        const content = readFileSync(filePath, "utf-8");
+        const task = JSON.parse(content) as {
+          status?: string;
+          subject?: string;
+          owner?: string;
+          id?: string;
+        };
+        if (task.status !== "in_progress") continue;
+        const stat = statSync(filePath);
+        const stalledSinceMs = Date.now() - stat.mtimeMs;
+        if (stalledSinceMs > thresholdMs) {
+          results.push({
+            taskId: task.id ?? String(file),
+            subject: task.subject ?? "",
+            owner: task.owner ?? "",
+            stalledSinceMs,
+            fileMtime: stat.mtimeMs,
+          });
+        }
+      } catch {
+        // Skip files that fail to parse (race condition with writes)
+      }
+    }
+  } catch {
+    // Return empty on error
+  }
+  return results;
+}
+
+export function sendNudgeToOrchestrator(
+  pane: string,
+  tasks: StalledTask[],
+  teamName: string,
+): void {
+  const lines = tasks.map(
+    (t) =>
+      `  - Task #${t.taskId} "${t.subject}" (owner: ${t.owner}, stalled ${Math.floor(t.stalledSinceMs / 60_000)}min)`,
+  );
+  const message = [
+    `[MONITOR] Team "${teamName}" has stalled teammates:`,
+    ...lines,
+    "Please SendMessage ping to stalled teammates or consider respawning them.",
+  ].join("\n");
+  pasteBuffer(pane, "monitor-nudge", message);
+  sendKeys(pane, "Enter");
+}
+
 export async function runMonitor(options: MonitorOptions): Promise<MonitorResult> {
   const logs: string[] = [];
   const startTime = Date.now();
@@ -102,6 +180,16 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   const pipelineCheckIntervalMs = 60_000;
   const idleCheckStartMs = 120_000;
   const idleCheckIntervalMs = 60_000;
+
+  // Team stall detection state
+  let lastTeamStallCheck = 0;
+  const teamStallCheckIntervalMs = 60_000;
+  const teamStallStates = new Map<string, TeamStallState>();
+  const stallConfig: TeamStallCheckConfig = {
+    stallThresholdMs: 300_000,
+    graceAfterNudgeMs: 120_000,
+    maxNudges: 3,
+  };
 
   while (true) {
     const elapsed = Date.now() - startTime;
@@ -192,6 +280,45 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
             };
           }
           logs.push("TUI idle but no artifacts yet");
+        }
+      }
+
+      // Team stall detection
+      if (options.enableTeamStallDetection && phase0Done && elapsed >= 180_000) {
+        if (elapsed - lastTeamStallCheck >= teamStallCheckIntervalMs) {
+          lastTeamStallCheck = elapsed;
+          const taskDirs = discoverTeamTaskDirs();
+          for (const dir of taskDirs) {
+            const teamName = path.basename(dir);
+            const stalledTasks = findStalledTasks(dir, stallConfig.stallThresholdMs);
+            if (stalledTasks.length === 0) {
+              teamStallStates.delete(teamName);
+              continue;
+            }
+            const existing = teamStallStates.get(teamName);
+            if (existing) {
+              // Check grace period
+              if (Date.now() - existing.lastNudgeAt < stallConfig.graceAfterNudgeMs) continue;
+              if (existing.nudgeCount >= stallConfig.maxNudges) {
+                logs.push(`[stall] ${teamName}: max nudges (${stallConfig.maxNudges}) reached, deferring to global timeout`);
+                continue;
+              }
+              existing.nudgeCount++;
+              existing.lastNudgeAt = Date.now();
+              existing.stalledTasks = stalledTasks;
+              sendNudgeToOrchestrator(options.targetPane, stalledTasks, teamName);
+              logs.push(`[stall] Nudge #${existing.nudgeCount} sent for ${teamName}`);
+            } else {
+              teamStallStates.set(teamName, {
+                teamName,
+                nudgeCount: 1,
+                lastNudgeAt: Date.now(),
+                stalledTasks,
+              });
+              sendNudgeToOrchestrator(options.targetPane, stalledTasks, teamName);
+              logs.push(`[stall] First nudge sent for ${teamName}`);
+            }
+          }
         }
       }
     } catch (e) {

@@ -1,7 +1,7 @@
 ---
 name: worker-suggest
 description: "Research best practices and suggest tools/libraries"
-tools: Read, Write, Edit, Grep, Glob, Bash
+tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch
 ---
 
 ## Agent Teams Context
