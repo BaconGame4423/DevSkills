@@ -105,19 +105,21 @@ export function respondToPhase0(
     return { responded: false, turnCount, done: false };
   }
 
-  // 最近の出力（最後20行）に質問マーカーがあるか
-  const recentContent = getRecentLines(content, 20);
-  if (!recentContent.includes("?") && !recentContent.includes("？")) {
-    return { responded: false, turnCount, done: false };
-  }
-
-  // UI タイプ検出: selection UI の場合はデフォルト(Enter)のみ送信
-  const uiType = detectUIType(recentContent);
-  if (uiType === "selection") {
+  // Selection UI 検出は全文に対して行う。
+  // Claude Code の AskUserQuestion は選択肢の下に大量の空白パディングがあるため、
+  // getRecentLines() では "Enter to select" や "?" を検出できない。
+  const fullUIType = detectUIType(content);
+  if (fullUIType === "selection") {
     sendKeys(paneId, "Enter");
     const newTurnCount = turnCount + 1;
     const done = newTurnCount >= config.max_turns;
     return { responded: true, turnCount: newTurnCount, done };
+  }
+
+  // テキストプロンプト: 最近の出力に質問マーカーがあるか
+  const recentContent = getRecentLines(content, 20);
+  if (!recentContent.includes("?") && !recentContent.includes("？")) {
+    return { responded: false, turnCount, done: false };
   }
 
   const response = matchResponse(recentContent, config);

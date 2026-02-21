@@ -129,7 +129,7 @@ function hasArtifacts(comboDir: string): boolean {
   try {
     const files = execSync(
       `find "${comboDir}" -maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
-      `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*'`,
+      `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/_runs/*'`,
       { encoding: "utf-8" }
     ).trim();
     return files.length > 0;
@@ -220,6 +220,31 @@ export function sendNudgeToOrchestrator(
   sendKeys(pane, "Enter");
 }
 
+/**
+ * Check if the TUI pane is showing a selection UI (AskUserQuestion).
+ * Selection UI has ❯ as a cursor indicator, NOT as an input prompt.
+ */
+function isSelectionUIActive(content: string): boolean {
+  return content.includes("Enter to select")
+    || content.includes("↑/↓ to navigate")
+    || /❯\s*\d+\./.test(content);
+}
+
+/**
+ * Check if the TUI is truly idle (showing ❯ input prompt, NOT a selection UI or streaming).
+ * Claude Code always shows ❯ at the bottom — even during active processing.
+ * Distinguish by checking for streaming indicators:
+ * - "esc to inter" (truncated "esc to interrupt") only appears during active streaming
+ * - Selection UI means AskUserQuestion is displayed
+ */
+function isTUIIdle(content: string): boolean {
+  if (!content.includes("❯")) return false;
+  if (isSelectionUIActive(content)) return false;
+  // "esc to inter" (truncated) only appears during active streaming/processing
+  if (content.includes("esc to inter")) return false;
+  return true;
+}
+
 export async function runMonitor(options: MonitorOptions): Promise<MonitorResult> {
   const logs: string[] = [];
   const startTime = Date.now();
@@ -240,13 +265,19 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   let phase0Done = false;
   let lastPipelineCheck = 0;
   let lastIdleCheck = 0;
-  let idleWithArtifactsCount = 0;
+  let consecutiveIdleCount = 0;
+  let lastKnownStep = "";
+  let recoveryAttempts = 0;
 
   const intervalMs = 10_000;
   const pipelineCheckIntervalMs = 60_000;
   const idleCheckStartMs = 120_000;
   const idleCheckIntervalMs = 60_000;
   const phase0TimeoutMs = 600_000;
+  // Recovery thresholds: only send recovery after sustained idle on same step
+  const idleCountBeforeRecovery = 3;   // 3 consecutive idle checks (3 min)
+  const maxRecoveryAttempts = 2;
+  const idleCountBeforeExit = 6;       // 6 consecutive idle checks (6 min)
 
   // Team stall detection state
   let lastTeamStallCheck = 0;
@@ -347,7 +378,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       if (elapsed >= idleCheckStartMs && elapsed - lastIdleCheck >= idleCheckIntervalMs) {
         lastIdleCheck = elapsed;
 
-        if (paneContent.includes("❯")) {
+        if (isTUIIdle(paneContent)) {
           const pipelineInfo = readPipelineInfo(options.comboDir);
           const pipelineComplete = pipelineInfo === null
             || pipelineInfo.current === null
@@ -364,24 +395,59 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
             }
             logs.push("TUI idle but no artifacts yet");
           } else {
-            idleWithArtifactsCount++;
-            if (idleWithArtifactsCount === 1) {
-              const msg = buildRecoveryMessage(pipelineInfo);
-              pasteBuffer(options.targetPane, "monitor-recovery", msg);
-              sendKeys(options.targetPane, "Enter");
-              logs.push(`Recovery message sent (current: ${pipelineInfo.current})`);
-            } else if (idleWithArtifactsCount >= 3) {
-              logs.push("Recovery failed after 3 attempts");
-              return {
-                exitReason: "tui_idle",
-                elapsedSeconds,
-                combo: options.combo,
-                logs,
-              };
+            // Track if pipeline step has progressed — reset idle counter if so
+            const currentStep = pipelineInfo?.current ?? "";
+            if (currentStep !== lastKnownStep) {
+              lastKnownStep = currentStep;
+              consecutiveIdleCount = 0;
+              recoveryAttempts = 0; // Fresh recovery budget for each new step
+            } else {
+              // In team mode, check if teammates are actively working.
+              // If active team tasks exist, don't count idle (orchestrator is waiting for teammates).
+              let hasActiveTeamTasks = false;
+              if (options.enableTeamStallDetection) {
+                const taskDirs = discoverTeamTaskDirs(undefined, startTime);
+                for (const dir of taskDirs) {
+                  const stalled = findStalledTasks(dir, stallConfig.stallThresholdMs);
+                  try {
+                    const allJsonFiles = readdirSync(dir).filter(f => String(f).endsWith(".json"));
+                    const inProgressCount = allJsonFiles.length - stalled.length;
+                    if (inProgressCount > 0) {
+                      hasActiveTeamTasks = true;
+                      break;
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+
+              if (hasActiveTeamTasks) {
+                // Teammates working — don't accumulate idle count
+                if (consecutiveIdleCount > 0) {
+                  logs.push(`Idle reset: active team tasks found for step "${currentStep}"`);
+                  consecutiveIdleCount = 0;
+                }
+              } else {
+                consecutiveIdleCount++;
+                if (consecutiveIdleCount >= idleCountBeforeExit) {
+                  logs.push(`Pipeline stuck at "${currentStep}" for ${consecutiveIdleCount} idle cycles, giving up`);
+                  return {
+                    exitReason: "tui_idle",
+                    elapsedSeconds,
+                    combo: options.combo,
+                    logs,
+                  };
+                } else if (consecutiveIdleCount >= idleCountBeforeRecovery && recoveryAttempts < maxRecoveryAttempts) {
+                  recoveryAttempts++;
+                  const msg = buildRecoveryMessage(pipelineInfo);
+                  pasteBuffer(options.targetPane, "monitor-recovery", msg);
+                  sendKeys(options.targetPane, "Enter");
+                  logs.push(`Recovery #${recoveryAttempts} sent (current: ${currentStep}, idle cycles: ${consecutiveIdleCount})`);
+                }
+              }
             }
           }
         } else {
-          idleWithArtifactsCount = 0;
+          consecutiveIdleCount = 0;
         }
       }
 
@@ -439,8 +505,13 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       const info = readPipelineInfo(options.comboDir);
       if (info) stepLabel = `${info.current ?? "done"}(${info.completed.length}/${info.pipeline.length})`;
     }
+    const dbgParts = [`phase0=${phase0Done ? "done" : "active"}`, `step=${stepLabel}`];
+    if (!phase0Done) {
+      const lastLines = paneContent.split("\n").slice(-5).map(l => l.trim()).filter(l => l.length > 0);
+      dbgParts.push(`selUI=${isSelectionUIActive(paneContent)}`, `tail=${JSON.stringify(lastLines).slice(0, 200)}`);
+    }
     process.stderr.write(
-      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s phase0=${phase0Done ? "done" : "active"} step=${stepLabel}\n`
+      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s ${dbgParts.join(" ")}\n`
     );
 
     await sleep(intervalMs);
