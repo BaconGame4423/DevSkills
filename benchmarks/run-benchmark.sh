@@ -10,7 +10,10 @@
 #       環境セットアップのみ（lib/commands/pipeline.md 配置）
 #
 #   ./benchmarks/run-benchmark.sh --post <combo>
-#       ポスト処理のみ（メトリクス収集 + PoorDevSkills 分析 + 完了マーカー）
+#       ポスト処理のみ（メトリクス収集 + 完了マーカー）
+#
+#   ./benchmarks/run-benchmark.sh --analyze <combo>
+#       PoorDevSkills 分析のみ
 #
 #   ./benchmarks/run-benchmark.sh --collect <combo>
 #       メトリクス収集のみ
@@ -176,6 +179,7 @@ HOOK_EOF
 COLLECT_ONLY=false
 SETUP_ONLY=false
 POST_ONLY=false
+ANALYZE_ONLY=false
 ARCHIVE_ONLY=false
 CLEAN_ONLY=false
 COMBO=""
@@ -185,13 +189,15 @@ case "${1:-}" in
   --collect) COLLECT_ONLY=true; COMBO="${2:-}" ;;
   --setup)   SETUP_ONLY=true;   COMBO="${2:-}"; VERSION="${3:-}" ;;
   --post)    POST_ONLY=true;    COMBO="${2:-}" ;;
+  --analyze) ANALYZE_ONLY=true; COMBO="${2:-}" ;;
   --archive) ARCHIVE_ONLY=true; COMBO="${2:-}" ;;
   --clean)   CLEAN_ONLY=true;   COMBO="${2:-}" ;;
   --help|-h)
     echo "Usage:"
     echo "  $0 <combo> [version]       セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
     echo "  $0 --setup <combo> [ver]   環境セットアップのみ"
-    echo "  $0 --post <combo>          ポスト処理のみ（分析 + メトリクス + 完了マーカー）"
+    echo "  $0 --post <combo>          ポスト処理のみ（メトリクス + 完了マーカー）"
+    echo "  $0 --analyze <combo>       PoorDevSkills 分析のみ"
     echo "  $0 --collect <combo>       メトリクス収集のみ"
     echo "  $0 --archive <combo>       既存ランを _runs/ にアーカイブ"
     echo "  $0 --clean <combo>         生成物を削除してクリーン状態にする"
@@ -884,19 +890,29 @@ if [[ "$SETUP_ONLY" == true ]]; then
 fi
 
 if [[ "$POST_ONLY" == true ]]; then
-  # --post モード: メトリクス収集 + 分析 + 完了マーカー
+  # --post モード: メトリクス収集 + 完了マーカー（軽量）
   if [[ ! -d "$TARGET_DIR" ]]; then
     err "ディレクトリが見つかりません: $TARGET_DIR"
     exit 1
   fi
   collect_and_summarize 0
-  if [[ "$MODE" != "baseline" ]]; then
-    analyze_poordev
-  else
-    info "baseline モード: PoorDevSkills 分析スキップ"
-  fi
   date +%s > "$TARGET_DIR/.bench-complete"
   ok "ポスト処理完了: $COMBO"
+  exit 0
+fi
+
+if [[ "$ANALYZE_ONLY" == true ]]; then
+  # --analyze モード: PoorDevSkills 分析のみ（重い処理を独立実行）
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  if [[ "$MODE" == "baseline" ]]; then
+    info "baseline モード: PoorDevSkills 分析は不要です"
+    exit 0
+  fi
+  analyze_poordev
+  ok "分析完了: $COMBO"
   exit 0
 fi
 

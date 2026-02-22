@@ -2,7 +2,7 @@
 import { parseArgs } from "node:util";
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { runMonitor } from "../monitor.js";
-import { killPane, paneExists, listAllPanes } from "../tmux.js";
+import { killPane, paneExists, listAllPanes, currentSessionId } from "../tmux.js";
 import type { MonitorOptions } from "../types.js";
 
 const { values } = parseArgs({
@@ -50,8 +50,9 @@ if (!values.combo || !values.target || !values["combo-dir"] || !values["phase0-c
   process.exit(1);
 }
 
-// Snapshot panes at startup for differential cleanup
-const startPanes = new Set(listAllPanes());
+// Snapshot panes at startup for differential cleanup (scoped to current session)
+const sessionId = currentSessionId();
+const startPanes = new Set(listAllPanes(sessionId ?? undefined));
 const callerPane = values["caller-pane"];
 
 // Write cleanup marker so external callers can clean up if monitor is killed
@@ -64,10 +65,13 @@ writeFileSync(cleanupMarker, JSON.stringify({
   pid: process.pid,
 }));
 
+let cleanedUp = false;
 function cleanup(targetPane: string, combo: string): void {
+  if (cleanedUp) return;
+  cleanedUp = true;
   // Kill panes spawned after monitor start (teammate panes)
   try {
-    const currentPanes = listAllPanes();
+    const currentPanes = listAllPanes(sessionId ?? undefined);
     for (const pane of currentPanes) {
       if (startPanes.has(pane)) continue;     // existed before bench → protect
       if (pane === callerPane) continue;       // caller pane → protect

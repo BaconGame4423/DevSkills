@@ -35,7 +35,15 @@ export type ConvergenceResult =
 // --- パーサー ---
 
 const ISSUE_LINE_RE = /^ISSUE:\s*(C|H|M|L)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*$/;
-const VERDICT_LINE_RE = /^VERDICT:\s*(GO|CONDITIONAL|NO-GO)/m;
+
+function normalizeVerdict(raw: string): "GO" | "CONDITIONAL" | "NO-GO" {
+  const upper = raw.toUpperCase().trim();
+  if (upper === "GO" || upper === "PASS") return "GO";
+  if (upper === "CONDITIONAL") return "CONDITIONAL";
+  return "NO-GO";
+}
+
+const VERDICT_LINE_RE = /^VERDICT:\s*(GO|CONDITIONAL|NO-GO|PASS|NOGO|NO_GO)/mi;
 
 /**
  * Reviewer の raw 出力を解析する。
@@ -63,7 +71,7 @@ export function parseReviewerOutput(
 
     const verdictMatch = VERDICT_LINE_RE.exec(line);
     if (verdictMatch) {
-      verdict = verdictMatch[1] ?? "";
+      verdict = normalizeVerdict(verdictMatch[1] ?? "");
       hasVerdictLine = true;
     }
   }
@@ -125,7 +133,7 @@ export function parseFixerOutput(raw: string): FixerOutput {
  * ```yaml ... ``` フェンスブロックを抽出する。
  */
 function extractYamlBlock(raw: string): string | null {
-  const m = raw.match(/```ya?ml\s*\n([\s\S]*?)```/);
+  const m = raw.match(/```\s*ya?ml\s*\n([\s\S]*?)```/);
   return m?.[1] ? m[1].trim() : null;
 }
 
@@ -134,7 +142,7 @@ function extractYamlBlock(raw: string): string | null {
  * フル YAML パーサーではなく、2つのフィールドだけを対象にする。
  */
 function parseSimpleYaml(content: string): { issues: Array<{ severity: string; description: string; location: string }>; verdict: string } | null {
-  const verdictMatch = content.match(/^verdict:\s*(GO|CONDITIONAL|NO-GO)/m);
+  const verdictMatch = content.match(/^verdict:\s*(GO|CONDITIONAL|NO-GO|PASS|NOGO|NO_GO)/mi);
   if (!verdictMatch) return null;
 
   const issues: Array<{ severity: string; description: string; location: string }> = [];
@@ -152,7 +160,7 @@ function parseSimpleYaml(content: string): { issues: Array<{ severity: string; d
     }
   }
 
-  return { issues, verdict: verdictMatch[1] ?? "GO" };
+  return { issues, verdict: normalizeVerdict(verdictMatch[1] ?? "GO") };
 }
 
 export interface ReviewerOutputYaml extends ReviewerOutput {

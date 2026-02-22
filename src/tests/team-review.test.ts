@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseReviewerOutput,
+  parseReviewerOutputYaml,
   parseFixerOutput,
   checkConvergence,
   validateVerdictLine,
@@ -168,5 +169,110 @@ describe("summarizeIssuesForFixer", () => {
 
   it("空 issues で 'No issues' メッセージ", () => {
     expect(summarizeIssuesForFixer([])).toContain("No issues");
+  });
+});
+
+describe("parseReviewerOutputYaml — verdict 正規化", () => {
+  it("小文字 verdict (go) → GO に正規化", () => {
+    const raw = "```yaml\nissues: []\nverdict: go\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("GO");
+    expect(result.parseMethod).toBe("yaml");
+  });
+
+  it("PASS → GO に正規化", () => {
+    const raw = "```yaml\nissues: []\nverdict: PASS\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("GO");
+    expect(result.parseMethod).toBe("yaml");
+  });
+
+  it("nogo → NO-GO に正規化", () => {
+    const raw = "```yaml\nissues:\n  - severity: C\n    description: \"critical issue\"\n    location: \"file.ts:1\"\nverdict: nogo\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("NO-GO");
+    expect(result.issues).toHaveLength(1);
+  });
+
+  it("NO_GO → NO-GO に正規化", () => {
+    const raw = "```yaml\nissues: []\nverdict: NO_GO\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("NO-GO");
+  });
+
+  it("verdict のみ (issues なし) の正常パース", () => {
+    const raw = "```yaml\nissues: []\nverdict: GO\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("GO");
+    expect(result.issues).toHaveLength(0);
+    expect(result.parseMethod).toBe("yaml");
+  });
+
+  it("フェンスブロック外テキスト + フェンスブロック内 YAML の優先抽出", () => {
+    const raw = [
+      "Here is my review:",
+      "",
+      "```yaml",
+      "# ARCH: clean design",
+      "issues:",
+      "  - severity: M",
+      '    description: "Minor coupling (ARCH)"',
+      '    location: "src/index.ts:10"',
+      "verdict: CONDITIONAL",
+      "```",
+      "",
+      "Let me know if you need more details.",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "PR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("CONDITIONAL");
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]!.severity).toBe("M");
+  });
+
+  it("YAML コメント行 (#) を含む出力の正常パース", () => {
+    const raw = [
+      "```yaml",
+      "# ARCH: repository pattern used correctly",
+      "# SEC: input validation present",
+      "# PERF: no N+1 queries",
+      "# SRE: health checks exist",
+      "issues: []",
+      "verdict: GO",
+      "```",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("GO");
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it("スペース付きフェンス (``` yaml) も許容", () => {
+    const raw = "``` yaml\nissues: []\nverdict: GO\n```";
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("GO");
+  });
+});
+
+describe("parseReviewerOutput — verdict 正規化 (テキスト形式)", () => {
+  it("VERDICT: PASS → GO に正規化", () => {
+    const raw = "VERDICT: PASS";
+    const result = parseReviewerOutput(raw, "PR", 1);
+    expect(result.verdict).toBe("GO");
+    expect(result.hasVerdictLine).toBe(true);
+  });
+
+  it("VERDICT: NOGO → NO-GO に正規化", () => {
+    const raw = "ISSUE: C | critical bug | file.ts:1\nVERDICT: NOGO";
+    const result = parseReviewerOutput(raw, "PR", 1);
+    expect(result.verdict).toBe("NO-GO");
+    expect(result.issues).toHaveLength(1);
+  });
+
+  it("VERDICT: NO_GO → NO-GO に正規化", () => {
+    const raw = "VERDICT: NO_GO";
+    const result = parseReviewerOutput(raw, "PR", 1);
+    expect(result.verdict).toBe("NO-GO");
   });
 });

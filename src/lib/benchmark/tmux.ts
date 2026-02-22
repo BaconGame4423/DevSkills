@@ -74,8 +74,11 @@ export function listPanes(): string[] {
     .filter((s) => s.length > 0);
 }
 
-export function listAllPanes(): string[] {
-  const result = execTmuxSafe(["list-panes", "-a", "-F", "#{pane_id}"]);
+export function listAllPanes(sessionId?: string): string[] {
+  const args = sessionId
+    ? ["list-panes", "-s", "-t", sessionId, "-F", "#{pane_id}"]
+    : ["list-panes", "-a", "-F", "#{pane_id}"];
+  const result = execTmuxSafe(args);
   if (!result) {
     return [];
   }
@@ -84,6 +87,10 @@ export function listAllPanes(): string[] {
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+}
+
+export function currentSessionId(): string | null {
+  return execTmuxSafe(["display-message", "-p", "#{session_id}"])?.trim() ?? null;
 }
 
 export function killPane(paneId: string): void {

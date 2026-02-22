@@ -93,7 +93,7 @@ export function buildReviewTask(
       contextDesc,
       teammate.writeAccess
         ? `Role: Fixer — standby for fix instructions from orchestrator`
-        : `Role: Reviewer — review target files and output ISSUE/VERDICT lines`,
+        : `Role: Reviewer — review target files and send result as YAML via SendMessage (see agent file for format)`,
     ].join("\n"),
     assignTo: teammate.role,
   };

@@ -30,9 +30,10 @@ vi.mock("../lib/benchmark/tmux.js", () => ({
   pasteBuffer: vi.fn(),
   splitWindow: vi.fn(),
   listPanes: vi.fn(),
-  listAllPanes: vi.fn(),
+  listAllPanes: vi.fn((_sessionId?: string) => []),
   killPane: vi.fn(),
   paneExists: vi.fn(),
+  currentSessionId: vi.fn(() => null),
 }));
 
 // phase0-responder.ts をモック

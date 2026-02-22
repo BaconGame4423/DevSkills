@@ -298,7 +298,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   let recoveryAttempts = 0;
 
   const intervalMs = 10_000;
-  const pipelineCheckIntervalMs = 60_000;
+  const pipelineCheckIntervalMs = 10_000;
   const idleCheckStartMs = 120_000;
   const idleCheckIntervalMs = 60_000;
   const phase0TimeoutMs = 600_000;
@@ -387,16 +387,20 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
         if (pipelineState.complete) {
           logs.push("Pipeline completed");
           if (options.postCommand) {
+            process.stderr.write(`[monitor] ${options.combo} post-processing started: ${options.postCommand}\n`);
             try {
               logs.push(`Running post-processing: ${options.postCommand}`);
               const postOutput = execSync(options.postCommand, {
                 encoding: "utf-8",
-                timeout: 300_000,
+                timeout: 600_000,
                 cwd: options.projectRoot,
               });
               logs.push(`Post-processing complete: ${postOutput.slice(0, 500)}`);
+              process.stderr.write(`[monitor] ${options.combo} post-processing complete\n`);
             } catch (e) {
-              logs.push(`Post-processing failed: ${e instanceof Error ? e.message : String(e)}`);
+              const errMsg = e instanceof Error ? e.message : String(e);
+              logs.push(`Post-processing failed: ${errMsg}`);
+              process.stderr.write(`[monitor] ${options.combo} post-processing FAILED: ${errMsg}\n`);
             }
           }
           return { exitReason: "pipeline_complete", elapsedSeconds, combo: options.combo, logs };
