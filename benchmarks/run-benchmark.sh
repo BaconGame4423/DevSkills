@@ -63,6 +63,21 @@ _is_scaffold() {
   return 1
 }
 
+# ヘルパー関数 — アーカイブ済み _runs/ サブディレクトリ内のファイルを除外
+# 全マッチを stdout に出力。呼び出し側で | head -1 等を適用すること。
+_find_excluding_archives() {
+  local base_dir="$1"; shift
+  find "$base_dir" "$@" 2>/dev/null | while IFS= read -r f; do
+    local d="$f"
+    local skip=false
+    while [[ "$d" != "$base_dir" && "$d" != "/" ]]; do
+      d=$(dirname "$d")
+      [[ -f "$d/_git-log.txt" ]] && { skip=true; break; }
+    done
+    $skip || echo "$f"
+  done
+}
+
 # ============================================================
 # has_existing_run: 既存ランの有無を判定
 # ============================================================
@@ -735,7 +750,7 @@ collect_and_summarize() {
   echo -e "${CYAN}--- 成果物 ---${NC}"
   for artifact in spec.md plan.md tasks.md review-log.yaml poordev-analysis.yaml; do
     local found
-    found=$(find "$TARGET_DIR" -name "$artifact" -not -path '*/_runs/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    found=$(_find_excluding_archives "$TARGET_DIR" -name "$artifact" -not -path '*/.git/*' | head -1)
     if [[ -n "$found" ]]; then
       local relpath="${found#$TARGET_DIR/}"
       echo -e "  ${GREEN}[x]${NC} $artifact ($relpath)"
@@ -757,7 +772,7 @@ collect_and_summarize() {
     total_lines=$((total_lines + lines))
     local relpath="${f#$TARGET_DIR/}"
     printf "  %-40s %6d lines\n" "$relpath" "$lines"
-  done < <(find "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*' 2>/dev/null | sort)
+  done < <(_find_excluding_archives "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' | sort)
   echo "  合計: ${file_count} ファイル, ${total_lines} 行"
   echo ""
 

@@ -12,12 +12,15 @@
  */
 
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { NodeFileSystem } from "../lib/node-adapters.js";
 import { FilePipelineStateManager } from "../lib/pipeline-state.js";
 import { resolveFlow } from "../lib/flow-loader.js";
 import { getFlowDefinition } from "../lib/flow-definitions.js";
 import { computeNextInstruction } from "../lib/team-state-machine.js";
+import { parseReviewerOutputYaml, checkConvergence } from "../lib/team-review.js";
 import type { PipelineState } from "../lib/types.js";
+import type { ReviewerOutput } from "../lib/team-review.js";
 
 // --- 引数パース ---
 
@@ -29,6 +32,9 @@ interface CliArgs {
   setConditional?: string;
   gateResponse?: string;
   init: boolean;
+  parseReview?: string;
+  idPrefix?: string;
+  checkConvergence?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -61,6 +67,15 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--init":
         args.init = true;
+        break;
+      case "--parse-review":
+        args.parseReview = next();
+        break;
+      case "--id-prefix":
+        args.idPrefix = next();
+        break;
+      case "--check-convergence":
+        args.checkConvergence = next();
         break;
     }
   }
@@ -107,6 +122,43 @@ function resolveConditionalBranch(
 
 function main(): void {
   const args = parseArgs(process.argv);
+
+  // --parse-review: reviewer 出力の YAML パース
+  if (args.parseReview) {
+    try {
+      const raw = readFileSync(args.parseReview, "utf-8");
+      const prefix = args.idPrefix ?? "RV";
+      const result = parseReviewerOutputYaml(raw, prefix, 1);
+      process.stdout.write(JSON.stringify({
+        issues: result.issues,
+        verdict: result.verdict,
+        hasVerdictLine: result.hasVerdictLine,
+        parseMethod: result.parseMethod,
+      }) + "\n");
+    } catch (e) {
+      process.stderr.write(JSON.stringify({ error: `Failed to parse review: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+      process.exit(1);
+    }
+    return;
+  }
+
+  // --check-convergence: レビュー収束判定
+  if (args.checkConvergence) {
+    try {
+      const data = JSON.parse(readFileSync(args.checkConvergence, "utf-8")) as {
+        reviewerOutputs: ReviewerOutput[];
+        fixedIds: string[];
+      };
+      const fixedSet = new Set(data.fixedIds ?? []);
+      const result = checkConvergence(data.reviewerOutputs, fixedSet);
+      process.stdout.write(JSON.stringify(result) + "\n");
+    } catch (e) {
+      process.stderr.write(JSON.stringify({ error: `Failed to check convergence: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+      process.exit(1);
+    }
+    return;
+  }
+
   const fs = new NodeFileSystem();
   const stateManager = new FilePipelineStateManager(fs);
   const projectDir = path.resolve(args.projectDir);

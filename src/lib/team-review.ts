@@ -119,6 +119,87 @@ export function parseFixerOutput(raw: string): FixerOutput {
   return { fixed, rejected };
 }
 
+// --- YAML パーサー ---
+
+/**
+ * ```yaml ... ``` フェンスブロックを抽出する。
+ */
+function extractYamlBlock(raw: string): string | null {
+  const m = raw.match(/```ya?ml\s*\n([\s\S]*?)```/);
+  return m?.[1] ? m[1].trim() : null;
+}
+
+/**
+ * issues 配列 + verdict のみ抽出する正規表現ベースのターゲットパーサー。
+ * フル YAML パーサーではなく、2つのフィールドだけを対象にする。
+ */
+function parseSimpleYaml(content: string): { issues: Array<{ severity: string; description: string; location: string }>; verdict: string } | null {
+  const verdictMatch = content.match(/^verdict:\s*(GO|CONDITIONAL|NO-GO)/m);
+  if (!verdictMatch) return null;
+
+  const issues: Array<{ severity: string; description: string; location: string }> = [];
+  const issueBlocks = content.split(/(?=^\s*-\s+severity:)/m).slice(1);
+  for (const block of issueBlocks) {
+    const sev = block.match(/severity:\s*(C|H|M|L)/);
+    const desc = block.match(/description:\s*"?([^"\n]+)"?/);
+    const loc = block.match(/location:\s*"?([^"\n]+)"?/);
+    if (sev?.[1]) {
+      issues.push({
+        severity: sev[1],
+        description: desc?.[1]?.trim() ?? "",
+        location: loc?.[1]?.trim() ?? "",
+      });
+    }
+  }
+
+  return { issues, verdict: verdictMatch[1] ?? "GO" };
+}
+
+export interface ReviewerOutputYaml extends ReviewerOutput {
+  parseMethod: "yaml" | "text-fallback" | "fallback-empty";
+}
+
+/**
+ * YAML フォーマットの reviewer 出力をパースする。
+ * テキスト形式へのフォールバック付き。
+ */
+export function parseReviewerOutputYaml(
+  raw: string,
+  idPrefix: string,
+  startId: number
+): ReviewerOutputYaml {
+  // 1. YAML パース試行
+  try {
+    const yamlContent = extractYamlBlock(raw) ?? raw;
+    const parsed = parseSimpleYaml(yamlContent);
+    if (parsed && Array.isArray(parsed.issues)) {
+      const issues: ReviewIssue[] = parsed.issues.map((item, idx) => ({
+        id: `${idPrefix}${String(startId + idx).padStart(3, "0")}`,
+        severity: (item.severity ?? "L") as ReviewIssue["severity"],
+        description: item.description ?? "",
+        location: item.location ?? "",
+        persona: "",
+      }));
+      return {
+        raw,
+        issues,
+        verdict: parsed.verdict ?? "GO",
+        hasVerdictLine: !!parsed.verdict,
+        parseMethod: "yaml",
+      };
+    }
+  } catch { /* fall through */ }
+
+  // 2. フォールバック: 既存テキスト形式パーサー
+  const textResult = parseReviewerOutput(raw, idPrefix, startId);
+  if (textResult.hasVerdictLine || textResult.issues.length > 0) {
+    return { ...textResult, parseMethod: "text-fallback" };
+  }
+
+  // 3. 完全フォールバック: 空結果
+  return { ...textResult, parseMethod: "fallback-empty" };
+}
+
 // --- 収束判定 ---
 
 /**

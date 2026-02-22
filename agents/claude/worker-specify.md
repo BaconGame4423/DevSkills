@@ -156,4 +156,6 @@ Implementation happens in the implement step. Generated code files will be autom
 
 **Success criteria must be**: measurable (specific metrics), technology-agnostic, user-focused, verifiable without implementation details.
 
+**Success Criteria checkboxes**: Always use `- [ ]` (unchecked). NEVER use `- [x]`.
+
 <!-- SYNC:END -->

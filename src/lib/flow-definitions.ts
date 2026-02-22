@@ -76,7 +76,7 @@ export const FEATURE_FLOW: FlowDefinition = {
   context: {
     specify:   { input: "input.txt", discussion: "discussion-summary.md" },
     suggest:   { spec: "spec.md" },
-    plan:      { spec: "spec.md", suggestions: "suggestions.yaml" },
+    plan:      { spec: "spec.md", suggestions: "suggestions.yaml", decisions: "suggestion-decisions.yaml" },
     tasks:     { plan: "plan.md", spec: "spec.md" },
     testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md" },
     implement: { tasks: "tasks.md", plan: "plan.md", testplan: "test-plan.md" },

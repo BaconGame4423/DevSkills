@@ -15,8 +15,12 @@ Before creating any teams:
    - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
    - 技術スタック: 必要なら選択肢を提示
    - 質問が不要なほど要件が明確な場合はスキップ可
-3. Create `discussion-summary.md` in the feature directory
-4. No teammates are spawned during this phase
+3. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
+   - NNN = 3桁連番 (001, 002, ...)。既存 features/ ディレクトリの最大値 + 1
+   - 例: `features/001-function-visualizer/`
+   - **禁止**: `_runs/` 配下に作成しないこと（アーカイブ領域と衝突）
+4. Create `discussion-summary.md` in the feature directory
+5. No teammates are spawned during this phase
 
 ## Core Loop
 
@@ -54,6 +58,10 @@ After Phase 0, execute the pipeline via TS helper:
 - Task サブエージェント（`team_name` なし）でパイプラインステップを実行してはならない
 - JSON の `tasks[].description` を独自プロンプトで置き換えてはならない（Context injection の追記のみ許可）
 - TeamMate 応答失敗時に「残りステップは直接実行」等の方針転換は禁止 → §Error Handling に従う
+
+**Implement Step Exception**: tasks.md の全タスクが同一ファイルを対象とする場合、
+CLAUDE.md の例外規定に従い逐次実装を使用する。
+並列 TeamMate での同一ファイル書き込みは禁止。
 
 ### Conditional Steps
 
@@ -98,15 +106,17 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 Agent Teams ではメッセージはターン間でのみ配信される。
 sleep はターンを維持し続けるため、メッセージが永遠に届かない。
 TaskList ポーリングを使用すること。
-- 各レビュアー出力から以下を抽出:
-  - `ISSUE: {C|H|M|L} | {description} | {file:line}`
-  - `VERDICT: {GO|CONDITIONAL|NO-GO}`
-- VERDICT 行なし → そのレビュアーに SendMessage で再出力依頼（最大2回）
-- Deduplicate: same file:line + same severity → keep first
+- reviewer からの SendMessage 内容を一時ファイルに保存
+- `node .poor-dev/dist/bin/poor-dev-next.js --parse-review <file> --id-prefix <STEP>` で構造化パース
+- JSON 出力から `issues` / `verdict` / `parseMethod` を取得
+- パース失敗（`parseMethod: "fallback-empty"`）の場合は `issues: [], verdict: GO` として続行
+- Deduplicate: same location + same severity → keep first
 - Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
 
 ### Step 3: Convergence Check
-- C=0 AND H=0 (fixed_ids 除外後) → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
+- 全 reviewer の --parse-review 結果 + fixedIds を JSON ファイルに書き出し
+- `node .poor-dev/dist/bin/poor-dev-next.js --check-convergence <file>` で判定
+- `converged: true` → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
 - iteration >= max_iterations → user_gate → TeamDelete
 - Otherwise → Step 4
 
@@ -127,8 +137,9 @@ TaskList ポーリングを使用すること。
    a. shutdown_request 送信 → 確認待ち
    b. 同じ agent spec で Task re-spawn → タスク再割当
    c. respawn カウント（teammate 毎最大3回）
-5. 3回 respawn 後も失敗 → その reviewer なしで続行（graceful degradation）
-6. 全 teammate 同時失敗 → rate limit 疑い → 120s 待機 → リトライ（最大3回）
+5. 3回 respawn 後も失敗 → review-log に `verdict: GO` + `note: "DEGRADED: {role} failed after 3 respawns"` を記録して続行
+6. **全レビューステップが DEGRADED の場合**: ユーザーに警告メッセージを出力: "WARNING: All review steps degraded. Quality gate bypassed."
+7. 全 teammate 同時失敗 → rate limit 疑い → 120s 待機 → リトライ（最大3回）
 
 ### TeamCreate / Teammate Failure
 - "Already leading team" エラー → TeamDelete → 5秒待機 → TeamCreate 再試行（最大2回）

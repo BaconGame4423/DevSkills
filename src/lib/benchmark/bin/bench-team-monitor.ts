@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { runMonitor } from "../monitor.js";
 import { killPane, paneExists, listAllPanes } from "../tmux.js";
 import type { MonitorOptions } from "../types.js";
@@ -54,6 +54,16 @@ if (!values.combo || !values.target || !values["combo-dir"] || !values["phase0-c
 const startPanes = new Set(listAllPanes());
 const callerPane = values["caller-pane"];
 
+// Write cleanup marker so external callers can clean up if monitor is killed
+const cleanupMarker = `/tmp/bench-cleanup-${values.combo}.json`;
+writeFileSync(cleanupMarker, JSON.stringify({
+  targetPane: values.target,
+  combo: values.combo,
+  startPanes: [...startPanes],
+  callerPane: callerPane ?? null,
+  pid: process.pid,
+}));
+
 function cleanup(targetPane: string, combo: string): void {
   // Kill panes spawned after monitor start (teammate panes)
   try {
@@ -83,6 +93,8 @@ function cleanup(targetPane: string, combo: string): void {
   } catch {
     // best effort
   }
+  // Remove cleanup marker
+  try { unlinkSync(`/tmp/bench-cleanup-${combo}.json`); } catch { /* best effort */ }
 }
 
 const options: MonitorOptions = {

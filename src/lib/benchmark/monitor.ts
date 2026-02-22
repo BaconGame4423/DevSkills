@@ -33,13 +33,22 @@ function findPipelineState(comboDir: string): string | null {
       }
     }
   }
-  // 2. _runs/*/ (team mode) — exclude archive dirs (YYYYMMDD-*)
+  // 2. _runs/*/ (team mode) — skip archived dirs (those with _git-log.txt)
   const runsDir = path.join(comboDir, "_runs");
   if (existsSync(runsDir)) {
     for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && !/^\d{8}-/.test(entry.name)) {
-        const candidate = path.join(runsDir, entry.name, "pipeline-state.json");
-        if (existsSync(candidate)) return candidate;
+      if (!entry.isDirectory()) continue;
+      if (existsSync(path.join(runsDir, entry.name, "_git-log.txt"))) continue;
+      const candidate = path.join(runsDir, entry.name, "pipeline-state.json");
+      if (existsSync(candidate)) return candidate;
+      // Also check nested feature dirs (e.g., _runs/<ts>/features/<name>/)
+      const featDir = path.join(runsDir, entry.name, "features");
+      if (existsSync(featDir)) {
+        for (const sub of readdirSync(featDir, { withFileTypes: true })) {
+          if (!sub.isDirectory()) continue;
+          const nested = path.join(featDir, sub.name, "pipeline-state.json");
+          if (existsSync(nested)) return nested;
+        }
       }
     }
   }
@@ -126,13 +135,30 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
 }
 
 function hasArtifacts(comboDir: string): boolean {
+  const findOpts = `-maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
+    `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/.git/*'`;
   try {
-    const files = execSync(
-      `find "${comboDir}" -maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
-      `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/_runs/*'`,
+    // Pass 1: combo root (excluding _runs/ — fast path)
+    const rootFiles = execSync(
+      `find "${comboDir}" ${findOpts} -not -path '*/_runs/*'`,
       { encoding: "utf-8" }
     ).trim();
-    return files.length > 0;
+    if (rootFiles) return true;
+
+    // Pass 2: non-archived _runs/ subdirs only
+    const runsDir = path.join(comboDir, "_runs");
+    if (existsSync(runsDir)) {
+      for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        if (existsSync(path.join(runsDir, entry.name, "_git-log.txt"))) continue;
+        const subFiles = execSync(
+          `find "${path.join(runsDir, entry.name)}" ${findOpts}`,
+          { encoding: "utf-8" }
+        ).trim();
+        if (subFiles) return true;
+      }
+    }
+    return false;
   } catch {
     return false;
   }

@@ -29,6 +29,21 @@ if [ ! -d "$DIR_PATH" ]; then
     exit 1
 fi
 
+# ヘルパー関数 — アーカイブ済み _runs/ サブディレクトリ内のファイルを除外
+# 全マッチを stdout に出力。呼び出し側で | head -1 等を適用すること。
+_find_excluding_archives() {
+  local base_dir="$1"; shift
+  find "$base_dir" "$@" 2>/dev/null | while IFS= read -r f; do
+    local d="$f"
+    local skip=false
+    while [[ "$d" != "$base_dir" && "$d" != "/" ]]; do
+      d=$(dirname "$d")
+      [[ -f "$d/_git-log.txt" ]] && { skip=true; break; }
+    done
+    $skip || echo "$f"
+  done
+}
+
 echo "============================================================"
 echo "Metrics for: $DIR_NAME"
 echo "============================================================"
@@ -62,7 +77,7 @@ while IFS= read -r f; do
     printf "  %-40s %6d lines  %8d bytes\n" "$relpath" "$lines" "$bytes"
     total_output_lines=$((total_output_lines + lines))
     total_output_bytes=$((total_output_bytes + bytes))
-done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/*' 2>/dev/null | sort)
+done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' | sort)
 echo ""
 echo "Total output: $total_output_lines lines, $total_output_bytes bytes"
 
@@ -74,7 +89,7 @@ echo "--- Pipeline State ---"
 
 # Check for DevSkills artifacts (recursive search)
 for artifact in spec.md plan.md tasks.md review-log.yaml; do
-    found=$(find "$DIR_PATH" -name "$artifact" -not -path '*/_runs/*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    found=$(_find_excluding_archives "$DIR_PATH" -name "$artifact" -not -path '*/.git/*' | head -1)
     if [ -n "$found" ]; then
         relpath="${found#$DIR_PATH/}"
         echo "  [x] $artifact ($relpath)"
@@ -94,7 +109,7 @@ if [ "$BENCH_MODE" = "baseline" ]; then
     echo "  (baseline モード: パイプライン成果物なし)"
 else
     # Check pipeline-state.json if exists
-    PSJ=$(find "$DIR_PATH" -name "pipeline-state.json" -not -path '*/_runs/*' -not -path '*/.git/*' -print -quit 2>/dev/null)
+    PSJ=$(_find_excluding_archives "$DIR_PATH" -name "pipeline-state.json" -not -path '*/.git/*' | head -1)
     if [ -n "$PSJ" ]; then
         echo ""
         echo "  pipeline-state.json (${PSJ#$DIR_PATH/}):"
@@ -142,7 +157,7 @@ else
         if [ -z "$earliest_mod" ] || [ "$mod" -lt "$earliest_mod" ]; then
             earliest_mod=$mod
         fi
-    done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null)
+    done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
     first_ts="${earliest_mod:-}"
 fi
 
@@ -154,7 +169,7 @@ while IFS= read -r f; do
     if [ "$mod" -gt "$latest_mod" ]; then
         latest_mod=$mod
     fi
-done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null)
+done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
 
 if [ -n "$first_ts" ] && [ "$latest_mod" -gt 0 ]; then
     wall_clock=$((latest_mod - first_ts))

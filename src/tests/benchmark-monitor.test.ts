@@ -243,7 +243,7 @@ describe("benchmark-monitor", () => {
     expect(result.exitReason).toBe("tui_idle");
   }, 10_000);
 
-  it("TUI アイドル + パイプライン未完了 → 回復メッセージ送信、3回で tui_idle", async () => {
+  it("TUI アイドル + パイプライン未完了 → 回復メッセージ送信、6回で tui_idle", async () => {
     const { runMonitor } = await importMonitor();
     const options = makeDefaultOptions({ timeoutSeconds: 600 });
     const mockedPasteBuffer = vi.mocked(pasteBuffer);
@@ -258,11 +258,12 @@ describe("benchmark-monitor", () => {
     mockedExecSync.mockReturnValue("index.html\n");
 
     const promise = runMonitor(options);
-    // idleCheckStartMs=120s + 3 idle checks at 60s intervals = 120 + 60*3 = 300s
-    await vi.advanceTimersByTimeAsync(360_000);
+    // First idle check at 120s sets lastKnownStep (count stays 0).
+    // Then 6 checks at 180,240,300,360,420,480s → count reaches 6 at 480s → exit.
+    await vi.advanceTimersByTimeAsync(490_000);
     const result = await promise as MonitorResult;
 
-    // Recovery message should have been sent via pasteBuffer
+    // Recovery message should have been sent via pasteBuffer (max 2 attempts)
     expect(mockedPasteBuffer).toHaveBeenCalledWith(
       "test-pane",
       "monitor-recovery",
@@ -270,13 +271,13 @@ describe("benchmark-monitor", () => {
     );
     expect(mockedSendKeys).toHaveBeenCalledWith("test-pane", "Enter");
 
-    // After 3 idle checks, should exit with tui_idle
+    // After 6 idle checks, should exit with tui_idle
     expect(result.exitReason).toBe("tui_idle");
-    expect(result.logs.some((l: string) => l.includes("Recovery message sent"))).toBe(true);
-    expect(result.logs.some((l: string) => l.includes("Recovery failed after 3 attempts"))).toBe(true);
-  }, 10_000);
+    expect(result.logs.some((l: string) => l.includes("Recovery #1 sent"))).toBe(true);
+    expect(result.logs.some((l: string) => l.includes("giving up"))).toBe(true);
+  }, 30_000);
 
-  it("TUI 復帰後に idleWithArtifactsCount がリセットされる", async () => {
+  it("TUI 復帰後に consecutiveIdleCount がリセットされる", async () => {
     const { runMonitor } = await importMonitor();
     const options = makeDefaultOptions({ timeoutSeconds: 600 });
     const mockedPasteBuffer = vi.mocked(pasteBuffer);
@@ -285,33 +286,32 @@ describe("benchmark-monitor", () => {
     setPipelineState("active", ["specify"], "suggest", ["specify", "suggest", "plan"]);
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    // idle check runs at: 120s (call 13), 180s (call 19), 240s (call 25), 300s (call 31)
-    // The reset only occurs inside the idle check block when pane is NOT idle
+    // idle checks at: 120s(c13), 180s(c19), 240s(c25), 300s(c31), 360s(c37), 420s(c43), 480s(c49)
+    // Recovery at count>=3 (idleCountBeforeRecovery=3), exit at count>=6
+    // Make idle for first 3 checks, active at 300s, idle again for 3 checks → recovery twice
     let callCount = 0;
     mockedCapturePaneContent.mockImplementation(() => {
       callCount++;
-      // call 13 = 120s idle check → "❯" → recovery (count=1)
-      if (callCount === 13) return "❯ ";
-      // call 19 = 180s idle check → active → reset (count=0)
-      if (callCount === 19) return "Working...";
-      // call 25 = 240s idle check → "❯" → recovery again (count=1)
-      if (callCount === 25) return "❯ ";
-      return "Working...";
+      // call 31 = 300s → active (reset count)
+      if (callCount === 31) return "Working...";
+      // All other calls → idle
+      return "❯ ";
     });
 
     const promise = runMonitor(options);
-    // Advance past 240s idle check
-    await vi.advanceTimersByTimeAsync(260_000);
+    // Advance to 500s to cover: idle checks at 120(1),180(2),240(3→recovery#1),
+    // 300(active→reset), 360(1),420(2),480(3→recovery#2)
+    await vi.advanceTimersByTimeAsync(500_000);
 
     // Force timeout
-    await vi.advanceTimersByTimeAsync(500_000);
+    await vi.advanceTimersByTimeAsync(200_000);
     const result = await promise as MonitorResult;
 
-    // Recovery should have been sent twice (once at 120s, reset at 180s, once at 240s)
-    const recoveryLogs = result.logs.filter((l: string) => l.includes("Recovery message sent"));
+    // Recovery should have been sent twice
+    const recoveryLogs = result.logs.filter((l: string) => l.includes("Recovery #"));
     expect(recoveryLogs.length).toBe(2);
     expect(mockedPasteBuffer).toHaveBeenCalledTimes(2);
-  }, 10_000);
+  }, 15_000);
 
   it("Phase0 max_turns 後も監視を継続し、パイプライン完了で終了", async () => {
     const { runMonitor } = await importMonitor();
