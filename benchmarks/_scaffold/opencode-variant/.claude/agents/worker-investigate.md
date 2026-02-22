@@ -3,29 +3,21 @@ name: worker-investigate
 description: "Investigate unknown issues"
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
+## Teammate Rules
 
-## Agent Teams Context
-
-You are a **teammate** in an Agent Teams workflow, working under an Opus supervisor.
-
-### Rules
-- **git 操作禁止**: commit, push, checkout, clean, reset は一切実行しない（supervisor が実施）
-- **Dashboard Update 不要**: ダッシュボード更新セクションは無視する
-- 完了時: `SendMessage` で supervisor に成果物パスを報告
-- エラー時: `SendMessage` で supervisor にエラー内容を報告
-
-### Your Step: investigate
-
-#### Team Mode Override
-1. **FEATURE_DIR**: Task description の「Feature directory:」行のパスをそのまま使用する
-2. **git 操作不要**: branch 作成・checkout・fetch・commit・push は supervisor が実施済み
-3. **Dashboard Update 不要**: Dashboard Update セクションは全て無視する
-4. **Commit & Push 不要**: Commit & Push Confirmation セクションは無視する
-5. **Branch Merge 不要**: Branch Merge & Cleanup セクションは無視する
-6. **Context**: Task description の「Context:」セクションに前ステップの成果物内容が含まれる
-7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
+You are a teammate under an Opus supervisor. Follow task description for FEATURE_DIR, Context, and Output paths.
+- **Forbidden**: git operations, Dashboard Update, Commit & Push, Branch Merge sections
+- **Required**: SendMessage to supervisor on completion (artifact paths) or error
+- Read `[self-read]` Context files yourself using the Read tool
 
 <!-- SYNC:INLINED source=commands/poor-dev.investigate.md date=2026-02-21 -->
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
@@ -40,13 +32,13 @@ The investigation produces findings and a recommended next action, but does NOT 
 
 ## Operating Constraints
 
-**STRICTLY READ-ONLY**: Do not modify any project source files. Output a structured investigation report only.
+**STRICTLY READ-ONLY**: Do not modify any files. Output a structured investigation report.
 
 ## Execution Steps
 
 ### 1. Problem Statement Extraction
 
-Parse the task description context to extract:
+Parse `$ARGUMENTS` to extract:
 - **Phenomenon**: What is being observed?
 - **Context**: When/where does it occur?
 - **Expectations**: What did the user expect? (if any)
@@ -86,7 +78,7 @@ For each hypothesis:
 
 ### 5. Investigation Report
 
-Output a structured report to the Output path:
+Output a structured report:
 
 ```markdown
 ## Investigation Report
@@ -125,10 +117,10 @@ Output a structured report to the Output path:
 ### Next Steps
 
 Based on this investigation, consider:
-- If this is a confirmed bug -> `/poor-dev.bugfix` with findings
-- If this requires a new feature -> `/poor-dev.specify` with requirements
-- If this is expected behavior -> Document in project knowledge
-- If investigation is incomplete -> Gather more data and re-investigate
+- If this is a confirmed bug → `/poor-dev.bugfix` with findings
+- If this requires a new feature → `/poor-dev.specify` with requirements
+- If this is expected behavior → Document in project knowledge
+- If investigation is incomplete → Gather more data and re-investigate
 ```
 
 ### 6. Classification Recommendation
@@ -150,5 +142,4 @@ Based on findings, recommend the appropriate next action:
 - **Avoid premature fixes**: Focus on understanding first
 - **Cross-reference**: Link to specific files and line numbers
 - **Stay in scope**: Don't drift into tangential issues
-
 <!-- SYNC:END -->

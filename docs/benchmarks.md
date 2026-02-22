@@ -2,7 +2,7 @@
 
 ## 概要
 
-DevSkills のスキル（PoorDevSkill）が複数のLLMモデルで正しく動作するかを検証・比較するベンチマーク基盤。オーケストレーター×サブエージェントの組み合わせ（19パターン）で同一タスクを実行し、プロセス遵守・コード品質・完全性・UX・憲章準拠・効率の6次元で評価する。
+DevSkills のスキル（PoorDevSkill）が複数のLLMモデルで正しく動作するかを検証・比較するベンチマーク基盤。オーケストレーター×サブエージェントの組み合わせ（22パターン）で同一タスクを実行し、プロセス遵守・コード品質・完全性・UX・憲章準拠・効率の6次元で評価する。
 
 `benchmarks/` ディレクトリは配布パッケージ（npm）には含まれない開発専用ツール。
 
@@ -48,14 +48,17 @@ benchmarks/
 | `m2.5_baseline` | MiniMax M2.5 | MiniMax M2.5 | baseline |
 | `glm5_claude_plan` | GLM-5 | GLM-5 | step-override (plan=Claude) |
 | `glm5_claude_specify` | GLM-5 | GLM-5 | step-override (specify=Claude) |
-| `glm5_claude_design` | GLM-5 | GLM-5 | step-override (specify,suggest,plan=Claude) |
+| `glm5_claude_design` | GLM-5 | GLM-5 | step-override (specify,plan=Claude) |
 | `sonnet_all` | Claude Sonnet 4.6 | Claude Sonnet 4.6 | solo |
 | `sonnet_glm5_sub` | Claude Sonnet 4.6 | GLM-5 | orch+sub |
 | `sonnet_m2.5_sub` | Claude Sonnet 4.6 | MiniMax M2.5 | orch+sub |
 | `sonnet_baseline` | Claude Sonnet 4.6 | Claude Sonnet 4.6 | baseline |
 | `glm5_sonnet_plan` | GLM-5 | GLM-5 | step-override (plan=Sonnet) |
 | `glm5_sonnet_specify` | GLM-5 | GLM-5 | step-override (specify=Sonnet) |
-| `glm5_sonnet_design` | GLM-5 | GLM-5 | step-override (specify,suggest,plan=Sonnet) |
+| `glm5_sonnet_design` | GLM-5 | GLM-5 | step-override (specify,plan=Sonnet) |
+| `claude_team` | Claude | Claude | team |
+| `sonnet_team` | Claude Sonnet 4.6 | Claude Sonnet 4.6 | team |
+| `claude_bash_glm5` | Claude | GLM-5 | team + Bash Dispatch |
 
 ## ステップオーバーライドパターン
 
@@ -65,14 +68,33 @@ benchmarks/
 |---|---|---|
 | `glm5_claude_plan` | plan | plan の設計品質がボトルネック |
 | `glm5_claude_specify` | specify | 仕様品質が全体を決定（GIGO） |
-| `glm5_claude_design` | specify + suggest + plan | 上流の設計フェーズ全体がボトルネック |
+| `glm5_claude_design` | specify + plan | 上流の設計フェーズ全体がボトルネック |
 | `glm5_sonnet_plan` | plan | plan の設計品質がボトルネック（Sonnet版） |
 | `glm5_sonnet_specify` | specify | 仕様品質が全体を決定（Sonnet版） |
-| `glm5_sonnet_design` | specify + suggest + plan | 上流の設計フェーズ全体がボトルネック（Sonnet版） |
+| `glm5_sonnet_design` | specify + plan | 上流の設計フェーズ全体がボトルネック（Sonnet版） |
 
 `config-resolver.sh` の既存 5-level resolution chain がそのまま動作する。`overrides.<step>` にマッチするステップだけ Claude Opus が使われ、それ以外は GLM-5 がデフォルトとして使われる。
 
 `config_extras` フィールドにより、サブエージェントモデル固有のチューニング値（`command_variant`, `review_mode`, timeout 等）が base config に deep merge される。
+
+## Agent Teams モード
+
+`mode: "team"` の組み合わせは Agent Teams パス（`/poor-dev.team`）で実行する。Orchestrator (Opus/Sonnet) が `TeamCreate` + `Task` でパイプラインを駆動し、Teammate がステップを実行する。
+
+| 組み合わせ | dispatch 方式 | 特徴 |
+|---|---|---|
+| `claude_team` | Agent Teams (標準) | Opus Orchestrator + Opus Teammate |
+| `sonnet_team` | Agent Teams (標準) | Sonnet Orchestrator + Sonnet Teammate |
+| `claude_bash_glm5` | Bash Dispatch | Opus Orchestrator + GLM-5 Teammate（`glm -p` 直接呼び出し） |
+
+### Bash Dispatch
+
+`dispatch_mode: "bash"` が設定された組み合わせでは、Agent Teams の `TeamCreate` / `Task` / `SendMessage` lifecycle を使用せず、`glm -p` コマンドを直接 `Bash` ツールから呼び出して Teammate を起動する。
+
+メリット:
+- Team lifecycle（チーム作成・タスク割り当て・メッセージング・シャットダウン）のオーバーヘッドを排除
+- Teammate の起動・完了を同期的に制御可能
+- Orchestrator のコンテキストウィンドウを節約
 
 ## 使い方
 
@@ -122,7 +144,7 @@ DevSkills のコマンド/エージェントファイルをスキャフォール
 4. pipeline-state.json をポーリングして完了監視
 5. 完了後 `--post` でメトリクス収集・分析
 
-TUI 内ではスキル（`/poor-dev`）が正しく認識・実行され、PoorDevSkills パイプライン（specify → plan → tasks → implement → review）が完全に動作する。
+TUI 内ではスキル（`/poor-dev`）が正しく認識・実行され、PoorDevSkills パイプライン（specify → plan → planreview → tasks → tasksreview → implement → testdesign → architecturereview → qualityreview → phasereview の 10 ステージ）が完全に動作する。
 
 > **Note**: TUI モードでは `.bench-output.txt` は生成されない。パイプライン成果物（spec.md, plan.md, tasks.md, コード, pipeline-state.json）が実行結果となる。
 

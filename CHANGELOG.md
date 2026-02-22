@@ -3,9 +3,22 @@
 ## [Unreleased]
 
 ### Added
+- Bash Dispatch モード (`dispatch_mode: "bash"`) — `glm -p` 直接呼び出しで Agent Teams lifecycle オーバーヘッドを排除
+- Agent Teams ベンチマークコンボ 3 件 (`claude_team`, `sonnet_team`, `claude_bash_glm5`)
+- bench-team モニター改善 — チームスタック検出、ペインクリーンアップ、Claude Code TUI 対応
+- Worker エージェントに WebSearch / WebFetch ツール付与 (`worker-suggest`, `worker-bugfix`)
 - `poor-dev benchmark` CLI サブコマンド（setup/update/metrics/compare）
 - benchmarks/ を npm パッケージに同梱（ソースのみ、生成物は除外）
 - ベンチマーク出力ディレクトリの git 追跡を有効化
+- `docs/glm-teammate.md` — GLM-5 Teammate セットアップガイドを README から分離
+
+### Changed
+- suggest ステップを plan Phase 0 に統合・削除（パイプライン 11 → 10 ステージ）
+- レビューペルソナを統合（個別ペルソナコマンド 22 件削除）
+- Reviewer Constraint-First プロンプト最適化
+- ハイブリッドコンテキスト注入（ミッションクリティカル成果物のみ Opus が事前注入）
+- `process_stages` を更新（`suggest` 削除、`testdesign` 追加）
+- README.md をシンプル化（レビューペルソナ詳細・デュアルランタイム戦略・リビングダッシュボードを外出し）
 
 ### Removed
 - レガシーパイプライン実行パス (`poor-dev.pipeline` / `poor-dev.md` / `poor-dev-simple.md`) を削除

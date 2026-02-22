@@ -6,6 +6,14 @@ description: "Agent Teams orchestrator for all development flows"
 
 Orchestrate development workflows using Claude Code Agent Teams.
 
+## Compaction Recovery
+
+If context is unclear after compaction, run:
+```
+node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir .
+```
+This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
+
 ## Phase 0: Discussion
 
 Before creating any teams:
@@ -26,7 +34,7 @@ Before creating any teams:
 
 After Phase 0, execute the pipeline via TS helper:
 
-1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
+1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .` (Bash Dispatch モード時は `--bash-dispatch` を追加)
 2. Parse the JSON output and execute the action:
    - `create_team` → 以下の手順を厳守:
      1. **Cleanup**: TeamDelete (既存チームがあれば削除。エラーは無視)
@@ -38,7 +46,9 @@ After Phase 0, execute the pipeline via TS helper:
      4. **TaskCreate**: JSON の `tasks[]` 毎に:
         - `subject` = `tasks[].subject`
         - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
-        - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
+        - **Context injection (hybrid)**: description の `Context:` 行を確認:
+          - `[inject]` マーク付きファイル: Read して末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
+          - `[self-read]` マーク付きファイル: パスのみ記載（worker が自分で Read する）
         - `owner` = `tasks[].assignTo`
      5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)。注: Bash(sleep) で待機してはならない。TaskList ツールを使用すること
      6. **Commit**: JSON の `artifacts[]` を処理:
@@ -48,6 +58,8 @@ After Phase 0, execute the pipeline via TS helper:
      8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
      9. **TeamDelete**
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
+   - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
+   - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)
    - `user_gate` → See §User Gates below
    - `done` → Report completion to user
 3. After action completes: see §Conditional Steps below
@@ -95,36 +107,106 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - reviewer は read-only、fixer は write-enabled
 - target files + 前回 review-log を task description に含める
 
-### Step 2: Collect & Parse
+### Step 2: Collect & Process (Single CLI Call)
 - **TaskList ポーリングで reviewer タスク完了を確認** (`create_team` Step 5 と同じパターン)
 - reviewer タスクが completed になったら、reviewer からのメッセージを処理する:
-  - メッセージが未着の場合: 短いステータス出力（例: "Reviewer task completed. Waiting for output..."）でターンを終了し、メッセージ配信を待つ
+  - メッセージが未着の場合: 短いステータス出力でターンを終了し、メッセージ配信を待つ
 - 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
 
 **CRITICAL — Anti-Sleep Rule:**
-`Bash(sleep N)` で teammate の応答を待ってはならない。
-Agent Teams ではメッセージはターン間でのみ配信される。
-sleep はターンを維持し続けるため、メッセージが永遠に届かない。
-TaskList ポーリングを使用すること。
+`Bash(sleep N)` で teammate の応答を待ってはならない。TaskList ポーリングを使用すること。
+
 - reviewer からの SendMessage 内容を一時ファイルに保存
-- `node .poor-dev/dist/bin/poor-dev-next.js --parse-review <file> --id-prefix <STEP>` で構造化パース
-- JSON 出力から `issues` / `verdict` / `parseMethod` を取得
-- パース失敗（`parseMethod: "fallback-empty"`）の場合は `issues: [], verdict: GO` として続行
-- Deduplicate: same location + same severity → keep first
-- Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
+- **統合レビューサイクル**: 以下の JSON を一時ファイルに書き出し:
+  ```json
+  {"rawReview": "<reviewer output>", "fixedIds": ["AR001"], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
+  ```
+  `node .poor-dev/dist/bin/poor-dev-next.js --review-cycle <file>` で一括処理。
+  戻り値: `{ converged, verdict, parseMethod, fixerInstructions, reviewLogEntry, maxIterationsReached }`
 
-### Step 3: Convergence Check
-- 全 reviewer の --parse-review 結果 + fixedIds を JSON ファイルに書き出し
-- `node .poor-dev/dist/bin/poor-dev-next.js --check-convergence <file>` で判定
-- `converged: true` → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
-- iteration >= max_iterations → user_gate → TeamDelete
-- Otherwise → Step 4
+### Step 3: Branch on Result
+- `converged: true` → `review-log-{step}.yaml` 更新 → commit → step complete → TeamDelete
+- `maxIterationsReached: true` → user_gate → TeamDelete
+- Otherwise → fixer に `fixerInstructions` を SendMessage → fixer の fixed/rejected を受信 → fixedIds に追加 → Step 1 に戻る
 
-### Step 4: Fix
-- C/H イシューを fixer に SendMessage: `- [{id}] {severity} | {description} | {location}`
-- Fixer が fixed/rejected YAML を返す → fixed_ids に追加
-- Opus が修正ファイルを確認: コード重複 >=10行・debug 文混入 → fixer に差し戻し（最大2回）
-- clean → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → Step 1 に戻る
+## Bash Dispatch (glm -p)
+
+For `bash_dispatch` actions. Team lifecycle なしで glm -p (CLI headless mode) を直接呼び出す。
+
+### 手順
+1. プロンプトをファイルに書き出し: `<feature-dir>/.pd-dispatch/<step>-prompt.txt`
+2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ)
+3. glm -p 実行:
+   ```bash
+   CLAUDECODE= timeout 600 glm -p "$(cat <feature-dir>/.pd-dispatch/<step>-prompt.txt)" \
+     --append-system-prompt-file <worker.agentFile> \
+     --allowedTools "<worker.tools>" \
+     --output-format json \
+     --max-turns <worker.maxTurns> \
+     > <feature-dir>/.pd-dispatch/<step>-worker-result.json 2>&1
+   ```
+   **重要**: `CLAUDECODE=` で環境変数をクリアしてネストセッション検出を回避する
+4. 結果 JSON を Read:
+   - `subtype: "success"` → 成功
+   - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
+   - `subtype: "error_during_execution"` → エラー、ユーザーに報告
+   - タイムアウト (exit code 124) → ユーザーに報告
+5. artifacts を git add && commit
+6. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --bash-dispatch --state-dir <DIR> --project-dir .`
+7. 次のステップへ (Core Loop に戻る)
+
+## Bash Review Dispatch (glm -p)
+
+For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
+
+### Step 1: Reviewer 実行
+- `iteration += 1`
+- reviewer を glm -p で実行:
+  ```bash
+  CLAUDECODE= timeout 600 glm -p "$(cat <review-prompt-file>)" \
+    --append-system-prompt-file <reviewer.agentFile> \
+    --allowedTools "<reviewer.tools>" \
+    --output-format json \
+    --max-turns <reviewer.maxTurns> \
+    > <step>-reviewer-result.json 2>&1
+  ```
+- 結果 JSON の `result` フィールドからテキスト出力を取得
+
+### Step 2: Review Cycle 処理
+- reviewer テキスト出力を一時ファイルに保存
+- `--review-cycle` で一括処理 (Agent Teams 版と同じ):
+  ```json
+  {"rawReview": "<reviewer output>", "fixedIds": [...], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
+  ```
+- 戻り値: `{ converged, verdict, fixerInstructions, reviewLogEntry, maxIterationsReached }`
+
+### Step 3: 分岐
+- `converged: true` → review-log 更新 → commit → step-complete → 完了
+- `maxIterationsReached: true` → ユーザーに報告
+- Otherwise → Step 4 へ
+
+### Step 4: Fixer 実行
+- fixer プロンプトを構築: `fixerBasePrompt + "\n\n## Review Issues (Iteration N)\n" + fixerInstructions`
+- fixer を glm -p で実行:
+  ```bash
+  CLAUDECODE= timeout 600 glm -p "$(cat <fixer-prompt-file>)" \
+    --append-system-prompt-file <fixer.agentFile> \
+    --allowedTools "<fixer.tools>" \
+    --output-format json \
+    --max-turns <fixer.maxTurns> \
+    > <step>-fixer-result.json 2>&1
+  ```
+- fixer 結果の `result` から fixed/rejected ID を抽出 → `fixed_ids` に追加
+- commit fixes
+- Step 1 に戻る
+
+### エラー処理
+- glm -p タイムアウト (exit 124) → 1回リトライ → 再失敗でユーザーに報告
+- glm -p エラー出力 → ログに記録、ユーザーに報告
+
+### 一時ファイル管理
+- 一時ファイルは `<feature-dir>/.pd-dispatch/` に保存
+- パイプライン完了後に `.pd-dispatch/` を削除
 
 ## Error Handling
 

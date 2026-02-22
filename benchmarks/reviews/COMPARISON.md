@@ -28,9 +28,9 @@
 | `glm5_sonnet_plan` | GLM-5 (plan=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
 | `glm5_sonnet_specify` | GLM-5 (specify=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
 | `glm5_sonnet_design` | GLM-5 (specify=Claude Sonnet 4.6,suggest=Claude Sonnet 4.6,plan=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
-| `claude_team` | Claude | solo | -- | -- | 未開始 |
-| `sonnet_team` | Claude Sonnet 4.6 | solo | -- | -- | 未開始 |
-| `claude_bash_glm5` | Claude + GLM-5 | orch+sub | 10/10 | index.html+interfaces.ts | 完了 |
+| `claude_team` | Claude | team | -- | -- | 未開始 |
+| `sonnet_team` | Claude Sonnet 4.6 | team | -- | -- | 未開始 |
+| `claude_bash_glm5` | Claude + GLM-5 | orch+sub (bash) | 10/10 | index.html+interfaces.ts | 完了 |
 
 ---
 
@@ -225,17 +225,17 @@ _(現時点で該当なし)_
 - **弱み**: --
 - **特徴**: --
 
-### claude_team (Claude solo)
+### claude_team (Claude team)
 - **強み**: --
 - **弱み**: --
 - **特徴**: --
 
-### sonnet_team (Claude Sonnet 4.6 solo)
+### sonnet_team (Claude Sonnet 4.6 team)
 - **強み**: --
 - **弱み**: --
 - **特徴**: --
 
-### claude_bash_glm5 (Claude + GLM-5 orch+sub)
+### claude_bash_glm5 (Claude + GLM-5 orch+sub (bash))
 - **強み**: Bash Dispatch で Agent Teams lifecycle オーバーヘッド排除、全 13/13 要件達成 (100%)、モジュラー設計+シンボリック微分正確
 - **弱み**: implement フェーズ約 20 分が全体の支配的ボトルネック、UX 全カテゴリ 4/5 で突出した強みなし
 - **特徴**: Agent Teams lifecycle 排除の初実証。Bash Dispatch (`glm -p`) 直接呼び出しで team create/shutdown を省略し低オーバーヘッド実行

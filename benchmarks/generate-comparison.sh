@@ -35,9 +35,17 @@ for i in $(seq 0 $((combo_count - 1))); do
 
   dir_names+=("$dir")
 
+  dispatch_mode=$(jval ".combinations[$i].dispatch_mode // \"\"")
+
   if [[ "$mode" == "baseline" ]]; then
     display_labels+=("$orch_disp (Baseline)")
     roles+=("baseline")
+  elif [[ "$mode" == "team" && -n "$dispatch_mode" ]]; then
+    display_labels+=("$orch_disp + $sub_disp")
+    roles+=("orch+sub ($dispatch_mode)")
+  elif [[ "$mode" == "team" ]]; then
+    display_labels+=("$orch_disp")
+    roles+=("team")
   elif [[ "$step_ovr_count" -gt 0 ]]; then
     ovr_desc=$(echo "$step_ovr" | jq -r --argjson models "$(jq '.models' "$CONFIG")" '
       to_entries | map("\(.key)=\($models[.value].display_name)") | join(",")
