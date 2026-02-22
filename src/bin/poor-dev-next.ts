@@ -18,9 +18,9 @@ import { FilePipelineStateManager } from "../lib/pipeline-state.js";
 import { resolveFlow } from "../lib/flow-loader.js";
 import { getFlowDefinition } from "../lib/flow-definitions.js";
 import { computeNextInstruction } from "../lib/team-state-machine.js";
-import { parseReviewerOutputYaml, checkConvergence } from "../lib/team-review.js";
+import { parseReviewerOutputYaml, checkConvergence, processReviewCycle } from "../lib/team-review.js";
 import type { PipelineState } from "../lib/types.js";
-import type { ReviewerOutput } from "../lib/team-review.js";
+import type { ReviewerOutput, ReviewCycleInput } from "../lib/team-review.js";
 
 // --- 引数パース ---
 
@@ -35,6 +35,7 @@ interface CliArgs {
   parseReview?: string;
   idPrefix?: string;
   checkConvergence?: string;
+  reviewCycle?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -76,6 +77,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--check-convergence":
         args.checkConvergence = next();
+        break;
+      case "--review-cycle":
+        args.reviewCycle = next();
         break;
     }
   }
@@ -122,6 +126,19 @@ function resolveConditionalBranch(
 
 function main(): void {
   const args = parseArgs(process.argv);
+
+  // --review-cycle: 統合レビューサイクル (parse + dedup + convergence + fixer instructions)
+  if (args.reviewCycle) {
+    try {
+      const data = JSON.parse(readFileSync(args.reviewCycle, "utf-8")) as ReviewCycleInput;
+      const result = processReviewCycle(data);
+      process.stdout.write(JSON.stringify(result) + "\n");
+    } catch (e) {
+      process.stderr.write(JSON.stringify({ error: `Failed to process review cycle: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+      process.exit(1);
+    }
+    return;
+  }
 
   // --parse-review: reviewer 出力の YAML パース
   if (args.parseReview) {

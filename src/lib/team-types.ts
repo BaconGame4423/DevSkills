@@ -29,6 +29,12 @@ export type TeamAction =
   | UserGateAction
   | DoneAction;
 
+/** アクション共通メタデータ */
+export interface ActionMeta {
+  recovery_hint: string;
+  step_complete_cmd?: string;
+}
+
 /** Worker チーム作成 */
 export interface CreateTeamAction {
   action: "create_team";
@@ -37,6 +43,7 @@ export interface CreateTeamAction {
   teammates: TeammateSpec[];
   tasks: TaskSpec[];
   artifacts: string[];
+  _meta?: ActionMeta;
 }
 
 /** レビューチーム作成 (review-loop / parallel-review) */
@@ -50,6 +57,7 @@ export interface CreateReviewTeamAction {
   max_iterations: number;
   communication: "direct" | "opus-mediated";
   tasks: TaskSpec[];
+  _meta?: ActionMeta;
 }
 
 /** ユーザー確認ゲート */

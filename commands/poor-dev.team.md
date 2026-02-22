@@ -6,6 +6,14 @@ description: "Agent Teams orchestrator for all development flows"
 
 Orchestrate development workflows using Claude Code Agent Teams.
 
+## Compaction Recovery
+
+If context is unclear after compaction, run:
+```
+node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir .
+```
+This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
+
 ## Phase 0: Discussion
 
 Before creating any teams:
@@ -97,36 +105,27 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - reviewer は read-only、fixer は write-enabled
 - target files + 前回 review-log を task description に含める
 
-### Step 2: Collect & Parse
+### Step 2: Collect & Process (Single CLI Call)
 - **TaskList ポーリングで reviewer タスク完了を確認** (`create_team` Step 5 と同じパターン)
 - reviewer タスクが completed になったら、reviewer からのメッセージを処理する:
-  - メッセージが未着の場合: 短いステータス出力（例: "Reviewer task completed. Waiting for output..."）でターンを終了し、メッセージ配信を待つ
+  - メッセージが未着の場合: 短いステータス出力でターンを終了し、メッセージ配信を待つ
 - 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
 
 **CRITICAL — Anti-Sleep Rule:**
-`Bash(sleep N)` で teammate の応答を待ってはならない。
-Agent Teams ではメッセージはターン間でのみ配信される。
-sleep はターンを維持し続けるため、メッセージが永遠に届かない。
-TaskList ポーリングを使用すること。
+`Bash(sleep N)` で teammate の応答を待ってはならない。TaskList ポーリングを使用すること。
+
 - reviewer からの SendMessage 内容を一時ファイルに保存
-- `node .poor-dev/dist/bin/poor-dev-next.js --parse-review <file> --id-prefix <STEP>` で構造化パース
-- JSON 出力から `issues` / `verdict` / `parseMethod` を取得
-- パース失敗（`parseMethod: "fallback-empty"`）の場合は `issues: [], verdict: GO` として続行
-- Deduplicate: same location + same severity → keep first
-- Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
+- **統合レビューサイクル**: 以下の JSON を一時ファイルに書き出し:
+  ```json
+  {"rawReview": "<reviewer output>", "fixedIds": ["AR001"], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
+  ```
+  `node .poor-dev/dist/bin/poor-dev-next.js --review-cycle <file>` で一括処理。
+  戻り値: `{ converged, verdict, parseMethod, fixerInstructions, reviewLogEntry, maxIterationsReached }`
 
-### Step 3: Convergence Check
-- 全 reviewer の --parse-review 結果 + fixedIds を JSON ファイルに書き出し
-- `node .poor-dev/dist/bin/poor-dev-next.js --check-convergence <file>` で判定
-- `converged: true` → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
-- iteration >= max_iterations → user_gate → TeamDelete
-- Otherwise → Step 4
-
-### Step 4: Fix
-- C/H イシューを fixer に SendMessage: `- [{id}] {severity} | {description} | {location}`
-- Fixer が fixed/rejected YAML を返す → fixed_ids に追加
-- Opus が修正ファイルを確認: コード重複 >=10行・debug 文混入 → fixer に差し戻し（最大2回）
-- clean → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → Step 1 に戻る
+### Step 3: Branch on Result
+- `converged: true` → `review-log-{step}.yaml` 更新 → commit → step complete → TeamDelete
+- `maxIterationsReached: true` → user_gate → TeamDelete
+- Otherwise → fixer に `fixerInstructions` を SendMessage → fixer の fixed/rejected を受信 → fixedIds に追加 → Step 1 に戻る
 
 ## Error Handling
 

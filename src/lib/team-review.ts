@@ -264,3 +264,88 @@ export function summarizeIssuesForFixer(
   );
   return `Fix the following issues:\n${lines.join("\n")}`;
 }
+
+// --- Review Cycle 統合 ---
+
+export interface ReviewCycleInput {
+  rawReview: string;
+  fixedIds: string[];
+  idPrefix: string;
+  iteration: number;
+  maxIterations: number;
+}
+
+export interface ReviewCycleResult {
+  converged: boolean;
+  verdict: string;
+  parseMethod: string;
+  issueCount: number;
+  criticalCount: number;
+  highCount: number;
+  fixerInstructions: string;
+  reviewLogEntry: {
+    n: number;
+    raw_issues: number;
+    actionable: number;
+    fixed: string;
+  };
+  maxIterationsReached: boolean;
+}
+
+/**
+ * 1 回のレビューサイクルを統合処理する。
+ *
+ * Opus の 4-5 アクション/iteration を単一呼び出しに圧縮:
+ * 1. reviewer 出力パース
+ * 2. dedup + 収束判定
+ * 3. fixer 指示生成
+ * 4. review-log エントリ生成
+ */
+export function processReviewCycle(input: ReviewCycleInput): ReviewCycleResult {
+  // 1. パース
+  const parsed = parseReviewerOutputYaml(input.rawReview, input.idPrefix, 1);
+
+  // 2. 重複除去 (same location + same severity)
+  const seen = new Set<string>();
+  const dedupedIssues = parsed.issues.filter((i) => {
+    const key = `${i.location}|${i.severity}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // 3. fixedIds を除外
+  const fixedSet = new Set(input.fixedIds);
+  const remainingIssues = dedupedIssues.filter((i) => !fixedSet.has(i.id));
+
+  // 4. C/H カウント
+  const criticalCount = remainingIssues.filter((i) => i.severity === "C").length;
+  const highCount = remainingIssues.filter((i) => i.severity === "H").length;
+  const converged = criticalCount === 0 && highCount === 0;
+
+  // 5. fixer 指示
+  const actionableIssues = remainingIssues.filter(
+    (i) => i.severity === "C" || i.severity === "H"
+  );
+  const fixerInstructions = summarizeIssuesForFixer(actionableIssues);
+
+  // 6. review-log エントリ
+  const reviewLogEntry = {
+    n: input.iteration,
+    raw_issues: parsed.issues.length,
+    actionable: actionableIssues.length,
+    fixed: input.fixedIds.join(","),
+  };
+
+  return {
+    converged,
+    verdict: converged ? "GO" : parsed.verdict || "NO-GO",
+    parseMethod: parsed.parseMethod,
+    issueCount: remainingIssues.length,
+    criticalCount,
+    highCount,
+    fixerInstructions,
+    reviewLogEntry,
+    maxIterationsReached: input.iteration >= input.maxIterations,
+  };
+}

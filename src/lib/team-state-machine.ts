@@ -15,6 +15,7 @@ import type {
   TeamAction,
   TeammateSpec,
   TaskSpec,
+  ActionMeta,
 } from "./team-types.js";
 import { buildTeamName, buildTeammateSpec, buildWorkerTask, buildReviewTask } from "./team-instruction.js";
 
@@ -102,7 +103,18 @@ export function computeNextInstruction(
       options: ["skip", "abort"],
     };
   }
-  return buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+  const action = buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+
+  // _meta: recovery hint + step complete コマンド
+  if (action.action === "create_team" || action.action === "create_review_team") {
+    const meta: ActionMeta = {
+      recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
+      step_complete_cmd: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete ${nextStep} --state-dir ${featureDir} --project-dir ${projectDir}`,
+    };
+    action._meta = meta;
+  }
+
+  return action;
 }
 
 // --- 内部ヘルパー ---
