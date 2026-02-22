@@ -1,5 +1,5 @@
 ---
-description: Execute suggestion phase - GLM4.7 research for best practices, tools, libraries, and usage patterns with maintainability/security validation
+description: "[DEPRECATED] Suggest functionality is now integrated into /poor-dev.plan Phase 0. This command is kept for standalone use only."
 handoffs:
   - label: プラン作成
     agent: poor-dev.plan

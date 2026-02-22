@@ -63,24 +63,24 @@ describe("computeNextInstruction", () => {
       }
     });
 
-    it("specify 完了後に suggest の create_team を返す", () => {
+    it("specify 完了後に plan の create_team を返す", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
-      // suggest には spec.md が必要
+      // plan には spec.md が必要
       const fs = mockFs({ "/proj/specs/001-test/spec.md": "spec" });
       const action = computeNextInstruction(ctx, fs);
 
       expect(action.action).toBe("create_team");
       if (action.action === "create_team") {
-        expect(action.step).toBe("suggest");
+        expect(action.step).toBe("plan");
       }
     });
 
     it("レビューステップで create_review_team を返す", () => {
       const ctx = makeCtx({
         state: makeState({
-          completed: ["specify", "suggest", "plan"],
+          completed: ["specify", "plan"],
         }),
       });
       const fs = mockFs({
@@ -93,7 +93,7 @@ describe("computeNextInstruction", () => {
       if (action.action === "create_review_team") {
         expect(action.step).toBe("planreview");
         expect(action.communication).toBe("opus-mediated");
-        expect(action.max_iterations).toBe(12);
+        expect(action.max_iterations).toBe(6);
         // tasks[] の検証
         expect(action.tasks).toBeDefined();
         expect(action.tasks.length).toBe(2); // reviewer + fixer
@@ -122,12 +122,12 @@ describe("computeNextInstruction", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
-      // spec.md がない → suggest の前提失敗
+      // spec.md がない → plan の前提失敗
       const action = computeNextInstruction(ctx, mockFs());
 
       expect(action.action).toBe("user_gate");
       if (action.action === "user_gate") {
-        expect(action.step).toBe("suggest");
+        expect(action.step).toBe("plan");
         expect(action.message).toContain("spec.md");
       }
     });
@@ -235,7 +235,7 @@ describe("computeNextInstruction", () => {
   });
 
   describe("配列 artifacts", () => {
-    it("suggest の create_team で配列 artifacts が返る", () => {
+    it("plan の create_team で string artifact が返る", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
@@ -246,18 +246,15 @@ describe("computeNextInstruction", () => {
 
       expect(action.action).toBe("create_team");
       if (action.action === "create_team") {
-        expect(action.step).toBe("suggest");
-        expect(action.artifacts).toHaveLength(3);
-        expect(action.artifacts).toContain("/proj/specs/001-test/suggestions.yaml");
-        expect(action.artifacts).toContain("/proj/specs/001-test/exploration-session.yaml");
-        expect(action.artifacts).toContain("/proj/specs/001-test/suggestion-decisions.yaml");
+        expect(action.step).toBe("plan");
+        expect(action.artifacts).toEqual(["/proj/specs/001-test/plan.md"]);
       }
     });
 
     it("implement の create_team で '*' sentinel artifacts が返る", () => {
       const ctx = makeCtx({
         state: makeState({
-          completed: ["specify", "suggest", "plan", "planreview", "tasks", "tasksreview", "testdesign"],
+          completed: ["specify", "plan", "planreview", "tasks", "tasksreview"],
         }),
       });
       const fs = mockFs({
@@ -279,8 +276,8 @@ describe("computeNextInstruction", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: [
-            "specify", "suggest", "plan", "planreview",
-            "tasks", "tasksreview", "testdesign", "implement",
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement", "testdesign",
           ],
         }),
       });
@@ -302,8 +299,8 @@ describe("computeNextInstruction", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: [
-            "specify", "suggest", "plan", "planreview",
-            "tasks", "tasksreview", "testdesign", "implement",
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement", "testdesign",
           ],
         }),
       });
@@ -329,8 +326,8 @@ describe("computeNextInstruction", () => {
     });
   });
 
-  describe("done で配列 artifacts を収集", () => {
-    it("suggest artifacts が存在する場合に全て収集する", () => {
+  describe("done で artifacts を収集", () => {
+    it("存在する全 artifacts を収集する", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: [...FEATURE_FLOW.steps],
@@ -338,9 +335,6 @@ describe("computeNextInstruction", () => {
       });
       const fs = mockFs({
         "/proj/specs/001-test/spec.md": "spec",
-        "/proj/specs/001-test/suggestions.yaml": "yaml",
-        "/proj/specs/001-test/exploration-session.yaml": "yaml",
-        "/proj/specs/001-test/suggestion-decisions.yaml": "yaml",
         "/proj/specs/001-test/plan.md": "plan",
         "/proj/specs/001-test/tasks.md": "tasks",
         "/proj/specs/001-test/test-plan.md": "testplan",
@@ -349,9 +343,10 @@ describe("computeNextInstruction", () => {
 
       expect(action.action).toBe("done");
       if (action.action === "done") {
-        expect(action.artifacts).toContain("/proj/specs/001-test/suggestions.yaml");
-        expect(action.artifacts).toContain("/proj/specs/001-test/exploration-session.yaml");
-        expect(action.artifacts).toContain("/proj/specs/001-test/suggestion-decisions.yaml");
+        expect(action.artifacts).toContain("/proj/specs/001-test/spec.md");
+        expect(action.artifacts).toContain("/proj/specs/001-test/plan.md");
+        expect(action.artifacts).toContain("/proj/specs/001-test/tasks.md");
+        expect(action.artifacts).toContain("/proj/specs/001-test/test-plan.md");
         // implement "*" → fd itself
         expect(action.artifacts).toContain("/proj/specs/001-test");
       }

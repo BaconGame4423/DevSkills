@@ -16,7 +16,7 @@ const PLANREVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-plan-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
-  maxReviewIterations: 12,
+  maxReviewIterations: 6,
   reviewCommunication: "opus-mediated",
 };
 
@@ -26,7 +26,7 @@ const TASKSREVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-tasks-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
-  maxReviewIterations: 12,
+  maxReviewIterations: 6,
   reviewCommunication: "opus-mediated",
 };
 
@@ -36,7 +36,7 @@ const ARCH_REVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-arch-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
-  maxReviewIterations: 12,
+  maxReviewIterations: 8,
   reviewCommunication: "opus-mediated",
 };
 
@@ -46,7 +46,7 @@ const QUALITY_REVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-quality-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
-  maxReviewIterations: 12,
+  maxReviewIterations: 8,
   reviewCommunication: "opus-mediated",
 };
 
@@ -56,7 +56,7 @@ const PHASE_REVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-phase-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
-  maxReviewIterations: 12,
+  maxReviewIterations: 6,
   reviewCommunication: "opus-mediated",
 };
 
@@ -64,7 +64,7 @@ const PHASE_REVIEW_TEAM: StepTeamConfig = {
 
 export const FEATURE_FLOW: FlowDefinition = {
   steps: [
-    "specify", "suggest", "plan", "planreview",
+    "specify", "plan", "planreview",
     "tasks", "tasksreview", "implement", "testdesign",
     "architecturereview", "qualityreview", "phasereview",
   ],
@@ -75,8 +75,7 @@ export const FEATURE_FLOW: FlowDefinition = {
   conditionals: [],
   context: {
     specify:   { input: "input.txt", discussion: "discussion-summary.md" },
-    suggest:   { spec: "spec.md" },
-    plan:      { spec: "spec.md", suggestions: "suggestions.yaml", decisions: "suggestion-decisions.yaml" },
+    plan:      { spec: "spec.md" },
     tasks:     { plan: "plan.md", spec: "spec.md" },
     implement: { tasks: "tasks.md", plan: "plan.md" },
     testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md", implementation: "*" },
@@ -86,15 +85,24 @@ export const FEATURE_FLOW: FlowDefinition = {
     qualityreview:      { spec: "spec.md" },
     phasereview:        { spec: "spec.md" },
   },
+  contextInject: {
+    plan:      { spec: true },
+    tasks:     { spec: true },
+    implement: {},
+    testdesign: { spec: true },
+    planreview:  { spec: true },
+    tasksreview: { spec: true },
+    architecturereview: { spec: true },
+    qualityreview:      { spec: true },
+    phasereview:        { spec: true },
+  },
   prerequisites: {
-    suggest: ["spec.md"],
     plan: ["spec.md"],
     tasks: ["plan.md", "spec.md"],
     implement: ["tasks.md", "spec.md"],
   },
   artifacts: {
     specify: "spec.md",
-    suggest: ["suggestions.yaml", "exploration-session.yaml", "suggestion-decisions.yaml"],
     plan: "plan.md",
     tasks: "tasks.md",
     testdesign: "test-plan.md",
@@ -115,7 +123,6 @@ export const FEATURE_FLOW: FlowDefinition = {
   discussionSteps: ["discussion"],
   teamConfig: {
     specify:  { type: "team", teammates: [{ role: "worker-specify" }] },
-    suggest:  { type: "team", teammates: [{ role: "worker-suggest" }] },
     plan:     { type: "team", teammates: [{ role: "worker-plan" }] },
     planreview: PLANREVIEW_TEAM,
     tasks:       { type: "team", teammates: [{ role: "worker-tasks" }] },

@@ -19,6 +19,8 @@ export interface FlowDefinition {
   conditionals?: string[];
   /** step → {key: relativeFilename}（contextArgsForStep 置換） */
   context?: Record<string, Record<string, string>>;
+  /** step → {key: true} — true のコンテキストは Opus が pre-inject、それ以外は worker が self-read */
+  contextInject?: Record<string, Record<string, boolean>>;
   /** step → required files（checkPrerequisites 置換） */
   prerequisites?: Record<string, string[]>;
   /** step → output filename */

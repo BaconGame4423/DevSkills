@@ -93,7 +93,8 @@ specs/[###-feature]/
 
 **Phase 0: Outline & Research**
 1. Extract unknowns from Technical Context → research tasks.
-2. Consolidate in `research.md`: Decision, Rationale, Alternatives considered.
+2. **Web Research** (integrated from suggest step): Search for best practices, recommended libraries, and known pitfalls for the target tech stack. Include decision rationale directly in research.md.
+3. Consolidate in `research.md`: Decision, Rationale, Alternatives considered.
 
 **Output**: research.md
 

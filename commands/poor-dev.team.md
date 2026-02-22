@@ -38,7 +38,9 @@ After Phase 0, execute the pipeline via TS helper:
      4. **TaskCreate**: JSON の `tasks[]` 毎に:
         - `subject` = `tasks[].subject`
         - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
-        - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
+        - **Context injection (hybrid)**: description の `Context:` 行を確認:
+          - `[inject]` マーク付きファイル: Read して末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
+          - `[self-read]` マーク付きファイル: パスのみ記載（worker が自分で Read する）
         - `owner` = `tasks[].assignTo`
      5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)。注: Bash(sleep) で待機してはならない。TaskList ツールを使用すること
      6. **Commit**: JSON の `artifacts[]` を処理:

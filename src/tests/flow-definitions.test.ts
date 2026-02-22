@@ -72,13 +72,12 @@ describe("FEATURE_FLOW", () => {
   it("context に全主要ステップのマッピングがある", () => {
     const ctx = FEATURE_FLOW.context!;
     expect(ctx["specify"]).toEqual({ input: "input.txt", discussion: "discussion-summary.md" });
-    expect(ctx["plan"]).toEqual({ spec: "spec.md", suggestions: "suggestions.yaml", decisions: "suggestion-decisions.yaml" });
+    expect(ctx["plan"]).toEqual({ spec: "spec.md" });
     expect(ctx["implement"]).toEqual({ tasks: "tasks.md", plan: "plan.md" });
   });
 
   it("prerequisites が正しく定義されている", () => {
     const prereqs = FEATURE_FLOW.prerequisites!;
-    expect(prereqs["suggest"]).toEqual(["spec.md"]);
     expect(prereqs["tasks"]).toEqual(["plan.md", "spec.md"]);
     expect(prereqs["implement"]).toEqual(["tasks.md", "spec.md"]);
   });
@@ -86,7 +85,6 @@ describe("FEATURE_FLOW", () => {
   it("artifacts が正しく定義されている", () => {
     const artifacts = FEATURE_FLOW.artifacts!;
     expect(artifacts["specify"]).toBe("spec.md");
-    expect(artifacts["suggest"]).toEqual(["suggestions.yaml", "exploration-session.yaml", "suggestion-decisions.yaml"]);
     expect(artifacts["plan"]).toBe("plan.md");
     expect(artifacts["testdesign"]).toBe("test-plan.md");
     expect(artifacts["implement"]).toBe("*");

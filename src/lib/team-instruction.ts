@@ -101,6 +101,10 @@ export function buildReviewTask(
 
 /**
  * ステップのコンテキストファイル説明を構築する。
+ *
+ * contextInject フラグが定義されている場合:
+ * - inject: true のコンテキストは "inject" マーク付き（Opus が pre-inject）
+ * - inject: false / 未定義は "self-read" マーク付き（worker が自分で Read）
  */
 function buildContextDescription(
   step: string,
@@ -111,11 +115,18 @@ function buildContextDescription(
   const ctx = flowDef.context?.[step];
   if (!ctx) return "Context: none";
 
+  const injectMap = flowDef.contextInject?.[step];
   const parts: string[] = [];
   for (const [key, filename] of Object.entries(ctx)) {
-    const fullPath = path.join(fd, filename);
+    const fullPath = filename === "*" ? fd : path.join(fd, filename);
     const exists = fs.exists(fullPath);
-    parts.push(`  ${key}: ${fullPath}${exists ? "" : " (missing)"}`);
+    const mode = injectMap?.[key] ? "inject" : "self-read";
+    parts.push(`  ${key}: ${fullPath}${exists ? "" : " (missing)"} [${mode}]`);
   }
+
+  if (injectMap) {
+    parts.push("  Note: [inject] files will be provided below. [self-read] files: use Read tool to load them.");
+  }
+
   return `Context:\n${parts.join("\n")}`;
 }
