@@ -65,7 +65,37 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="GLM-5"
 
-exec claude --mcp-config ~/.claude/glm-mcp.json "\$@"
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  DO NOT REMOVE: model interception loop                     ║
+# ║  Agent Teams passes --model claude-opus-4-6 (full literal   ║
+# ║  ID) which bypasses ANTHROPIC_DEFAULT_*_MODEL env vars.     ║
+# ║  This loop converts literals to aliases so the env var      ║
+# ║  mapping takes effect. Removal causes silent fallback to    ║
+# ║  Anthropic Opus via Z.AI proxy.                             ║
+# ║  Ref: 3b772dd removed this → broke all team benchmarks.    ║
+# ╚══════════════════════════════════════════════════════════════╝
+args=()
+skip_next=false
+for arg in "\$@"; do
+  if \$skip_next; then
+    skip_next=false
+    case "\$arg" in
+      *opus*)   args+=("opus") ;;
+      *sonnet*) args+=("sonnet") ;;
+      *haiku*)  args+=("haiku") ;;
+      *)        args+=("\$arg") ;;
+    esac
+    continue
+  fi
+  if [[ "\$arg" == "--model" ]]; then
+    skip_next=true
+    args+=("--model")
+    continue
+  fi
+  args+=("\$arg")
+done
+
+exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
 WRAPPER
 sudo chmod +x /usr/local/bin/glm
 echo "[OK] /usr/local/bin/glm 生成完了（キー埋め込み + MCP）"
@@ -155,7 +185,37 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="GLM-5"
 
-exec claude --mcp-config ~/.claude/glm-mcp.json "\$@"
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  DO NOT REMOVE: model interception loop                     ║
+# ║  Agent Teams passes --model claude-opus-4-6 (full literal   ║
+# ║  ID) which bypasses ANTHROPIC_DEFAULT_*_MODEL env vars.     ║
+# ║  This loop converts literals to aliases so the env var      ║
+# ║  mapping takes effect. Removal causes silent fallback to    ║
+# ║  Anthropic Opus via Z.AI proxy.                             ║
+# ║  Ref: 3b772dd removed this → broke all team benchmarks.    ║
+# ╚══════════════════════════════════════════════════════════════╝
+args=()
+skip_next=false
+for arg in "\$@"; do
+  if \$skip_next; then
+    skip_next=false
+    case "\$arg" in
+      *opus*)   args+=("opus") ;;
+      *sonnet*) args+=("sonnet") ;;
+      *haiku*)  args+=("haiku") ;;
+      *)        args+=("\$arg") ;;
+    esac
+    continue
+  fi
+  if [[ "\$arg" == "--model" ]]; then
+    skip_next=true
+    args+=("--model")
+    continue
+  fi
+  args+=("\$arg")
+done
+
+exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
 GLM_INNER
 sudo chmod +x /usr/local/bin/glm
 echo "[OK] glm ラッパーを再生成（キー埋め込み済み）"
