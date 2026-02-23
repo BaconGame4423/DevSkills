@@ -198,7 +198,7 @@ HOOK_EOF
 
   # 4b) team モード: scaffold に含まれないスキルファイルを直接コピー
   if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-    for team_file in poor-dev.team.md; do
+    for team_file in poor-dev.md; do
       local src="$DEVSKILLS_DIR/.opencode/command/$team_file"
       if [[ -f "$src" ]]; then
         cp "$src" "$target/.opencode/command/"
@@ -406,7 +406,7 @@ ENDJSON
 
     # 7b) team モード: scaffold に含まれないスキルファイルを直接コピー
     if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-      for team_file in poor-dev.team.md; do
+      for team_file in poor-dev.md; do
         src="$DEVSKILLS_DIR/.opencode/command/$team_file"
         if [[ -f "$src" ]]; then
           cp "$src" "$target/.opencode/command/"

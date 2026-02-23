@@ -127,7 +127,7 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
   return [
     `[MONITOR] TUI idle but pipeline incomplete (current: ${info.current}, ${info.completed.length}/${info.pipeline.length} steps done).`,
     `Resume: node .poor-dev/dist/bin/poor-dev-next.js --flow ${info.flow} --state-dir ${info.stateDir} --project-dir .`,
-    `Parse JSON output and execute the action per poor-dev.team Core Loop.`,
+    `Parse JSON output and execute the action per poor-dev Core Loop.`,
   ].join("\n");
 }
 

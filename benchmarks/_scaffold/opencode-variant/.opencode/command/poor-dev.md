@@ -1,8 +1,8 @@
 ---
-description: "Agent Teams orchestrator for all development flows"
+description: "Bash Dispatch orchestrator for all development flows"
 ---
 
-# poor-dev.team — Agent Teams Orchestrator
+# poor-dev — Bash Dispatch Orchestrator
 
 Orchestrate development workflows using Claude Code Agent Teams.
 

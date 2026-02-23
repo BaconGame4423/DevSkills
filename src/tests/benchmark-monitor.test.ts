@@ -535,7 +535,7 @@ describe("benchmark-monitor", () => {
       expect(msg).toContain("3/5 steps done");
       expect(msg).toContain("--flow feature");
       expect(msg).toContain("--state-dir features/my-feature");
-      expect(msg).toContain("poor-dev.team Core Loop");
+      expect(msg).toContain("poor-dev Core Loop");
     });
   });
 

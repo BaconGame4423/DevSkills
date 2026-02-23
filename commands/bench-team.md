@@ -1,5 +1,5 @@
 ---
-description: "Agent Teams ベンチマーク実行（右 tmux ペインで /poor-dev.team 自動実行 + Phase 0 自動応答 + PoorDevSkills 分析）"
+description: "ベンチマーク実行（右 tmux ペインで /poor-dev 自動実行 + Phase 0 自動応答 + PoorDevSkills 分析）"
 ---
 
 ## Arguments
@@ -41,13 +41,13 @@ fi
 
 ## Step 3: プロンプト構築
 
-benchmarks.json からプロンプトを構築する。`/poor-dev.team` プレフィックスを使用。
+benchmarks.json からプロンプトを構築する。`/poor-dev` プレフィックスを使用。
 
 ```bash
 TASK_DESC=$(jq -r '.task.description' benchmarks/benchmarks.json)
 TASK_NAME=$(jq -r '.task.name' benchmarks/benchmarks.json)
 REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' benchmarks/benchmarks.json)
-PROMPT="/poor-dev.team ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
+PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
 ```
 
 ## Step 4: ベンチペイン作成 + claude 起動
@@ -175,7 +175,7 @@ node dist/lib/benchmark/bin/bench-team-monitor.js \
 Bash(run_in_background) で実行。
 
 ユーザーに通知:
-- 右ペインで Agent Teams `/poor-dev.team` パイプラインが開始されたこと
+- 右ペインで Agent Teams `/poor-dev` パイプラインが開始されたこと
 - Phase 0 質問は自動応答されること
 - 進捗は右ペインで確認可能なこと
 - 完了後は自動でポスト処理が実行されること

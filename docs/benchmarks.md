@@ -79,7 +79,7 @@ benchmarks/
 
 ## Agent Teams モード
 
-`mode: "team"` の組み合わせは Agent Teams パス（`/poor-dev.team`）で実行する。Orchestrator (Opus/Sonnet) が `TeamCreate` + `Task` でパイプラインを駆動し、Teammate がステップを実行する。
+`mode: "team"` の組み合わせは Agent Teams パス（`/poor-dev`）で実行する。Orchestrator (Opus/Sonnet) が `TeamCreate` + `Task` でパイプラインを駆動し、Teammate がステップを実行する。
 
 | 組み合わせ | dispatch 方式 | 特徴 |
 |---|---|---|

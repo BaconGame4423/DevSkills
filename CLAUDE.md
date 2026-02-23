@@ -35,9 +35,9 @@
   - minor: コマンド追加、エージェント追加、機能追加
   - major: 破壊的変更（コマンド体系変更、ディレクトリ構造変更）
 
-## Bash Dispatch フロー (poor-dev.team)
+## Bash Dispatch フロー (poor-dev)
 
-- `/poor-dev.team` 実行中は TS ヘルパー (`node .poor-dev/dist/bin/poor-dev-next.js`) の JSON 指示に従う
+- `/poor-dev` 実行中は TS ヘルパー (`node .poor-dev/dist/bin/poor-dev-next.js`) の JSON 指示に従う
 - Phase 0 は Worker 不使用。Opus が直接ユーザーと議論
 - レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（`glm -p` 経由）
 - compaction 後の回復: `pipeline-state.json` を読み、`node .poor-dev/dist/bin/poor-dev-next.js` 再実行
@@ -45,7 +45,7 @@
 
 ## Bash Dispatch アーキテクチャ
 
-- poor-dev.team が唯一のパイプライン実行パス
+- poor-dev が唯一のパイプライン実行パス
 - `glm -p` で Worker を直接呼び出し（Agent Teams lifecycle なし）
 - Worker のモデルは `CLAUDE_CODE_TEAMMATE_COMMAND` 環境変数でプロセスレベル差し替え
   - Orchestrator (Opus) = Anthropic API
