@@ -107,10 +107,21 @@ When a step is in the flow's `conditionals` list (e.g., bugfix, rebuildcheck):
 ### User Gates
 
 When the TS helper returns `user_gate`:
+
+#### Standard Gates (no gateOptions)
 1. Display the `message` to the user
 2. Present `options` as choices
 3. After user responds: `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <response> --state-dir <DIR> --project-dir .`
 4. Parse the returned action and continue the Core Loop
+
+#### Post-Step User Gates (gateOptions present)
+`user_gate` に `gateOptions` が含まれる場合（userGates 由来）:
+1. `gateOptions` の `label` を AskUserQuestion の選択肢として提示
+2. ユーザー選択に対応する `conditionalKey` を取得
+3. `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <conditionalKey> --state-dir <DIR> --project-dir .`
+4. Parse the returned action and continue the Core Loop
+
+注: `gateOptions` 付きの user_gate では出力マーカースキャンは行わない。
 
 ## Bash Dispatch (glm -p)
 

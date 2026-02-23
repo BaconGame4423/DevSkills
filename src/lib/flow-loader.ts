@@ -68,6 +68,52 @@ export function validateFlowDefinition(
     }
   }
 
+  // userGates: 任意、Record<string, { message: string, options: { label: string, conditionalKey: string }[] }>
+  if (obj["userGates"] !== undefined && obj["userGates"] !== null) {
+    if (typeof obj["userGates"] !== "object") {
+      errors.push(`Flow "${name}": "userGates" must be an object`);
+    } else {
+      const gates = obj["userGates"] as Record<string, unknown>;
+      for (const [step, gateDef] of Object.entries(gates)) {
+        if (typeof gateDef !== "object" || gateDef === null) {
+          errors.push(`Flow "${name}": userGates["${step}"] must be an object`);
+          continue;
+        }
+        const g = gateDef as Record<string, unknown>;
+        if (typeof g["message"] !== "string") {
+          errors.push(`Flow "${name}": userGates["${step}"].message must be a string`);
+        }
+        if (!Array.isArray(g["options"])) {
+          errors.push(`Flow "${name}": userGates["${step}"].options must be an array`);
+        } else {
+          for (let i = 0; i < g["options"].length; i++) {
+            const opt = g["options"][i] as Record<string, unknown> | undefined;
+            if (typeof opt !== "object" || opt === null) {
+              errors.push(`Flow "${name}": userGates["${step}"].options[${i}] must be an object`);
+            } else {
+              if (typeof opt["label"] !== "string") {
+                errors.push(`Flow "${name}": userGates["${step}"].options[${i}].label must be a string`);
+              }
+              if (typeof opt["conditionalKey"] !== "string") {
+                errors.push(`Flow "${name}": userGates["${step}"].options[${i}].conditionalKey must be a string`);
+              }
+            }
+          }
+        }
+      }
+
+      // 排他チェック: userGates のキーが conditionals に含まれていないこと
+      if (Array.isArray(obj["conditionals"])) {
+        const conditionals = new Set(obj["conditionals"] as string[]);
+        for (const step of Object.keys(gates)) {
+          if (conditionals.has(step)) {
+            errors.push(`Flow "${name}": step "${step}" cannot be in both userGates and conditionals (mutually exclusive)`);
+          }
+        }
+      }
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 

@@ -256,6 +256,15 @@ async function main(): Promise<void> {
       resolveConditionalBranch(args.setConditional, stateFile, projectDir, stateManager, fs);
     }
 
+    // userGates チェック: ステップに userGate が定義されていれば awaiting-approval に設定
+    if (!args.setConditional) {
+      const tmpState = stateManager.read(stateFile);
+      const tmpFlowDef = resolveFlow(tmpState.flow, projectDir, fs) ?? getFlowDefinition(tmpState.flow);
+      if (tmpFlowDef?.userGates?.[args.stepComplete]) {
+        stateManager.setApproval(stateFile, "user-gate", args.stepComplete);
+      }
+    }
+
     // 完了後に次のアクションも返す
     const state = stateManager.read(stateFile);
     const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
@@ -277,6 +286,27 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const response = args.gateResponse;
+
+    // user-gate の場合: response を conditionalKey として分岐解決
+    const preState = stateManager.read(stateFile);
+    if (preState.pendingApproval?.type === "user-gate") {
+      stateManager.clearApproval(stateFile);
+      resolveConditionalBranch(response, stateFile, projectDir, stateManager, fs);
+
+      const state = stateManager.read(stateFile);
+      const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
+      if (!flowDef) {
+        process.stderr.write(JSON.stringify({ error: `Unknown flow: ${state.flow}` }) + "\n");
+        process.exit(1);
+      }
+      const featureDir = path.relative(projectDir, stateDir);
+      const action = computeNextInstruction(
+        { state, featureDir, projectDir, flowDef },
+        fs
+      );
+      process.stdout.write(JSON.stringify(action) + "\n");
+      return;
+    }
 
     if (response === "abort") {
       stateManager.setStatus(stateFile, "completed", "Aborted by user");

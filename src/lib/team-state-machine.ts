@@ -54,6 +54,21 @@ export function computeNextInstruction(
     };
   }
   if (state.status === "awaiting-approval") {
+    // user-gate: userGates 定義から選択肢付き gate を返す
+    if (state.pendingApproval?.type === "user-gate") {
+      const gateStep = state.pendingApproval.step;
+      const gate = flowDef.userGates?.[gateStep];
+      if (gate) {
+        return {
+          action: "user_gate",
+          step: gateStep,
+          message: gate.message,
+          options: gate.options.map((o) => o.label),
+          gateOptions: gate.options,
+        };
+      }
+    }
+    // 通常の approval 処理
     return {
       action: "user_gate",
       step: state.pendingApproval?.step ?? "unknown",

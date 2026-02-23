@@ -200,23 +200,69 @@ export const ROADMAP_FLOW: FlowDefinition = {
   },
 };
 
-// --- Discovery Init Flow ---
+// --- Exploration Flow (discovery-init + discovery-rebuild 統合) ---
 
-export const DISCOVERY_INIT_FLOW: FlowDefinition = {
-  description: "まず作って学ぶ探索フロー",
+export const EXPLORATION_FLOW: FlowDefinition = {
+  description: "探索→ユーザー判断→ロードマップ or 再構築の統合フロー",
   steps: ["discovery"],
-  teamConfig: {
-    discovery: { type: "team", teammates: [{ role: "worker-discovery" }] },
-  },
-};
-
-// --- Discovery Rebuild Flow ---
-
-export const DISCOVERY_REBUILD_FLOW: FlowDefinition = {
-  description: "プロトタイプ評価→再構築判定",
-  steps: ["rebuildcheck"],
   conditionals: ["rebuildcheck"],
+  userGates: {
+    discovery: {
+      message: "探索が完了しました。次のステップを選択してください。",
+      options: [
+        { label: "ロードマップを作成する", conditionalKey: "discovery:ROADMAP" },
+        { label: "プロトタイプを評価・再構築する", conditionalKey: "discovery:EVALUATE" },
+        { label: "探索を終了する", conditionalKey: "discovery:DONE" },
+      ],
+    },
+  },
+  conditionalBranches: {
+    // User gate 分岐
+    "discovery:ROADMAP": {
+      pattern: "N/A",
+      action: "replace-pipeline",
+      pipeline: ["discovery", "concept", "goals", "milestones", "roadmap"],
+      variant: "exploration-roadmap",
+    },
+    "discovery:EVALUATE": {
+      pattern: "N/A",
+      action: "replace-pipeline",
+      pipeline: ["discovery", "rebuildcheck"],
+      variant: "exploration-evaluate",
+    },
+    "discovery:DONE": {
+      pattern: "N/A",
+      action: "pause",
+      variant: "exploration-done",
+      pauseReason: "探索完了",
+    },
+    // Output-based 分岐 (rebuildcheck)
+    "rebuildcheck:REBUILD": {
+      pattern: "\\[VERDICT: REBUILD\\]",
+      action: "replace-pipeline",
+      pipeline: [
+        "discovery", "rebuildcheck", "harvest", "plan", "planreview",
+        "tasks", "tasksreview", "implement",
+        "architecturereview", "qualityreview", "phasereview",
+      ],
+      variant: "exploration-rebuild",
+    },
+    "rebuildcheck:CONTINUE": {
+      pattern: "\\[VERDICT: CONTINUE\\]",
+      action: "pause",
+      variant: "exploration-continue",
+      pauseReason: "CONTINUE verdict — プロトタイプの継続改善を推奨",
+    },
+  },
   teamConfig: {
+    // Discovery
+    discovery:    { type: "team", teammates: [{ role: "worker-discovery" }] },
+    // Roadmap 系
+    concept:      { type: "team", teammates: [{ role: "worker-concept" }] },
+    goals:        { type: "team", teammates: [{ role: "worker-goals" }] },
+    milestones:   { type: "team", teammates: [{ role: "worker-milestones" }] },
+    roadmap:      { type: "team", teammates: [{ role: "worker-roadmap" }] },
+    // Rebuild 系
     rebuildcheck: { type: "team", teammates: [{ role: "worker-rebuildcheck" }] },
     harvest:      { type: "team", teammates: [{ role: "worker-harvest" }] },
     plan:         { type: "team", teammates: [{ role: "worker-plan" }] },
@@ -227,24 +273,6 @@ export const DISCOVERY_REBUILD_FLOW: FlowDefinition = {
     architecturereview: ARCH_REVIEW_TEAM,
     qualityreview:      QUALITY_REVIEW_TEAM,
     phasereview:        PHASE_REVIEW_TEAM,
-  },
-  conditionalBranches: {
-    "rebuildcheck:REBUILD": {
-      pattern: "\\[VERDICT: REBUILD\\]",
-      action: "replace-pipeline",
-      pipeline: [
-        "rebuildcheck", "harvest", "plan", "planreview",
-        "tasks", "tasksreview", "implement",
-        "architecturereview", "qualityreview", "phasereview",
-      ],
-      variant: "discovery-rebuild",
-    },
-    "rebuildcheck:CONTINUE": {
-      pattern: "\\[VERDICT: CONTINUE\\]",
-      action: "pause",
-      variant: "discovery-continue",
-      pauseReason: "CONTINUE verdict",
-    },
   },
 };
 
@@ -264,8 +292,7 @@ export const BUILTIN_FLOWS: Record<string, FlowDefinition> = {
   feature: FEATURE_FLOW,
   bugfix: BUGFIX_FLOW,
   roadmap: ROADMAP_FLOW,
-  "discovery-init": DISCOVERY_INIT_FLOW,
-  "discovery-rebuild": DISCOVERY_REBUILD_FLOW,
+  exploration: EXPLORATION_FLOW,
   investigation: INVESTIGATION_FLOW,
 };
 

@@ -23,14 +23,15 @@ describe("--list-flows", () => {
     try {
       const result = runListFlows(tmpDir);
       expect(result.errors).toHaveLength(0);
-      expect(result.flows.length).toBeGreaterThanOrEqual(6);
+      expect(result.flows.length).toBeGreaterThanOrEqual(5);
       const names = result.flows.map(f => f.name);
       expect(names).toContain("feature");
       expect(names).toContain("bugfix");
       expect(names).toContain("roadmap");
-      expect(names).toContain("discovery-init");
-      expect(names).toContain("discovery-rebuild");
+      expect(names).toContain("exploration");
       expect(names).toContain("investigation");
+      expect(names).not.toContain("discovery-init");
+      expect(names).not.toContain("discovery-rebuild");
       // 全て builtin: true
       for (const f of result.flows) {
         expect(f.builtin).toBe(true);

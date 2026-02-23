@@ -79,6 +79,61 @@ describe("validateFlowDefinition", () => {
     expect(valid).toBe(true);
     expect(errors).toHaveLength(0);
   });
+
+  it("有効な userGates を受け入れる", () => {
+    const { valid, errors } = validateFlowDefinition("test", {
+      steps: ["discovery"],
+      userGates: {
+        discovery: {
+          message: "次のステップを選択",
+          options: [
+            { label: "ロードマップ", conditionalKey: "discovery:ROADMAP" },
+            { label: "終了", conditionalKey: "discovery:DONE" },
+          ],
+        },
+      },
+    });
+    expect(valid).toBe(true);
+    expect(errors).toHaveLength(0);
+  });
+
+  it("userGates が object でない場合を拒否する", () => {
+    const { valid, errors } = validateFlowDefinition("test", {
+      steps: ["a"],
+      userGates: "invalid",
+    });
+    expect(valid).toBe(false);
+    expect(errors[0]).toContain("must be an object");
+  });
+
+  it("userGates の option に label がない場合を拒否する", () => {
+    const { valid, errors } = validateFlowDefinition("test", {
+      steps: ["a"],
+      userGates: {
+        a: {
+          message: "msg",
+          options: [{ conditionalKey: "a:X" }],
+        },
+      },
+    });
+    expect(valid).toBe(false);
+    expect(errors.some((e: string) => e.includes("label"))).toBe(true);
+  });
+
+  it("userGates と conditionals の排他チェック", () => {
+    const { valid, errors } = validateFlowDefinition("test", {
+      steps: ["a"],
+      conditionals: ["a"],
+      userGates: {
+        a: {
+          message: "msg",
+          options: [{ label: "x", conditionalKey: "a:X" }],
+        },
+      },
+    });
+    expect(valid).toBe(false);
+    expect(errors.some((e: string) => e.includes("mutually exclusive"))).toBe(true);
+  });
 });
 
 // --- loadCustomFlows ---

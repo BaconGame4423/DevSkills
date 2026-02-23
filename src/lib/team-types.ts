@@ -64,6 +64,8 @@ export interface UserGateAction {
   step: string;
   message: string;
   options?: string[];
+  /** userGates: conditionalKey へのマッピング付き選択肢 */
+  gateOptions?: { label: string; conditionalKey: string }[];
 }
 
 /** パイプライン完了 */

@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import { computeNextInstruction, type ComputeContext } from "../lib/team-state-machine.js";
-import { FEATURE_FLOW, BUGFIX_FLOW } from "../lib/flow-definitions.js";
+import { FEATURE_FLOW, BUGFIX_FLOW, EXPLORATION_FLOW } from "../lib/flow-definitions.js";
 import type { PipelineState } from "../lib/types.js";
 
 // --- ヘルパー ---
@@ -228,6 +228,43 @@ describe("computeNextInstruction", () => {
       expect(action.action).toBe("user_gate");
       if (action.action === "user_gate") {
         expect(action.message).toBe("Pipeline paused");
+      }
+    });
+
+    it("awaiting-approval + user-gate で gateOptions 付き user_gate を返す", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          flow: "exploration",
+          status: "awaiting-approval",
+          pendingApproval: { type: "user-gate", step: "discovery" },
+        }),
+        flowDef: EXPLORATION_FLOW,
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("user_gate");
+      if (action.action === "user_gate") {
+        expect(action.step).toBe("discovery");
+        expect(action.message).toContain("探索が完了しました");
+        expect(action.gateOptions).toBeDefined();
+        expect(action.gateOptions).toHaveLength(3);
+        expect(action.gateOptions![0]!.conditionalKey).toBe("discovery:ROADMAP");
+        expect(action.options).toHaveLength(3);
+      }
+    });
+
+    it("awaiting-approval + user-gate で flowDef に gate がない場合は通常 approval", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          status: "awaiting-approval",
+          pendingApproval: { type: "user-gate", step: "nonexistent" },
+        }),
+        flowDef: FEATURE_FLOW,
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("user_gate");
+      if (action.action === "user_gate") {
+        expect(action.gateOptions).toBeUndefined();
+        expect(action.options).toContain("approve");
       }
     });
   });

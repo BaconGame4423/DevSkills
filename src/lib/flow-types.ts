@@ -41,6 +41,21 @@ export interface FlowDefinition {
   teamConfig?: Record<string, StepTeamConfig>;
   /** "step:OUTCOME" → 分岐定義 */
   conditionalBranches?: Record<string, ConditionalBranch>;
+  /** step → ユーザー選択ゲート（conditionals とは排他） */
+  userGates?: Record<string, UserGateDefinition>;
+}
+
+// --- User Gate 型 ---
+
+/** ステップ完了後にユーザーに提示する選択肢ゲート */
+export interface UserGateDefinition {
+  message: string;
+  options: UserGateOption[];
+}
+
+export interface UserGateOption {
+  label: string;
+  conditionalKey: string;
 }
 
 // --- Agent Teams 型 ---

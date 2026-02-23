@@ -54,7 +54,7 @@ Claude Code のチャット内からスラッシュコマンドで各ステッ�
 
 ```bash
 # 探索フロー（推奨: まず作って学ぶ）
-/poor-dev "認証の仕組みをプロトタイプしたい"     # → 探索フローへ
+/poor-dev "認証の仕組みをプロトタイプしたい"     # → 探索(exploration)フローへ
 
 # 機能開発
 /poor-dev "ユーザー認証機能を追加する"           # → 機能開発フローへ
@@ -89,7 +89,10 @@ Claude Code のチャット内からスラッシュコマンドで各ステッ�
 
 ### 探索（スクラップ＆ビルド）
 
-`discovery` → プロトタイプ作成 → `rebuildcheck`（4 シグナル分析で CONTINUE/REBUILD 判定）→ `harvest`（知見抽出）→ `plan` 以降の構造化フローに合流
+`discovery` → ユーザー選択:
+- **ロードマップを作成** → `concept` → `goals` → `milestones` → `roadmap`
+- **プロトタイプを評価** → `rebuildcheck`（4 シグナル分析で CONTINUE/REBUILD 判定）→ `harvest`（知見抽出）→ `plan` 以降の構造化フローに合流
+- **探索を終了** → 完了
 
 ### ロードマップ
 

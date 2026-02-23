@@ -18,8 +18,7 @@ export type PipelineFlow =
   | "feature"
   | "bugfix"
   | "roadmap"
-  | "discovery-init"
-  | "discovery-rebuild"
+  | "exploration"
   | "investigation";
 
 export interface PendingApproval {

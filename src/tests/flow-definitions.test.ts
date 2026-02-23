@@ -10,8 +10,7 @@ import {
   FEATURE_FLOW,
   BUGFIX_FLOW,
   ROADMAP_FLOW,
-  DISCOVERY_INIT_FLOW,
-  DISCOVERY_REBUILD_FLOW,
+  EXPLORATION_FLOW,
   INVESTIGATION_FLOW,
   getFlowDefinition,
 } from "../lib/flow-definitions.js";
@@ -22,10 +21,10 @@ describe("BUILTIN_FLOWS registry", () => {
     expect(Object.keys(BUILTIN_FLOWS)).toEqual(
       expect.arrayContaining([
         "feature", "bugfix", "roadmap",
-        "discovery-init", "discovery-rebuild", "investigation",
+        "exploration", "investigation",
       ])
     );
-    expect(Object.keys(BUILTIN_FLOWS)).toHaveLength(6);
+    expect(Object.keys(BUILTIN_FLOWS)).toHaveLength(5);
   });
 
   it("各フローの steps が非空配列", () => {
@@ -159,19 +158,75 @@ describe("BUGFIX_FLOW", () => {
   });
 });
 
-describe("DISCOVERY_REBUILD_FLOW", () => {
+describe("EXPLORATION_FLOW", () => {
+  it("steps が discovery のみ", () => {
+    expect(EXPLORATION_FLOW.steps).toEqual(["discovery"]);
+  });
+
   it("conditionals に rebuildcheck が含まれる", () => {
-    expect(DISCOVERY_REBUILD_FLOW.conditionals).toContain("rebuildcheck");
+    expect(EXPLORATION_FLOW.conditionals).toContain("rebuildcheck");
   });
 
-  it("REBUILD の pipeline に harvest が含まれる", () => {
-    const branch = DISCOVERY_REBUILD_FLOW.conditionalBranches!["rebuildcheck:REBUILD"]!;
-    expect(branch.pipeline).toContain("harvest");
+  it("userGates に discovery が定義されている", () => {
+    expect(EXPLORATION_FLOW.userGates).toBeDefined();
+    expect(EXPLORATION_FLOW.userGates!["discovery"]).toBeDefined();
+    const gate = EXPLORATION_FLOW.userGates!["discovery"]!;
+    expect(gate.message).toBeTruthy();
+    expect(gate.options).toHaveLength(3);
   });
 
-  it("CONTINUE は pause アクション", () => {
-    const branch = DISCOVERY_REBUILD_FLOW.conditionalBranches!["rebuildcheck:CONTINUE"]!;
-    expect(branch.action).toBe("pause");
+  it("userGates の各オプションに label と conditionalKey がある", () => {
+    const gate = EXPLORATION_FLOW.userGates!["discovery"]!;
+    for (const opt of gate.options) {
+      expect(typeof opt.label).toBe("string");
+      expect(typeof opt.conditionalKey).toBe("string");
+      expect(opt.conditionalKey).toMatch(/^discovery:/);
+    }
+  });
+
+  it("userGates と conditionals が排他的（discovery は userGates のみ）", () => {
+    const condSet = new Set(EXPLORATION_FLOW.conditionals ?? []);
+    const gateSteps = Object.keys(EXPLORATION_FLOW.userGates ?? {});
+    for (const step of gateSteps) {
+      expect(condSet.has(step)).toBe(false);
+    }
+  });
+
+  it("conditionalBranches に user gate 分岐が定義されている", () => {
+    const branches = EXPLORATION_FLOW.conditionalBranches!;
+    expect(branches["discovery:ROADMAP"]).toBeDefined();
+    expect(branches["discovery:ROADMAP"]!.action).toBe("replace-pipeline");
+    expect(branches["discovery:ROADMAP"]!.pipeline).toContain("concept");
+    expect(branches["discovery:ROADMAP"]!.pipeline).toContain("roadmap");
+
+    expect(branches["discovery:EVALUATE"]).toBeDefined();
+    expect(branches["discovery:EVALUATE"]!.action).toBe("replace-pipeline");
+    expect(branches["discovery:EVALUATE"]!.pipeline).toContain("rebuildcheck");
+
+    expect(branches["discovery:DONE"]).toBeDefined();
+    expect(branches["discovery:DONE"]!.action).toBe("pause");
+  });
+
+  it("conditionalBranches に output-based 分岐 (rebuildcheck) が定義されている", () => {
+    const branches = EXPLORATION_FLOW.conditionalBranches!;
+    expect(branches["rebuildcheck:REBUILD"]).toBeDefined();
+    expect(branches["rebuildcheck:REBUILD"]!.pipeline).toContain("harvest");
+
+    expect(branches["rebuildcheck:CONTINUE"]).toBeDefined();
+    expect(branches["rebuildcheck:CONTINUE"]!.action).toBe("pause");
+  });
+
+  it("teamConfig に全関連ステップの設定がある", () => {
+    const tc = EXPLORATION_FLOW.teamConfig!;
+    const requiredSteps = [
+      "discovery", "concept", "goals", "milestones", "roadmap",
+      "rebuildcheck", "harvest", "plan", "planreview",
+      "tasks", "tasksreview", "implement",
+      "architecturereview", "qualityreview", "phasereview",
+    ];
+    for (const step of requiredSteps) {
+      expect(tc[step], step).toBeDefined();
+    }
   });
 });
 
