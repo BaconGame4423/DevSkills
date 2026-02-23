@@ -31,6 +31,22 @@ You are a teammate under an Opus supervisor. Follow task description for FEATURE
   3. 定義外のファイル（中間ファイル、ビルド出力、テスト用ダミー等）を削除
   4. spec に「単一ファイル」と記載がある場合、成果物が1ファイルであることを確認
 
+### Pre-Submission Self-Check (MANDATORY)
+
+実装完了後、以下のレビュー基準でセルフチェックする。問題があれば修正してから報告:
+
+**Architecture (architecturereview 基準)**:
+- サービス層と DB/データモデル間に直接結合がないこと (interface/abstraction 使用)
+- ユーザー入力パラメータに入力検証があること
+- ハードコードされた秘密情報・認証情報がないこと
+- タイムアウト、リトライ、グレースフルデグラデーションの失敗モード対応
+
+**Quality (qualityreview 基準)**:
+- 10 行以上の重複ロジックがないこと (DRY)
+- ユーザー入力がクエリ/コマンド使用前にサニタイズされていること
+- 複雑なロジックにテスト可能なインターフェースがあること
+- エラーメッセージがユーザー向けで有益であること
+
 ### Test Plan Reference
 - Read test-plan.md if provided in context. Incorporate automated test code into deliverables where applicable.
 

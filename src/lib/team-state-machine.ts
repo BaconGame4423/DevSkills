@@ -16,6 +16,7 @@ import type {
   ActionMeta,
   BashDispatchAction,
   BashReviewDispatchAction,
+  BashParallelDispatchAction,
 } from "./team-types.js";
 import {
   buildBashDispatchPrompt,
@@ -109,6 +110,29 @@ export function computeNextInstruction(
     };
   }
 
+  // 並列グループチェック: nextStep が parallelGroups に属し、
+  // グループ内の全ステップが未完了 + pipeline に含まれる + prerequisites 充足 + teamConfig あり
+  // → bash_parallel_dispatch を返す
+  const parallelGroup = findParallelGroup(nextStep, completedSet, pipeline, fd, flowDef, fs);
+  if (parallelGroup) {
+    const parallelActions: (BashDispatchAction | BashReviewDispatchAction)[] = [];
+    for (const step of parallelGroup) {
+      const tc = flowDef.teamConfig?.[step];
+      if (!tc) continue;
+      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs));
+    }
+    const meta: ActionMeta = {
+      recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
+      step_complete_cmd: `node .poor-dev/dist/bin/poor-dev-next.js --steps-complete ${parallelGroup.join(",")} --state-dir ${featureDir} --project-dir ${projectDir}`,
+    };
+    const parallelAction: BashParallelDispatchAction = {
+      action: "bash_parallel_dispatch",
+      steps: parallelActions,
+      _meta: meta,
+    };
+    return parallelAction;
+  }
+
   // 前提チェック
   const prereqError = checkPrerequisites(nextStep, fd, flowDef, fs);
   if (prereqError) {
@@ -143,6 +167,39 @@ export function computeNextInstruction(
 }
 
 // --- 内部ヘルパー ---
+
+/**
+ * nextStep が parallelGroups のグループに属し、
+ * グループ内の全ステップが条件を満たす場合にグループを返す。
+ * 一部完了済み等の場合は null → 従来の単一ステップ dispatch にフォールバック。
+ */
+function findParallelGroup(
+  nextStep: string,
+  completedSet: Set<string>,
+  pipeline: string[],
+  fd: string,
+  flowDef: FlowDefinition,
+  fs: Pick<FileSystem, "exists">
+): string[] | null {
+  if (!flowDef.parallelGroups) return null;
+
+  const pipelineSet = new Set(pipeline);
+
+  for (const group of flowDef.parallelGroups) {
+    if (!group.includes(nextStep)) continue;
+
+    // グループ内の全ステップが: (a) 未完了, (b) pipeline に含まれる, (c) prerequisites 充足, (d) teamConfig あり
+    const allReady = group.every(
+      (s) =>
+        !completedSet.has(s) &&
+        pipelineSet.has(s) &&
+        !checkPrerequisites(s, fd, flowDef, fs) &&
+        flowDef.teamConfig?.[s]
+    );
+    if (allReady) return group;
+  }
+  return null;
+}
 
 function checkPrerequisites(
   step: string,

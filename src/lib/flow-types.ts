@@ -43,6 +43,8 @@ export interface FlowDefinition {
   conditionalBranches?: Record<string, ConditionalBranch>;
   /** step → ユーザー選択ゲート（conditionals とは排他） */
   userGates?: Record<string, UserGateDefinition>;
+  /** 同時実行可能なステップグループ（各グループ内のステップは並列実行される） */
+  parallelGroups?: string[][];
 }
 
 // --- User Gate 型 ---

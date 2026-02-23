@@ -12,13 +12,14 @@
  */
 
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { NodeFileSystem } from "../lib/node-adapters.js";
 import { FilePipelineStateManager } from "../lib/pipeline-state.js";
 import { resolveFlow, mergeFlows } from "../lib/flow-loader.js";
 import { getFlowDefinition, BUILTIN_FLOWS } from "../lib/flow-definitions.js";
 import { computeNextInstruction } from "../lib/team-state-machine.js";
 import { parseReviewerOutputYaml, checkConvergence, processReviewCycle } from "../lib/team-review.js";
+import type { TeamAction, BashParallelDispatchAction } from "../lib/team-types.js";
 import type { PipelineState } from "../lib/types.js";
 import type { ReviewerOutput, ReviewCycleInput } from "../lib/team-review.js";
 
@@ -29,6 +30,7 @@ interface CliArgs {
   stateDir?: string;
   projectDir: string;
   stepComplete?: string;
+  stepsComplete?: string;
   setConditional?: string;
   gateResponse?: string;
   init: boolean;
@@ -38,6 +40,7 @@ interface CliArgs {
   reviewCycle?: string;
   tokenReport?: string;
   orchestratorJsonl?: string;
+  promptDir?: string;
   listFlows?: boolean;
 }
 
@@ -83,6 +86,12 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--review-cycle":
         args.reviewCycle = next();
+        break;
+      case "--steps-complete":
+        args.stepsComplete = next();
+        break;
+      case "--prompt-dir":
+        args.promptDir = next();
         break;
       case "--list-flows":
         args.listFlows = true;
@@ -131,6 +140,40 @@ function resolveConditionalBranch(
       break;
     case "continue":
       break;
+  }
+}
+
+// --- Prompt-to-File ---
+
+function writePromptsToFiles(action: TeamAction, promptDir: string): void {
+  mkdirSync(promptDir, { recursive: true });
+
+  if (action.action === "bash_dispatch") {
+    const filePath = path.join(promptDir, `${action.step}-prompt.txt`);
+    writeFileSync(filePath, action.prompt, "utf-8");
+    action.prompt = `-> ${filePath}`;
+  } else if (action.action === "bash_review_dispatch") {
+    const reviewPath = path.join(promptDir, `${action.step}-review-prompt.txt`);
+    const fixerPath = path.join(promptDir, `${action.step}-fixer-base-prompt.txt`);
+    writeFileSync(reviewPath, action.reviewPrompt, "utf-8");
+    writeFileSync(fixerPath, action.fixerBasePrompt, "utf-8");
+    action.reviewPrompt = `-> ${reviewPath}`;
+    action.fixerBasePrompt = `-> ${fixerPath}`;
+  } else if (action.action === "bash_parallel_dispatch") {
+    for (const sub of action.steps) {
+      if (sub.action === "bash_dispatch") {
+        const filePath = path.join(promptDir, `${sub.step}-prompt.txt`);
+        writeFileSync(filePath, sub.prompt, "utf-8");
+        sub.prompt = `-> ${filePath}`;
+      } else if (sub.action === "bash_review_dispatch") {
+        const reviewPath = path.join(promptDir, `${sub.step}-review-prompt.txt`);
+        const fixerPath = path.join(promptDir, `${sub.step}-fixer-base-prompt.txt`);
+        writeFileSync(reviewPath, sub.reviewPrompt, "utf-8");
+        writeFileSync(fixerPath, sub.fixerBasePrompt, "utf-8");
+        sub.reviewPrompt = `-> ${reviewPath}`;
+        sub.fixerBasePrompt = `-> ${fixerPath}`;
+      }
+    }
   }
 }
 
@@ -283,6 +326,42 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --steps-complete: 複数ステップ一括完了マーク (並列ディスパッチ用)
+  if (args.stepsComplete) {
+    if (!fs.exists(stateFile)) {
+      process.stderr.write(JSON.stringify({ error: "pipeline-state.json not found" }) + "\n");
+      process.exit(1);
+    }
+    const steps = args.stepsComplete.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const step of steps) {
+      stateManager.completeStep(stateFile, step);
+    }
+    process.stdout.write(JSON.stringify({ status: "steps_completed", steps }) + "\n");
+
+    // userGates チェック: 最終ステップのみ (中間ステップの gate は並列完了時に誤発火防止のためスキップ)
+    const lastStep = steps[steps.length - 1];
+    if (lastStep) {
+      const tmpState = stateManager.read(stateFile);
+      const tmpFlowDef = resolveFlow(tmpState.flow, projectDir, fs) ?? getFlowDefinition(tmpState.flow);
+      if (tmpFlowDef?.userGates?.[lastStep]) {
+        stateManager.setApproval(stateFile, "user-gate", lastStep);
+      }
+    }
+
+    // 完了後に次のアクションも返す
+    const state = stateManager.read(stateFile);
+    const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
+    if (flowDef) {
+      const featureDir = path.relative(projectDir, stateDir);
+      const action = computeNextInstruction(
+        { state, featureDir, projectDir, flowDef },
+        fs
+      );
+      process.stdout.write(JSON.stringify(action) + "\n");
+    }
+    return;
+  }
+
   // --gate-response: ユーザーゲート応答処理
   if (args.gateResponse) {
     if (!fs.exists(stateFile)) {
@@ -396,6 +475,11 @@ async function main(): Promise<void> {
     { state, featureDir, projectDir, flowDef },
     fs
   );
+
+  // --prompt-dir: prompt をファイルに書き出し、JSON の prompt フィールドを参照パスに置換
+  if (args.promptDir) {
+    writePromptsToFiles(action, args.promptDir);
+  }
 
   process.stdout.write(JSON.stringify(action) + "\n");
 }

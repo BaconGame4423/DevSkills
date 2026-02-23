@@ -36,7 +36,7 @@ const ARCH_REVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-arch-unified", writeAccess: false, maxTurns: 10 },
     { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 5,
+  maxReviewIterations: 3,
   reviewCommunication: "opus-mediated",
 };
 
@@ -46,7 +46,7 @@ const QUALITY_REVIEW_TEAM: StepTeamConfig = {
     { role: "reviewer-quality-unified", writeAccess: false, maxTurns: 10 },
     { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 5,
+  maxReviewIterations: 3,
   reviewCommunication: "opus-mediated",
 };
 
@@ -134,6 +134,7 @@ export const FEATURE_FLOW: FlowDefinition = {
     qualityreview: QUALITY_REVIEW_TEAM,
     phasereview: PHASE_REVIEW_TEAM,
   },
+  parallelGroups: [["testdesign", "architecturereview", "qualityreview"]],
   conditionalBranches: {},
 };
 

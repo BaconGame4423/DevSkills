@@ -373,6 +373,128 @@ describe("computeNextInstruction", () => {
     });
   });
 
+  describe("parallelGroups 並列ディスパッチ", () => {
+    it("全ステップ未完了 → bash_parallel_dispatch を返す", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_parallel_dispatch");
+      if (action.action === "bash_parallel_dispatch") {
+        expect(action.steps).toHaveLength(3);
+        const stepNames = action.steps.map((s) => s.step);
+        expect(stepNames).toContain("testdesign");
+        expect(stepNames).toContain("architecturereview");
+        expect(stepNames).toContain("qualityreview");
+        // testdesign は bash_dispatch、残り2つは bash_review_dispatch
+        const testdesignAction = action.steps.find((s) => s.step === "testdesign");
+        expect(testdesignAction?.action).toBe("bash_dispatch");
+        const archAction = action.steps.find((s) => s.step === "architecturereview");
+        expect(archAction?.action).toBe("bash_review_dispatch");
+        // _meta に steps-complete コマンドが含まれる
+        expect(action._meta).toBeDefined();
+        expect(action._meta!.step_complete_cmd).toContain("--steps-complete");
+        expect(action._meta!.step_complete_cmd).toContain("testdesign,architecturereview,qualityreview");
+      }
+    });
+
+    it("一部完了済み → 単一ステップ bash_review_dispatch にフォールバック", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement", "testdesign",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      // testdesign 完了済みなので parallelGroup 不成立 → 単一ステップ
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
+        expect(action.step).toBe("architecturereview");
+      }
+    });
+
+    it("parallelGroups 未定義のフロー → 従来の単一ステップ動作", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          flow: "bugfix",
+          pipeline: ["bugfix"],
+          completed: [],
+        }),
+        flowDef: BUGFIX_FLOW,
+      });
+      const fs = mockFs({});
+      const action = computeNextInstruction(ctx, fs);
+
+      // BUGFIX_FLOW には parallelGroups がない → 従来動作
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.step).toBe("bugfix");
+      }
+    });
+
+    it("動的 pipeline で group ステップが欠落 → フォールバック", () => {
+      // replace-pipeline で testdesign が欠落したケース
+      const ctx = makeCtx({
+        state: makeState({
+          pipeline: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement",
+            "architecturereview", "qualityreview", "phasereview",
+          ],
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      // testdesign が pipeline にないので parallelGroup 不成立 → 単一ステップ
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
+        expect(action.step).toBe("architecturereview");
+      }
+    });
+
+    it("並列グループの _meta.step_complete_cmd にカンマ区切りステップ名が含まれる", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_parallel_dispatch");
+      if (action.action === "bash_parallel_dispatch") {
+        expect(action._meta!.recovery_hint).toContain("poor-dev-next.js");
+      }
+    });
+  });
+
   describe("done で artifacts を収集", () => {
     it("存在する全 artifacts を収集する", () => {
       const ctx = makeCtx({

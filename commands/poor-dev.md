@@ -86,10 +86,11 @@ feature ディレクトリ作成 → discussion-summary.md 作成 → 即座に 
 
 After Phase 0, execute the pipeline via TS helper:
 
-1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
+1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`
 2. Parse the JSON output and execute the action:
    - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
    - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)
+   - `bash_parallel_dispatch` → 並列 Bash Dispatch (see §Bash Parallel Dispatch below)
    - `user_gate` → See §User Gates below
    - `done` → Generate cost report + report completion to user (see §Cost Report below)
 3. After action completes: see §Conditional Steps below
@@ -158,8 +159,8 @@ When the TS helper returns `done`, generate a cost report before reporting compl
 For `bash_dispatch` actions. Team lifecycle なしで glm -p (CLI headless mode) を直接呼び出す。
 
 ### 手順
-1. プロンプトをファイルに書き出し: `<feature-dir>/.pd-dispatch/<step>-prompt.txt`
-2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ)
+1. プロンプトファイル確認: `--prompt-dir` で TS helper が `<feature-dir>/.pd-dispatch/<step>-prompt.txt` を事前書き出し済み
+2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ、TS helper が作成済みの場合スキップ)
 3. glm -p 実行:
    ```bash
    CLAUDECODE= timeout 600 glm -p "$(cat <feature-dir>/.pd-dispatch/<step>-prompt.txt)" \
@@ -231,6 +232,57 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
 ### 一時ファイル管理
 - 一時ファイルは `<feature-dir>/.pd-dispatch/` に保存
 - パイプライン完了後に `.pd-dispatch/` を削除
+
+## Bash Parallel Dispatch
+
+For `bash_parallel_dispatch` actions. `steps` 配列内の各ステップを並列実行する。
+
+### 2段階実行モデル (reviewer 並列 → fixer 逐次)
+
+**Phase A: 全ステップの reviewer/worker を並列起動**
+
+`steps` 配列を走査し、各ステップを並列で実行:
+- `bash_dispatch` → 通常の glm -p worker 実行 (§Bash Dispatch と同じ)
+- `bash_review_dispatch` → reviewer のみを glm -p で実行 (fixer はまだ実行しない)
+
+各プロセスを PID/バックグラウンドジョブで管理し、個別に wait:
+```bash
+# 例: 3 ステップを並列実行
+CLAUDECODE= timeout 600 glm -p "$(cat <step1>-prompt.txt)" ... > <step1>-result.json 2>&1 &
+PID1=$!
+CLAUDECODE= timeout 600 glm -p "$(cat <step2>-review-prompt.txt)" ... > <step2>-reviewer-result.json 2>&1 &
+PID2=$!
+CLAUDECODE= timeout 600 glm -p "$(cat <step3>-review-prompt.txt)" ... > <step3>-reviewer-result.json 2>&1 &
+PID3=$!
+wait $PID1 $PID2 $PID3
+```
+
+プロンプトファイルは `--prompt-dir` で TS helper が事前書き出し済み。ファイル名はステップ名プレフィックスで衝突回避。
+glm -p の timeout は 1 プロセスあたり 600s。
+
+**Phase B: 各 review-loop の fixer を逐次処理**
+
+Phase A の reviewer 結果を使い、各 `bash_review_dispatch` ステップの review-cycle を逐次実行:
+```
+for step in [review steps with issues]:
+  --review-cycle で parse + convergence check
+  converged? → commit + next
+  not converged? → fixer dispatch (逐次) → 再 reviewer → 収束まで
+```
+fixer は書き込みを行うため、逐次実行して git 競合を回避する。
+
+**Phase C: 全ステップ完了マーク**
+```bash
+node .poor-dev/dist/bin/poor-dev-next.js --steps-complete testdesign,architecturereview,qualityreview --state-dir <DIR> --project-dir .
+```
+`_meta.step_complete_cmd` にこのコマンドが格納されている。
+
+### bash_dispatch ステップの処理
+- 通常の Bash Dispatch と同じ手順。結果確認 + artifact commit。
+
+### bash_review_dispatch ステップの処理
+- Phase A で reviewer のみ並列実行済み → reviewer 結果をそのまま `--review-cycle` に渡す
+- 以降は §Bash Review Dispatch の Step 2 以降と同じ
 
 ## Error Handling
 

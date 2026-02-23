@@ -11,6 +11,7 @@
 export type TeamAction =
   | BashDispatchAction
   | BashReviewDispatchAction
+  | BashParallelDispatchAction
   | UserGateAction
   | DoneAction;
 
@@ -55,6 +56,13 @@ export interface BashReviewDispatchAction {
   fixerBasePrompt: string;
   targetFiles: string[];
   maxIterations: number;
+  _meta?: ActionMeta;
+}
+
+/** 並列ステップの Bash dispatch */
+export interface BashParallelDispatchAction {
+  action: "bash_parallel_dispatch";
+  steps: (BashDispatchAction | BashReviewDispatchAction)[];
   _meta?: ActionMeta;
 }
 
