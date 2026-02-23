@@ -10,6 +10,8 @@
 
 /** 統一フロー定義。JSON シリアライズ可能。 */
 export interface FlowDefinition {
+  /** フローの説明（UI 表示用、任意） */
+  description?: string;
   // --- Issue #3/#4 コア ---
   /** ステップ名の順序リスト */
   steps: string[];

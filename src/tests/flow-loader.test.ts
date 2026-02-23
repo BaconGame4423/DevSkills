@@ -70,6 +70,15 @@ describe("validateFlowDefinition", () => {
     const { valid } = validateFlowDefinition("test", { steps: ["a"] });
     expect(valid).toBe(true);
   });
+
+  it("description フィールドを持つ FlowDefinition を受け入れる", () => {
+    const { valid, errors } = validateFlowDefinition("test", {
+      steps: ["a", "b"],
+      description: "テストフロー",
+    });
+    expect(valid).toBe(true);
+    expect(errors).toHaveLength(0);
+  });
 });
 
 // --- loadCustomFlows ---
@@ -147,6 +156,23 @@ describe("mergeFlows", () => {
     const { flows } = mergeFlows("/proj", fs);
     expect(flows["my-flow"]).toBeDefined();
     expect(flows["feature"]).toBeDefined(); // ビルトインも残る
+  });
+
+  it("カスタムフローの description がマージ後も保持される", () => {
+    const fs = mockFs({
+      "/proj/.poor-dev/flows.json": JSON.stringify({
+        "my-flow": { steps: ["a", "b"], description: "カスタムワークフロー" },
+      }),
+    });
+    const { flows } = mergeFlows("/proj", fs);
+    expect(flows["my-flow"]!.description).toBe("カスタムワークフロー");
+  });
+
+  it("ビルトインフローの description が存在する", () => {
+    const fs = mockFs({});
+    const { flows } = mergeFlows("/proj", fs);
+    expect(flows["feature"]!.description).toBeDefined();
+    expect(typeof flows["feature"]!.description).toBe("string");
   });
 });
 

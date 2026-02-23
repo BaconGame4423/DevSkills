@@ -18,7 +18,12 @@ This returns the current pipeline state and next action as JSON. Resume the Core
 
 Before starting the pipeline:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
-1. Classify the user's request into a flow type (feature, bugfix, investigation, roadmap, discovery)
+1. List available flows:
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --list-flows --project-dir .
+   ```
+   Parse the JSON output. Classify the user's request into one of the available flow names.
+   If custom flows exist, consider them in classification alongside built-in flows.
 2. Discuss scope and requirements with the user via AskUserQuestion:
    - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
    - 技術スタック: 必要なら選択肢を提示

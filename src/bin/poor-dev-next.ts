@@ -15,8 +15,8 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { NodeFileSystem } from "../lib/node-adapters.js";
 import { FilePipelineStateManager } from "../lib/pipeline-state.js";
-import { resolveFlow } from "../lib/flow-loader.js";
-import { getFlowDefinition } from "../lib/flow-definitions.js";
+import { resolveFlow, mergeFlows } from "../lib/flow-loader.js";
+import { getFlowDefinition, BUILTIN_FLOWS } from "../lib/flow-definitions.js";
 import { computeNextInstruction } from "../lib/team-state-machine.js";
 import { parseReviewerOutputYaml, checkConvergence, processReviewCycle } from "../lib/team-review.js";
 import type { PipelineState } from "../lib/types.js";
@@ -37,6 +37,7 @@ interface CliArgs {
   checkConvergence?: string;
   reviewCycle?: string;
   tokenReport?: string;
+  listFlows?: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -81,6 +82,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--review-cycle":
         args.reviewCycle = next();
+        break;
+      case "--list-flows":
+        args.listFlows = true;
         break;
       case "--token-report":
         args.tokenReport = next();
@@ -130,6 +134,21 @@ function resolveConditionalBranch(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
+
+  // --list-flows: 利用可能なフロー一覧を返す
+  if (args.listFlows) {
+    const fs = new NodeFileSystem();
+    const projectDir = path.resolve(args.projectDir);
+    const { flows, errors } = mergeFlows(projectDir, fs);
+    const list = Object.entries(flows).map(([name, def]) => ({
+      name,
+      description: def.description ?? null,
+      steps: def.steps,
+      builtin: name in BUILTIN_FLOWS,
+    }));
+    process.stdout.write(JSON.stringify({ flows: list, errors }) + "\n");
+    return;
+  }
 
   // --token-report: worker 結果集約 + JSONL 分析
   if (args.tokenReport) {

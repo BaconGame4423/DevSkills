@@ -63,6 +63,7 @@ const PHASE_REVIEW_TEAM: StepTeamConfig = {
 // --- Feature Flow ---
 
 export const FEATURE_FLOW: FlowDefinition = {
+  description: "仕様→計画→実装→レビューの10ステップ",
   steps: [
     "specify", "plan", "planreview",
     "tasks", "tasksreview", "implement", "testdesign",
@@ -139,6 +140,7 @@ export const FEATURE_FLOW: FlowDefinition = {
 // --- Bugfix Flow ---
 
 export const BUGFIX_FLOW: FlowDefinition = {
+  description: "調査→分類→修正のバグ修正フロー",
   steps: ["bugfix"],
   conditionals: ["bugfix"],
   context: {
@@ -182,6 +184,7 @@ export const BUGFIX_FLOW: FlowDefinition = {
 // --- Roadmap Flow ---
 
 export const ROADMAP_FLOW: FlowDefinition = {
+  description: "コンセプト→ゴール→マイルストーン→ロードマップの4ステップ",
   steps: ["concept", "goals", "milestones", "roadmap"],
   context: {
     concept: { spec: "spec.md" },
@@ -200,6 +203,7 @@ export const ROADMAP_FLOW: FlowDefinition = {
 // --- Discovery Init Flow ---
 
 export const DISCOVERY_INIT_FLOW: FlowDefinition = {
+  description: "まず作って学ぶ探索フロー",
   steps: ["discovery"],
   teamConfig: {
     discovery: { type: "team", teammates: [{ role: "worker-discovery" }] },
@@ -209,6 +213,7 @@ export const DISCOVERY_INIT_FLOW: FlowDefinition = {
 // --- Discovery Rebuild Flow ---
 
 export const DISCOVERY_REBUILD_FLOW: FlowDefinition = {
+  description: "プロトタイプ評価→再構築判定",
   steps: ["rebuildcheck"],
   conditionals: ["rebuildcheck"],
   teamConfig: {
@@ -246,6 +251,7 @@ export const DISCOVERY_REBUILD_FLOW: FlowDefinition = {
 // --- Investigation Flow ---
 
 export const INVESTIGATION_FLOW: FlowDefinition = {
+  description: "問題調査・分析フロー",
   steps: ["investigate"],
   teamConfig: {
     investigate: { type: "team", teammates: [{ role: "worker-investigate" }] },
