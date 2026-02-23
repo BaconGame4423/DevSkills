@@ -38,11 +38,13 @@ Before starting the pipeline:
    ```
    Parse the JSON output. Classify the user's request into one of the available flow names.
    If custom flows exist, consider them in classification alongside built-in flows.
-3. Discuss scope and requirements with the user via AskUserQuestion:
-   - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
-   - 技術スタック: 必要なら選択肢を提示
-   - 質問が不要なほど要件が明確な場合はスキップ可（ただし ExitPlanMode は必須）
-4. Write discussion results to the plan file:
+3. **壁打ちフェーズ** (Plan ファイル書き込み禁止):
+   - ユーザーと自由に対話してスコープ・要件・技術選択を議論する
+   - AskUserQuestion も使えるが、テキスト出力での自由対話が基本
+   - **Plan ファイルへの書き込みは禁止** — 議論が固まるまで形式化しない
+   - 議論が十分と判断したら「まとめて Plan に書きましょうか？」と確認する
+   - ユーザーが了承するまで壁打ちを継続
+4. **ユーザー許可後**: Write discussion results to the plan file:
    - **Selected flow**: フロー名 (例: feature, bugfix, roadmap)
    - **Scope summary**: 実現したいことの要約 (2-3 文)
    - **Requirements**: ユーザーとの議論で確定した要件・制約のリスト
@@ -58,6 +60,7 @@ Before starting the pipeline:
 - ファイル作成 (Write/Edit) 禁止
 - ディレクトリ作成 (mkdir) 禁止
 - 変更系 Bash コマンド禁止
+- Plan ファイルへの書き込みはユーザーの「まとめて」許可が出るまで禁止
 - Read-only Bash (`node ... --list-flows`, `ls`, `cat` 等) は許可
 
 ### Plan Mode 終了後 (ユーザー承認後)
