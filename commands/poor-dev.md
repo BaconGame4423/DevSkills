@@ -1,5 +1,6 @@
 ---
 description: "Bash Dispatch orchestrator for all development flows"
+model: opusplan
 ---
 
 # poor-dev — Bash Dispatch Orchestrator
@@ -13,6 +14,10 @@ If context is unclear after compaction, run:
 node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir .
 ```
 This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
+
+### モデル設定
+このSkillは `opusplan` モデルで動作します。
+Phase 0 (Plan Mode) は Opus、Core Loop は Sonnet で自動切替されます。
 
 ## Phase 0: Discussion (Plan Mode)
 
@@ -83,7 +88,7 @@ After Phase 0, execute the pipeline via TS helper:
    - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
    - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)
    - `user_gate` → See §User Gates below
-   - `done` → Report completion to user
+   - `done` → Generate cost report + report completion to user (see §Cost Report below)
 3. After action completes: see §Conditional Steps below
 4. Return to step 1
 
@@ -125,6 +130,25 @@ When the TS helper returns `user_gate`:
 4. Parse the returned action and continue the Core Loop
 
 注: `gateOptions` 付きの user_gate では出力マーカースキャンは行わない。
+
+## Cost Report
+
+When the TS helper returns `done`, generate a cost report before reporting completion:
+
+1. Find the latest orchestrator JSONL:
+   ```bash
+   JSONL_PATH=$(ls -t ~/.claude/projects/-$(pwd | tr / -)/*.jsonl 2>/dev/null | head -1)
+   ```
+2. Generate the integrated report:
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --token-report <feature-dir>/.pd-dispatch --orchestrator-jsonl "$JSONL_PATH" > <feature-dir>/cost-report.json
+   ```
+   - If JSONL is not found, omit `--orchestrator-jsonl` (worker-only report)
+3. Display cost summary to the user:
+   - Orchestrator cost (model, tokens, USD)
+   - Worker cost (total USD, turns)
+   - Total cost (orchestrator + worker)
+4. Commit `cost-report.json` with the final artifacts
 
 ## Bash Dispatch (glm -p)
 

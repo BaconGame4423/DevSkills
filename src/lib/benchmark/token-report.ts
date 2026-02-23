@@ -52,12 +52,14 @@ interface TokenReport {
   summary: {
     total_orchestrator_cost_usd: number;
     total_worker_cost_usd: number;
+    total_cost_usd: number;
     total_worker_turns: number;
     total_duration_ms: number;
+    pricing_note: string;
   };
 }
 
-// --- Opus 4.6 pricing ---
+// --- 料金定数 ---
 
 const OPUS_PRICING = {
   input: 5 / 1_000_000,
@@ -66,13 +68,20 @@ const OPUS_PRICING = {
   cache_read: 0.50 / 1_000_000,
 };
 
+const SONNET_PRICING = {
+  input: 3 / 1_000_000,
+  output: 15 / 1_000_000,
+  cache_create: 3.75 / 1_000_000,
+  cache_read: 0.30 / 1_000_000,
+};
+
 // --- メイン ---
 
 /**
  * dispatchDir 内の *-result.json を集約し、
  * オプションで JSONL を分析して TokenReport を生成する。
  */
-export function generateTokenReport(dispatchDir: string): TokenReport {
+export function generateTokenReport(dispatchDir: string, orchestratorJsonlPath?: string): TokenReport {
   const workers: WorkerEntry[] = [];
   let totalWorkerDuration = 0;
   let totalWorkerTurns = 0;
@@ -114,22 +123,30 @@ export function generateTokenReport(dispatchDir: string): TokenReport {
     }
   }
 
+  const orchestrator = orchestratorJsonlPath
+    ? analyzeOrchestratorJsonl(orchestratorJsonlPath)
+    : {
+        model: "opus",
+        source: "jsonl_post_analysis",
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_create_tokens: 0,
+        estimated_cost_usd: 0,
+      };
+
+  const totalCost = orchestrator.estimated_cost_usd + totalWorkerCost;
+
   return {
-    orchestrator: {
-      model: "opus",
-      source: "jsonl_post_analysis",
-      input_tokens: 0,
-      output_tokens: 0,
-      cache_read_tokens: 0,
-      cache_create_tokens: 0,
-      estimated_cost_usd: 0,
-    },
+    orchestrator,
     workers,
     summary: {
-      total_orchestrator_cost_usd: 0,
+      total_orchestrator_cost_usd: orchestrator.estimated_cost_usd,
       total_worker_cost_usd: totalWorkerCost,
+      total_cost_usd: Math.round(totalCost * 100) / 100,
       total_worker_turns: totalWorkerTurns,
       total_duration_ms: totalWorkerDuration,
+      pricing_note: "Worker cost is Claude Code estimate (Sonnet rates). Actual GLM-5 cost depends on Coding Plan subscription.",
     },
   };
 }
@@ -137,11 +154,22 @@ export function generateTokenReport(dispatchDir: string): TokenReport {
 /**
  * JSONL ファイルからオーケストレーターのトークン使用量を分析する。
  */
+/**
+ * モデル名からプライシングテーブルを選択する。
+ * opusplan は Phase 0 = Opus, Core Loop = Sonnet の混合だが、
+ * JSONL にはモデル別のブレイクダウンがないためコスト推定は Opus ベースとする。
+ */
+function getPricingForModel(model: string): typeof OPUS_PRICING {
+  if (model.includes("sonnet")) return SONNET_PRICING;
+  return OPUS_PRICING; // opus, opusplan → Opus 料金 (保守的な上限推定)
+}
+
 export function analyzeOrchestratorJsonl(jsonlPath: string): TokenReport["orchestrator"] {
   let inputTokens = 0;
   let outputTokens = 0;
   let cacheReadTokens = 0;
   let cacheCreateTokens = 0;
+  let detectedModel = "opus";
 
   if (!existsSync(jsonlPath)) {
     return {
@@ -162,6 +190,7 @@ export function analyzeOrchestratorJsonl(jsonlPath: string): TokenReport["orches
       const entry = JSON.parse(line) as {
         type?: string;
         message?: {
+          model?: string;
           usage?: {
             input_tokens?: number;
             output_tokens?: number;
@@ -176,20 +205,28 @@ export function analyzeOrchestratorJsonl(jsonlPath: string): TokenReport["orches
         outputTokens += u.output_tokens ?? 0;
         cacheReadTokens += u.cache_read_input_tokens ?? 0;
         cacheCreateTokens += u.cache_creation_input_tokens ?? 0;
+
+        // JSONL の最初の assistant メッセージからモデル名を検出
+        if (detectedModel === "opus" && entry.message.model) {
+          const m = entry.message.model;
+          if (m.includes("sonnet")) detectedModel = "sonnet";
+          else if (m.includes("opus")) detectedModel = "opus";
+        }
       }
     } catch {
       // skip malformed lines
     }
   }
 
+  const pricing = getPricingForModel(detectedModel);
   const cost =
-    inputTokens * OPUS_PRICING.input +
-    outputTokens * OPUS_PRICING.output +
-    cacheReadTokens * OPUS_PRICING.cache_read +
-    cacheCreateTokens * OPUS_PRICING.cache_create;
+    inputTokens * pricing.input +
+    outputTokens * pricing.output +
+    cacheReadTokens * pricing.cache_read +
+    cacheCreateTokens * pricing.cache_create;
 
   return {
-    model: "opus",
+    model: detectedModel,
     source: "jsonl_post_analysis",
     input_tokens: inputTokens,
     output_tokens: outputTokens,

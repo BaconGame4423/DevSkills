@@ -213,7 +213,7 @@ Claude Code のチャット内からスラッシュコマンドで各ステッ�
 
 | 役割 | モデル | API |
 |------|--------|-----|
-| Orchestrator（リーダー） | Claude Opus | Anthropic API |
+| Orchestrator（リーダー） | opusplan (Plan=Opus, Execute=Sonnet) | Anthropic API |
 | Worker（ワーカー・レビュアー） | GLM-5 等 | Z.AI API（`CLAUDE_CODE_TEAMMATE_COMMAND` で差し替え） |
 
 Orchestrator が全体の進行を制御し、各ステップを `glm -p` で Worker に dispatch します。Worker のモデルはプロセスレベルで差し替え可能なため、**高品質な判断（Opus）+ 低コストな実行（GLM-5）** のハイブリッド構成が実現できます。

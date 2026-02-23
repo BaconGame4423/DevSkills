@@ -48,7 +48,7 @@
 - poor-dev が唯一のパイプライン実行パス
 - `glm -p` で Worker を直接呼び出し（Agent Teams lifecycle なし）
 - Worker のモデルは `CLAUDE_CODE_TEAMMATE_COMMAND` 環境変数でプロセスレベル差し替え
-  - Orchestrator (Opus) = Anthropic API
+  - Orchestrator (opusplan: Plan=Opus, Execute=Sonnet, auto) = Anthropic API
   - Worker (GLM-5) = Z.AI API (`scripts/setup-glm-teammate.sh` で構成)
 
 ## 実装の並列化ルール

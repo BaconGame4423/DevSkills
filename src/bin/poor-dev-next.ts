@@ -37,6 +37,7 @@ interface CliArgs {
   checkConvergence?: string;
   reviewCycle?: string;
   tokenReport?: string;
+  orchestratorJsonl?: string;
   listFlows?: boolean;
 }
 
@@ -88,6 +89,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--token-report":
         args.tokenReport = next();
+        break;
+      case "--orchestrator-jsonl":
+        args.orchestratorJsonl = next();
         break;
     }
   }
@@ -154,7 +158,7 @@ async function main(): Promise<void> {
   if (args.tokenReport) {
     try {
       const { generateTokenReport } = await import("../lib/benchmark/token-report.js");
-      const report = generateTokenReport(args.tokenReport);
+      const report = generateTokenReport(args.tokenReport, args.orchestratorJsonl);
       process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     } catch (e) {
       process.stderr.write(JSON.stringify({ error: `Failed to generate token report: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
