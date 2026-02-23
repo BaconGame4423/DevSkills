@@ -18,6 +18,10 @@ import type { PoorDevConfig } from "./types.js";
  *   4. default
  *   5. ハードコード: { cli: "claude", model: "sonnet" }
  */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function resolveCliModel(
   step: string,
   config: PoorDevConfig | null
@@ -31,10 +35,10 @@ export function resolveCliModel(
   const lastHyphen = step.lastIndexOf("-");
   const category = lastHyphen > 0 ? step.slice(0, lastHyphen) : step;
 
-  const overrides = cfg["overrides"] as Record<string, { cli?: string; model?: string }> | undefined;
-  const stepTiers = cfg["step_tiers"] as Record<string, string> | undefined;
-  const tiers = cfg["tiers"] as Record<string, { cli?: string; model?: string }> | undefined;
-  const defaultCfg = cfg["default"] as { cli?: string; model?: string } | undefined;
+  const overrides = isRecord(cfg["overrides"]) ? cfg["overrides"] as Record<string, { cli?: string; model?: string }> : undefined;
+  const stepTiers = isRecord(cfg["step_tiers"]) ? cfg["step_tiers"] as Record<string, string> : undefined;
+  const tiers = isRecord(cfg["tiers"]) ? cfg["tiers"] as Record<string, { cli?: string; model?: string }> : undefined;
+  const defaultCfg = isRecord(cfg["default"]) ? cfg["default"] as { cli?: string; model?: string } : undefined;
 
   // Level 1: overrides.<step>
   const overrideStep = overrides?.[step];

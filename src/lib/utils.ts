@@ -67,33 +67,6 @@ export function die(message: string): never {
   process.stderr.write(JSON.stringify({ error: message }) + "\n");
   throw new Error(message);
 }
-
-// --- 一時ファイル管理 ---
-
-const _tempFiles: string[] = [];
-
-/**
- * 一時ファイルを作成し、cleanup 対象に登録する。
- * utils.sh の make_temp() に対応。
- */
-export function makeTemp(prefix = "poor-dev"): string {
-  const tmpFile = `/tmp/poor-dev-${prefix}-${process.pid}-${Date.now()}.tmp`;
-  fs.writeFileSync(tmpFile, "");
-  _tempFiles.push(tmpFile);
-  return tmpFile;
-}
-
-/**
- * 登録された一時ファイルを全て削除する。
- * utils.sh の cleanup_temp_files() に対応。
- */
-export function cleanupTempFiles(): void {
-  for (const f of _tempFiles) {
-    try { fs.unlinkSync(f); } catch { /* no-op */ }
-  }
-  _tempFiles.length = 0;
-}
-
 // --- Config ---
 
 /**

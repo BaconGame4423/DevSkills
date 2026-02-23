@@ -58,6 +58,17 @@ export function validateFlowDefinition(
   if (obj["context"] !== undefined && obj["context"] !== null) {
     if (typeof obj["context"] !== "object") {
       errors.push(`Flow "${name}": "context" must be an object`);
+    } else {
+      const ctx = obj["context"] as Record<string, unknown>;
+      for (const [step, files] of Object.entries(ctx)) {
+        if (typeof files === "object" && files !== null) {
+          for (const [, filePath] of Object.entries(files as Record<string, unknown>)) {
+            if (typeof filePath === "string" && filePath.includes("..")) {
+              errors.push(`Flow "${name}": context["${step}"] contains path traversal ("${filePath}")`);
+            }
+          }
+        }
+      }
     }
   }
 

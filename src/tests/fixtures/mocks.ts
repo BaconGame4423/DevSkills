@@ -1,12 +1,12 @@
 /**
  * テスト共通モックファクトリ
  *
- * GitOps / FileSystem / Dispatcher / PipelineStateManager を
+ * GitOps / FileSystem / PipelineStateManager を
  * vitest の vi.fn() で実装し、テストで再利用可能にする。
  */
 
 import { vi } from "vitest";
-import type { GitOps, FileSystem, Dispatcher, PipelineStateManager } from "../../lib/interfaces.js";
+import type { GitOps, FileSystem, PipelineStateManager } from "../../lib/interfaces.js";
 import type { PipelineState, PipelineStatus } from "../../lib/types.js";
 
 // --- GitOps モック ---
@@ -39,14 +39,6 @@ export function makeFileSystem(initialFiles?: Record<string, string>): FileSyste
     removeDir: vi.fn(),
     readdir: vi.fn(() => []),
     isDirectory: vi.fn(() => false),
-  };
-}
-
-// --- Dispatcher モック ---
-
-export function makeDispatcher(exitCode = 0): Dispatcher {
-  return {
-    dispatch: vi.fn(async () => exitCode),
   };
 }
 

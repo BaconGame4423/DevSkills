@@ -35,6 +35,7 @@ export type ConvergenceResult =
 // --- パーサー ---
 
 const ISSUE_LINE_RE = /^ISSUE:\s*(C|H|M|L)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*$/;
+const ID_PATTERN = /[A-Z]{2}\d+/;
 
 function normalizeVerdict(raw: string): "GO" | "CONDITIONAL" | "NO-GO" {
   const upper = raw.toUpperCase().trim();
@@ -90,7 +91,8 @@ export function parseFixerOutput(raw: string): FixerOutput {
   const lines = raw.split("\n");
   let section: "none" | "fixed" | "rejected" = "none";
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
     if (/^\s*fixed:\s*$/.test(line)) {
       section = "fixed";
       continue;
@@ -101,7 +103,7 @@ export function parseFixerOutput(raw: string): FixerOutput {
     }
 
     if (section === "fixed") {
-      const m = line.match(/^\s*-\s*([A-Z]{2}\d+)\s*$/);
+      const m = line.match(new RegExp(String.raw`^\s*-\s*(${ID_PATTERN.source})\s*$`));
       if (m?.[1]) {
         fixed.push(m[1]);
       } else if (line.trim() !== "" && !line.trim().startsWith("-")) {
@@ -110,11 +112,10 @@ export function parseFixerOutput(raw: string): FixerOutput {
     }
 
     if (section === "rejected") {
-      const idMatch = line.match(/^\s*-\s*id:\s*([A-Z]{2}\d+)/);
+      const idMatch = line.match(new RegExp(String.raw`^\s*-\s*id:\s*(${ID_PATTERN.source})`));
       if (idMatch?.[1]) {
         // 次の行で reason を探す
-        const idx = lines.indexOf(line);
-        const nextLine = lines[idx + 1];
+        const nextLine = lines[i + 1];
         const reasonMatch = nextLine?.match(/^\s*reason:\s*"?(.+?)"?\s*$/);
         rejected.push({
           id: idMatch[1],
@@ -305,10 +306,10 @@ export function processReviewCycle(input: ReviewCycleInput): ReviewCycleResult {
   // 1. パース
   const parsed = parseReviewerOutputYaml(input.rawReview, input.idPrefix, 1);
 
-  // 2. 重複除去 (same location + same severity)
+  // 2. 重複除去 (same location + same severity + same description)
   const seen = new Set<string>();
   const dedupedIssues = parsed.issues.filter((i) => {
-    const key = `${i.location}|${i.severity}`;
+    const key = `${i.location}|${i.severity}|${i.description}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -63,4 +63,4 @@ lib/installer.mjs: init, update, status
 - 5 review types × 4 personas each = 20 AI reviewer agents (read-only)
 - 1 review-fixer agent (write-enabled) for auto-fix loops
 - Dual-runtime: Claude Code + OpenCode with per-agent model config
-- Config stored in `.poor-dev/config.json`
+- Config resolved by `src/lib/config-resolver.ts` (5-level chain)

@@ -33,7 +33,7 @@ Read で `LATEST_RUN/poordev-analysis.yaml` を読み込む。
 find "$COMBO_DIR/_runs" -name "repair-log.yaml" -type f 2>/dev/null
 
 # 最近のコマンドファイル変更履歴
-git log --oneline -20 -- "benchmarks/<combo>/commands/" "benchmarks/<combo>/.opencode/command/" "lib/"
+git log --oneline -20 -- "benchmarks/<combo>/commands/" "lib/"
 ```
 
 過去の repair-log.yaml が存在すれば Read で読み込み、同一パターンの修正履歴を参照する。
@@ -100,7 +100,6 @@ AskUserQuestion で修正の承諾を求める:
 
 修正対象はベンチマーク combo のコマンドテンプレート・config が中心:
 - `benchmarks/<combo>/commands/poor-dev.*.md`
-- `benchmarks/<combo>/.opencode/command/poor-dev.*.md`
 - `benchmarks/<combo>/.poor-dev/config.json`
 - `lib/` 内のスクリプト（review-runner.sh, dispatch-step.sh 等）
 
@@ -145,10 +144,8 @@ fi
 ```bash
 # compose-prompt でプロンプト生成
 STEP="implement"  # テスト対象ステップ
-COMMAND_FILE="$COMBO_DIR/commands/poor-dev.${STEP}-simple.md"
-[ ! -f "$COMMAND_FILE" ] && COMMAND_FILE="$COMBO_DIR/commands/poor-dev.${STEP}.md"
-[ ! -f "$COMMAND_FILE" ] && COMMAND_FILE="$COMBO_DIR/.opencode/command/poor-dev.${STEP}-simple.md"
-[ ! -f "$COMMAND_FILE" ] && COMMAND_FILE="$COMBO_DIR/.opencode/command/poor-dev.${STEP}.md"
+COMMAND_FILE="$COMBO_DIR/commands/poor-dev.${STEP}.md"
+[ ! -f "$COMMAND_FILE" ] && COMMAND_FILE="$COMBO_DIR/.claude/commands/poor-dev.${STEP}.md"
 
 PROMPT_FILE="/tmp/repair-test-prompt-$$.txt"
 

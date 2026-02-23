@@ -84,6 +84,14 @@ export function computeNextInstruction(
     };
   }
 
+  if (featureDir.includes("..")) {
+    return {
+      action: "user_gate",
+      step: "validation",
+      message: `Invalid featureDir: path traversal detected ("${featureDir}")`,
+      options: ["abort"],
+    };
+  }
   const fd = path.join(projectDir, featureDir);
   const completedSet = new Set(state.completed ?? []);
   const pipeline = state.pipeline?.length > 0 ? state.pipeline : flowDef.steps;

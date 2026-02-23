@@ -1,7 +1,7 @@
 # PoorDevSkills エージェントワークフロー
 
-**最終更新**: 2026-02-08
-**バージョン**: 1.0.0
+**最終更新**: 2026-02-23
+**バージョン**: 2.0.0
 
 このドキュメントは、poor-dev コマンド群による標準開発フローを定義します。すべてのエージェントはこのワークフローに従ってください。
 
@@ -14,9 +14,8 @@
 3. [標準フロー](#標準フロー)
 4. [品質ゲート](#品質ゲート)
 5. [レビュー戦略](#レビュー戦略)
-6. [Swarm統合](#swarm統合)
-7. [憲法コンプライアンス](#憲法コンプライアンス)
-8. [トラブルシューティング](#トラブルシューティング)
+6. [憲法コンプライアンス](#憲法コンプライアンス)
+7. [トラブルシューティング](#トラブルシューティング)
 
 ---
 
@@ -26,7 +25,7 @@
 
 - **開発コマンド**: 仕様化・計画・タスク分解の構造化されたアプローチ
 - **レビューコマンド**: 多角的レビューによる品質保証
-- **敵対的レビュー**: VDDスタイルの厳密なコードレビュー
+- **Bash Dispatch**: Opus 仲介による Worker ディスパッチ（`glm -p` 経由）
 - **品質ゲート**: 自動化された検証チェック
 - **段階的配信**: MVP優先の漸進的開発
 
@@ -35,7 +34,7 @@
 1. **仕様主導**: ユーザー価値から始める
 2. **計画レビュー**: 実装前に品質を担保
 3. **検証ゲート**: 自動化された品質チェック
-4. **敵対的レビュー**: 厳格なコード品質評価
+4. **自動レビューループ**: Reviewer → Fixer → Reviewer の収束ループ
 5. **段階的配信**: MVPを優先する
 
 ---
@@ -46,6 +45,7 @@
 
 | コマンド | 用途 | 入力 | 出力 |
 |----------|------|------|------|
+| `/poor-dev` | パイプラインオーケストレータ | 機能説明 | 全ステップ自動実行 |
 | `/poor-dev.discovery` | 探索フロー開始 | アイデア/既存コード | discovery-memo.md |
 | `/poor-dev.rebuildcheck` | リビルド判定 | なし | 分析レポート + CONTINUE/REBUILD |
 | `/poor-dev.harvest` | 知見収穫 + 再構築準備 | なし | learnings.md, constitution.md, spec.md |
@@ -53,38 +53,30 @@
 | `/poor-dev.plan` | 技術計画 | なし | plan.md, research.md, data-model.md, contracts/, quickstart.md |
 | `/poor-dev.tasks` | タスク分解 | なし | tasks.md |
 | `/poor-dev.implement` | 実装実行 | なし | 実装コード |
+| `/poor-dev.testdesign` | テスト計画作成 | なし | test-plan.md |
 | `/poor-dev.clarify` | 仕様明確化 | なし | 更新されたspec.md |
 | `/poor-dev.analyze` | 整合性分析 | なし | 分析レポート |
 | `/poor-dev.checklist` | チェックリスト作成 | ドメイン | ドメインチェックリスト |
 
-### Review系コマンド（オーケストレータ）
+### Review系コマンド（統合オーケストレータ）
 
-| コマンド | 用途 | ペルソナ（サブエージェント） | 自動ループ |
-|----------|------|---------------------------|-----------|
+| コマンド | 用途 | ペルソナ（統合エージェント内） | 自動ループ |
+|----------|------|-------------------------------|-----------|
 | `/poor-dev.planreview` | 計画レビュー | PM, RISK, VAL, CRIT | Yes |
 | `/poor-dev.tasksreview` | タスク分解レビュー | TECHLEAD, SENIOR, DEVOPS, JUNIOR | Yes |
 | `/poor-dev.architecturereview` | 設計レビュー | ARCH, SEC, PERF, SRE | Yes |
-| `/poor-dev.qualityreview` | 品質レビュー | QA, TESTDESIGN, CODE, SEC + adversarial | Yes |
+| `/poor-dev.qualityreview` | 品質レビュー | QA, TESTDESIGN, CODE, SEC | Yes |
 | `/poor-dev.phasereview` | フェーズ完了レビュー | QA, REGRESSION, DOCS, UX | Yes |
 
-### Review系コマンド（個別ペルソナ）
+### ユーティリティ系コマンド
 
-各ペルソナは `subtask: true` で単体呼び出し可能:
-
-| グループ | コマンド |
-|---------|---------|
-| Plan | `/poor-dev.planreview-pm`, `-risk`, `-value`, `-critical` |
-| Tasks | `/poor-dev.tasksreview-techlead`, `-senior`, `-devops`, `-junior` |
-| Architecture | `/poor-dev.architecturereview-architect`, `-security`, `-performance`, `-sre` |
-| Quality | `/poor-dev.qualityreview-qa`, `-testdesign`, `-code`, `-security` |
-| Phase | `/poor-dev.phasereview-qa`, `-regression`, `-docs`, `-ux` |
-
-### 実装・品質系コマンド
-
-| コマンド | 用途 | 関連ツール |
-|----------|------|----------|
-| `/swarm` | 並列エージェント実行 | SwarmTools |
-| `/finish` | 品質ゲート | 型チェック + テスト |
+| コマンド | 用途 |
+|----------|------|
+| `/poor-dev.report` | プロジェクトレポート生成 |
+| `/poor-dev.constitution` | 憲法の作成・更新 |
+| `/poor-dev.bugfix` | バグ調査・修正 |
+| `/poor-dev.investigate` | 問題調査 |
+| `/poor-dev.ask` | コードベースに関する質問応答 |
 
 ---
 
@@ -135,90 +127,40 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 機能開発フロー図
+### 機能開発フロー図（Bash Dispatch パイプライン）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. 仕様作成                                                  │
-│    /poor-dev.specify "機能の説明"                            │
-│    → spec.md 生成                                           │
-│    → requirements.md チェックリスト生成                     │
+│ 0. Phase 0: 壁打ち                                           │
+│    /poor-dev → Plan モードで Opus がユーザーと壁打ち         │
+│    → ユーザー承認後に Core Loop 開始                         │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. 技術計画                                                  │
-│    /poor-dev.plan                                           │
-│    → plan.md 生成                                           │
-│    → research.md (研究と決定)                              │
-│    → data-model.md (データモデル)                           │
-│    → contracts/ (API契約)                                  │
-│    → quickstart.md (クイックスタートガイド)                 │
+│ 1. specify → 2. plan → 3. planreview                        │
+│    各ステップは Worker を `glm -p` で Bash Dispatch          │
+│    → spec.md → plan.md → GO/CONDITIONAL/NO-GO               │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. プランレビュー                                            │
-│    /poor-dev.planreview plan.md                             │
-│    → GO / CONDITIONAL / NO-GO                               │
-│    → プランの品質と実現可能性を評価                          │
+│ 4. tasks → 5. tasksreview                                    │
+│    → tasks.md → 依存関係・並列化の確認                      │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. タスク分解                                                │
-│    /poor-dev.tasks                                          │
-│    → tasks.md 生成                                          │
-│    → ユーザーストーリーごとのタスク                         │
-│    → 依存関係と並列化の機会                                 │
+│ 6. implement                                                 │
+│    → Worker による並列実装（フェーズ分割ディスパッチ）       │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. タスクレビュー                                            │
-│    /poor-dev.tasksreview tasks.md                           │
-│    → 依存関係の確認                                          │
-│    → 並列化の機会の特定                                      │
-│    → タスク網羅性のチェック                                  │
+│ 7. testdesign                                                │
+│    → test-plan.md 生成                                      │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 6. 設計レビュー（必要時）                                    │
-│    /poor-dev.architecturereview data-model.md               │
-│    → SOLID原則の確認                                         │
-│    → 拡張性と保守性の評価                                    │
-│    → セキュリティと性能のチェック                            │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 7. 実装                                                      │
-│    /poor-dev.implement  または  /swarm "フェーズを実装"     │
-│    → swarm-planner → swarm-worker × N                       │
-│    → タスクごとの実行                                        │
-│    → 進捗の追跡                                             │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 8. 品質ゲート                                                │
-│    /finish                                                  │
-│    → 型チェック（例: tsc, mypy, cargo check）                │
-│    → リンティング（例: eslint, ruff, clippy）               │
-│    → フォーマットチェック（例: prettier, black, fmt）       │
-│    → テスト（例: npm test, pytest, cargo test）             │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 9. 品質レビュー                                              │
-│    /poor-dev.qualityreview                                  │
-│    → テスト網羅性の確認                                      │
-│    → コード品質の評価                                        │
-│    → 敵対的レビュー（swarm_adversarial_review）             │
-│    → セキュリティチェック                                    │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 10. フェーズ完了レビュー                                     │
-│     /poor-dev.phasereview [フェーズ名]                      │
-│     → Definition of Doneの確認                             │
-│     → リグレッションテスト                                  │
-│     → ドキュメントのチェック                                 │
-│     → UX評価                                               │
+│ 8-10. architecturereview → qualityreview → phasereview      │
+│    レビューループ: Opus 仲介                                 │
+│    reviewer → Opus → fixer → Opus（glm -p 経由）           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -229,10 +171,9 @@
 | 仕様 | `/poor-dev.specify` | ユーザー価値、明確な要件 |
 | 計画 | `/poor-dev.plan` → `/poor-dev.planreview` | 技術選択、アーキテクチャ |
 | タスク | `/poor-dev.tasks` → `/poor-dev.tasksreview` | 依存関係、並列化 |
-| 設計 | `/poor-dev.architecturereview` | SOLID、拡張性、セキュリティ |
-| 実装 | `/poor-dev.implement` or `/swarm` | 実装の完全性 |
-| 品質 | `/finish` → `/poor-dev.qualityreview` | テスト、コード品質 |
-| 完了 | `/poor-dev.phasereview` | DoD、統合、文書 |
+| 実装 | `/poor-dev.implement` | Worker による並列実装 |
+| テスト設計 | `/poor-dev.testdesign` | テスト計画 |
+| レビュー | 3段レビュー (arch/quality/phase) | 品質・セキュリティ・DoD |
 
 ---
 
@@ -240,7 +181,7 @@
 
 ### 自動実行されるゲート
 
-**`/finish`** コマンド実行時に自動チェック:
+品質ゲートは各ステップ完了時に自動チェック:
 
 #### 1. 型チェック
 
@@ -258,9 +199,6 @@ cargo check
 
 # Go
 go vet ./...
-
-# Java (Maven)
-mvn compile
 ```
 
 #### 2. リンティング
@@ -339,38 +277,42 @@ go test ./... -cover
 
 ## レビュー戦略
 
-### アーキテクチャ: サブエージェント分離 + 自動ループ
+### アーキテクチャ: Opus 仲介レビューループ
 
 レビューシステムは以下のアーキテクチャで動作:
 
-1. **ペルソナ分離**: 各ペルソナは独立エージェント定義（`.opencode/agents/`, `.claude/agents/`）
-2. **オーケストレータ**: ループ制御・結果集約のみ（ペルソナ定義はゼロ）
-3. **自動修正ループ**: issue 0件になるまで Review → Fix → Review を繰り返す
-4. **コンテキスト分離**: 毎イテレーションで新規サブエージェントを起動
+1. **統合ペルソナ**: 各レビュータイプは統合エージェント定義（`agents/claude/`）
+2. **Opus 仲介**: Orchestrator (Opus) がレビュー結果を集約し Fixer に指示
+3. **自動修正ループ**: C/H issue 0件になるまで Review → Fix → Review を繰り返す
+4. **Bash Dispatch**: Worker は `glm -p` 経由でディスパッチ
 
 ```
-STEP 1: 4x Review sub-agents (parallel, READ-ONLY)
+STEP 1: Reviewer sub-agent (READ-ONLY, glm -p dispatch)
    ↓
-STEP 2: Aggregate issues by C/H/M/L
+STEP 2: Opus がイシューを集約・dedup・収束判定
    ↓
-STEP 3: Issues > 0 → Fix sub-agent → back to STEP 1
-         Issues = 0 → DONE + handoff to next stage
+STEP 3: C/H > 0 → Fixer sub-agent (glm -p dispatch) → back to STEP 1
+         C/H = 0 → DONE + next step
 ```
 
 **安全策**:
 - レビューサブエージェント: read-only（Write/Edit/Bash 禁止）
 - 修正サブエージェント: write-enabled（`review-fixer`）
-- 10回超で安全弁（ユーザー確認）
+- maxReviewIterations 超過で安全弁（ユーザー確認）
 
-### エージェント間通信: 行指向フラットテキスト
+### エージェント間通信: YAML フォーマット
 
-トークン効率のため、エージェント間通信は全て英語:
+トークン効率のため、エージェント間通信は全て英語 YAML:
 
-```
-VERDICT: CONDITIONAL
-ISSUE: H | success metrics not quantitative | spec.md
-ISSUE: M | P2 priority rationale unclear | plan.md
-REC: add DAU/MAU ratio as metric
+```yaml
+verdict: CONDITIONAL
+issues:
+  - severity: H
+    description: success metrics not quantitative
+    location: spec.md
+  - severity: M
+    description: P2 priority rationale unclear
+    location: plan.md
 ```
 
 ### レビューの判定
@@ -388,149 +330,6 @@ REC: add DAU/MAU ratio as metric
 
 ---
 
-## モデル設定（ハイブリッドモデル）
-
-### 概要
-
-レビューの CLI とモデルをカテゴリ・エージェント単位で設定できます。設定は `.poor-dev/config.json` に保存されます。
-
-### コマンドリファレンス
-
-| サブコマンド | 説明 |
-|-------------|------|
-| `/poor-dev.config show` | 現在の設定 + 利用可能モデル一覧 |
-| `/poor-dev.config default <cli> <model>` | デフォルト CLI/モデルを設定 |
-| `/poor-dev.config set <key> <cli> <model>` | カテゴリまたはエージェント単位で上書き |
-| `/poor-dev.config unset <key>` | 上書きを削除（デフォルトに戻す） |
-| `/poor-dev.config reset` | 推奨デフォルトにリセット |
-
-### 設定ファイルフォーマット
-
-```json
-{
-  "default": {
-    "cli": "opencode",
-    "model": "zai-coding-plan/glm-4.7"
-  },
-  "overrides": {
-    "fixer": { "cli": "claude", "model": "sonnet" },
-    "phasereview": { "cli": "claude", "model": "haiku" }
-  }
-}
-```
-
-### 解決順序
-
-各ペルソナの CLI/モデルは以下の優先度で解決:
-
-```
-overrides.<agent名> → overrides.<カテゴリ名> → default
-```
-
-例: `phasereview-qa` の場合
-1. `overrides.phasereview-qa` があればそれを使用
-2. なければ `overrides.phasereview` を使用
-3. なければ `default` を使用
-
-### 推奨デフォルト
-
-| カテゴリ | CLI | モデル | 理由 |
-|---------|-----|--------|------|
-| planreview | opencode | GLM4.7 | 安価。一次レビュー向け |
-| tasksreview | opencode | GLM4.7 | 同上 |
-| architecturereview | opencode | GLM4.7 | 同上 |
-| qualityreview | opencode | GLM4.7 | 同上 |
-| phasereview | claude | haiku | 最終ゲートキーパー |
-| fixer | claude | sonnet | コード修正の正確さ重視 |
-
-### 実行モード
-
-オーケストレータは設定に基づき自動ルーティング:
-
-- **ネイティブ実行**: 設定の cli が現在の CLI と同じ → そのまま実行
-- **クロス CLI 実行**: 設定の cli が異なる → Bash 経由で他方の CLI を呼び出し
-
----
-
-## Swarm統合
-
-### Swarm Mailの使用
-
-**初期化**:
-```bash
-/swarmmail_init --project_path /path/to/project --agent_name [エージェント名]
-```
-
-**メッセージ送信**:
-```bash
-/swarmmail_send --to [受信者] --subject [件名] --body [本文]
-```
-
-**確認**:
-```bash
-/swarmmail_ack --message_id [メッセージID]
-```
-
-**ファイル予約**:
-```bash
-/swarmmail_reserve --paths [ファイルパス] --exclusive --reason [理由]
-```
-
-**ファイル解放**:
-```bash
-/swarmmail_release --paths [ファイルパス]
-```
-
-### セッション管理
-
-**セッション開始**:
-```bash
-/hive_session_start --active_cell_id [セルID]
-```
-
-**セッション終了**:
-```bash
-/hive_session_end --handoff_notes [引き継ぎノート]
-```
-
-### Swarm Planner/Worker
-
-**Swarm Planner**:
-- 仕様ファイルから正確な型名・シグネチャを抽出
-- サブタスクに「EXACT SPEC」を含める
-- 「FORBIDDEN」セクションで禁止事項を明示
-
-**Swarm Worker**:
-- EXACT SPECがあればそのまま実装
-- 命名・型・可視性の変更禁止
-- 仕様に疑問があればblockしてcoordinator確認
-
-**禁止事項（FORBIDDEN）**:
-- 命名変更（PortSide → MachinePortSide）
-- 型変更（u8 → usize）
-- 可視性変更（pub → private）
-- 仕様にない機能追加
-- 「改善」のための変更
-
-### 敵対的レビュー
-
-**実行**:
-```bash
-/swarm_adversarial_review --diff [差分] --test_output [テスト出力]
-```
-
-**判定**:
-- **APPROVED**: コードは優れている
-- **NEEDS_CHANGES**: 実際の問題が見つかった
-- **HALLUCINATING**: 敵対者が問題を捏造している（コードは優れている）
-
-**3ストライクルール**:
-- 3回の拒否後、タスクは失敗してバックログに戻る
-- 拒否ごとに理由を文書化
-- 修正後に再レビュー
-
----
-
 ## 憲法コンプライアンス
 
 ### 憲法第VIII章：検証ゲート
@@ -541,7 +340,7 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 1. 型チェック
 2. テスト
 3. リンティング
-4. 敵対的レビュー
+4. レビューループ
 
 **検証をスキップする場合**:
 - 明確な正当化が必要
@@ -550,12 +349,12 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 
 ### 憲法第III章：レビュー主導品質
 
-すべてのコード変更はマージ前に敵対的コードレビューを通過しなければなりません。
+すべてのコード変更はマージ前にレビューループを通過しなければなりません。
 
 **規則**:
-- すべてのサブタスク完了には敵対的レビューが必要
-- レビューアは敵対的であり、雑学に対してゼロ許容である必要がある
-- 3ストライクルール: 3回の拒否後、タスクは失敗し、バックログに戻る
+- すべてのステップ完了にはレビューループが必要
+- C/H issue が 0 になるまでループ継続
+- maxReviewIterations 超過時はユーザー確認
 
 ### 憲法第IV章：重要パスのテストファースト
 
@@ -574,37 +373,13 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 4. テストをパスする
 5. リファクタリング
 
-### 憲法第IX章：メモリと知識管理
-
-学習、決定、パターンは将来の検索のためにHivemindに保存されなければなりません。
-
-**保存**:
-```bash
-/hivemind_store --information [学習内容] --tags [タグ]
-```
-
-**検索**:
-```bash
-/hivemind_find --query [検索クエリ] --limit 10
-```
-
-**検証**:
-```bash
-/hivemind_validate --id [メモリID]
-```
-
-**同期**:
-```bash
-/hivemind_sync
-```
-
 ---
 
 ## トラブルシューティング
 
 ### 品質ゲートの失敗
 
-**問題**: `/finish` で品質ゲートが失敗する
+**問題**: 品質ゲートが失敗する
 
 **解決策**:
 1. 失敗したゲートを確認
@@ -617,18 +392,17 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 **問題**: レビューでNO-GO判定
 
 **解決策**:
-オーケストレータの自動ループが修正→再レビューを自動実行します。
-手動介入が必要な場合は10回超過時にユーザー確認が入ります。
+Opus 仲介の自動ループが修正→再レビューを自動実行します。
+手動介入が必要な場合は maxReviewIterations 超過時にユーザー確認が入ります。
 
-### 敵対的レビューがNEEDS_CHANGES
+### パイプラインの中断
 
-**問題**: `/swarm_adversarial_review` でNEEDS_CHANGES判定
+**問題**: パイプライン実行中に中断が発生
 
 **解決策**:
-1. 発見された問題を確認
-2. 問題を修正
-3. 再レビューをリクエスト
-4. 3回の拒否までチャンスがある
+1. `pipeline-state.json` を確認して現在のステップを特定
+2. `/poor-dev` を再実行すると、中断したステップから再開
+3. compaction 後も `pipeline-state.json` から回復可能
 
 ### タスクが不完全
 
@@ -639,16 +413,6 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 2. 足りないタスクを追加
 3. tasks.mdを更新
 4. `/poor-dev.tasksreview` で確認
-
-### 依存関係が不明確
-
-**問題**: タスク間の依存関係が不明確
-
-**解決策**:
-1. `/poor-dev.tasks` で依存関係を確認
-2. 必要に応じて依存関係を調整
-3. `/poor-dev.tasksreview` で依存関係を確認
-4. 並列化の機会を活用
 
 ---
 
@@ -677,8 +441,7 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 
 ### 実装
 
-- タスクを順次実行する
-- 並列タスクを活用する
+- Worker による並列実装を活用する
 - 進捗を報告する
 - エラーを即座に報告する
 
@@ -692,7 +455,7 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 ### 品質保証
 
 - 全ての品質ゲートを通過する
-- 敵対的レビューを実行する
+- レビューループを完走する
 - テスト網羅性を確保する
 - Definition of Doneを確認する
 
@@ -703,14 +466,11 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 | 用語 | 定義 |
 |------|------|
 | poor-dev コマンド | 仕様化・計画・タスク分解のフレームワーク |
-| レビューコマンド | 多角的レビューを行うためのスキルセット |
-| 敵対的レビュー | VDDスタイルの厳密なコードレビュー |
+| Bash Dispatch | `glm -p` 経由で Worker をディスパッチする実行方式 |
+| レビューループ | Reviewer → Opus → Fixer → Opus の自動収束ループ |
 | 品質ゲート | 型チェック、リンティング、テスト等の自動検証 |
-| ペルソナ | 特定の観点からレビューを行う役割 |
+| ペルソナ | 特定の観点からレビューを行う役割（統合エージェント内） |
 | Definition of Done | タスク完了の基準 |
-| 3ストライクルール | 敵対的レビューでの3回の拒否ルール |
-| SwarmTools | 並列エージェント実行のためのツールセット |
-| Hivemind | 知識管理と意味論検索のためのツール |
 | TDD | テスト駆動開発 |
 
 ---
@@ -718,10 +478,11 @@ overrides.<agent名> → overrides.<カテゴリ名> → default
 ## リソース
 
 - [憲法](constitution.md)
-- [レビューオーケストレータ](.opencode/command/poor-dev.*review.md)
-- [ペルソナエージェント](.opencode/agents/)
+- [レビューオーケストレータ](commands/poor-dev.*review.md)
+- [ペルソナエージェント](agents/claude/)
+- [ベンチマーク](docs/benchmarks.md)
 
 ---
 
-**最終更新**: 2026-02-08
-**次回見直し**: 2026-03-08
+**最終更新**: 2026-02-23
+**次回見直し**: 2026-03-23

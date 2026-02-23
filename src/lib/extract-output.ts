@@ -41,7 +41,7 @@ function extractOpencodeJson(content: string): string | null {
       if (obj.type === "text" && obj.part?.text) {
         parts.push(obj.part.text);
       }
-    } catch { /* no-op */ }
+    } catch { /* non-critical: skip non-JSON lines in opencode output */ }
   }
   return parts.length > 0 ? parts.join("\n") : null;
 }

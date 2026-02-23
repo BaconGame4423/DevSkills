@@ -67,31 +67,6 @@ export interface FileSystem {
   isDirectory(path: string): boolean;
 }
 
-// --- Dispatcher ---
-
-/**
- * dispatch-step.sh 呼び出しインターフェース。
- * retry-helpers.sh の dispatch_with_retry から分離した最小単位の実行。
- *
- * @param step  ステップ名 (e.g. "specify", "implement")
- * @param projectDir プロジェクトルート
- * @param promptFile プロンプトファイルパス
- * @param idleTimeout アイドルタイムアウト（秒）
- * @param maxTimeout 最大タイムアウト（秒）
- * @param resultFile 結果 JSON の書き込み先
- * @returns exit code（0=成功、124=timeout、その他=エラー）
- */
-export interface Dispatcher {
-  dispatch(
-    step: string,
-    projectDir: string,
-    promptFile: string,
-    idleTimeout: number,
-    maxTimeout: number,
-    resultFile: string
-  ): Promise<number>;
-}
-
 // --- PipelineStateManager ---
 
 /**

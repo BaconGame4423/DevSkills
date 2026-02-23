@@ -34,7 +34,8 @@ export class FilePipelineStateManager implements PipelineStateManager {
     try {
       const content = this.fs.readFile(stateFile);
       return JSON.parse(content) as PipelineState;
-    } catch {
+    } catch (e) {
+      process.stderr.write(`[pipeline-state] Failed to parse ${stateFile}: ${e instanceof Error ? e.message : String(e)}\n`);
       return null;
     }
   }
