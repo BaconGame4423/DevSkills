@@ -97,7 +97,8 @@ jq --arg c "<combo>" --arg p "$TARGET" \
 CLI 起動（常に claude + 全権限自動許諾）:
 ```bash
 ORCH_MODEL=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .orchestrator' benchmarks/benchmarks.json | xargs -I{} jq -r --arg o "{}" '.models[$o].model_id' benchmarks/benchmarks.json)
-tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
+BENCH_ABS="$(cd benchmarks/<combo> && pwd)"
+tmux send-keys -t $TARGET "cd $BENCH_ABS && GIT_CEILING_DIRECTORIES=$(cd benchmarks && pwd) env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
 ```
 
 パスは絶対パスに解決してから送信すること。
