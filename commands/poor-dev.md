@@ -71,22 +71,25 @@ Before starting the pipeline:
 ### Plan Mode 終了後 (ユーザー承認後)
 
 **実装コードの直接書き込みは hook でブロックされます。
-feature ディレクトリ作成 → discussion-summary.md 作成 → 即座に Core Loop へ進んでください。**
+`--init-from-plan` で feature ディレクトリ作成 → discussion-summary.md 生成 → pipeline 初期化 → 最初のアクション計算を一発で実行し、即座に Core Loop へ進んでください。**
 
-6. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
-   - NNN = 3桁連番 (001, 002, ...)。既存 features/ ディレクトリの最大値 + 1
-   - 例: `features/001-function-visualizer/`
-   - **禁止**: `_runs/` 配下に作成しないこと（アーカイブ領域と衝突）
-7. Create `discussion-summary.md` in the feature directory:
-   - Plan ファイルの内容をもとに生成する
-   - フロー分類、スコープ、ユーザー要件・制約を含める
-8. No sub-agents are spawned during this phase
+6. **Init from Plan** (1コマンドで Phase 0 → Core Loop 遷移):
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --init-from-plan <plan-file-path> --project-dir .
+   ```
+   - Plan ファイルに `## Feature name` (kebab-case) を含めること
+   - JSON 出力には `_initFromPlan.featureDir` (作成された feature ディレクトリ) が含まれる
+   - `_initFromPlan.warnings` にパース警告がある場合はユーザーに表示する
+   - `--flow` オプションで plan の `## Selected flow` を上書き可能
+   - Pipeline: `skip` の場合は `{ action: "done" }` が返り、ここで終了
+   - JSON 出力を Core Loop のステップ 2 (アクション解析) から開始
 
 ## Core Loop
 
-After Phase 0, execute the pipeline via TS helper:
+After Phase 0 (`--init-from-plan` の出力が最初のアクション), execute the pipeline via TS helper:
 
-1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`
+1. **初回**: `--init-from-plan` の JSON 出力をそのまま使用。`_initFromPlan.featureDir` を以降の `<DIR>` として記録
+   **2回目以降**: `node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`
 2. Parse the JSON output and execute the action:
    - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
    - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)

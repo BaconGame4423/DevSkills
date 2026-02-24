@@ -19,6 +19,7 @@ import { resolveFlow, mergeFlows } from "../lib/flow-loader.js";
 import { getFlowDefinition, BUILTIN_FLOWS } from "../lib/flow-definitions.js";
 import { computeNextInstruction } from "../lib/team-state-machine.js";
 import { parseReviewerOutputYaml, checkConvergence, processReviewCycle } from "../lib/team-review.js";
+import { parsePlanFile, resolveNextFeatureNumber, generateDiscussionSummary } from "../lib/plan-parser.js";
 import type { TeamAction, BashParallelDispatchAction } from "../lib/team-types.js";
 import type { PipelineState } from "../lib/types.js";
 import type { ReviewerOutput, ReviewCycleInput } from "../lib/team-review.js";
@@ -42,6 +43,7 @@ interface CliArgs {
   orchestratorJsonl?: string;
   promptDir?: string;
   listFlows?: boolean;
+  initFromPlan?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -95,6 +97,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--list-flows":
         args.listFlows = true;
+        break;
+      case "--init-from-plan":
+        args.initFromPlan = next();
         break;
       case "--token-report":
         args.tokenReport = next();
@@ -194,6 +199,85 @@ async function main(): Promise<void> {
       builtin: name in BUILTIN_FLOWS,
     }));
     process.stdout.write(JSON.stringify({ flows: list, errors }) + "\n");
+    return;
+  }
+
+  // --init-from-plan: Plan ファイルから feature ディレクトリ作成 + pipeline 初期化 + 最初のアクション計算
+  if (args.initFromPlan) {
+    const fs = new NodeFileSystem();
+    const projectDir = path.resolve(args.projectDir);
+
+    let planContent: string;
+    try {
+      planContent = readFileSync(args.initFromPlan, "utf-8");
+    } catch (e) {
+      process.stderr.write(JSON.stringify({ error: `Failed to read plan file: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+      process.exit(1);
+    }
+
+    const parseResult = parsePlanFile(planContent);
+    if (!parseResult.plan) {
+      process.stderr.write(JSON.stringify({ error: `Plan parse errors: ${parseResult.errors.join("; ")}` }) + "\n");
+      process.exit(1);
+    }
+
+    const plan = parseResult.plan;
+
+    // Pipeline: skip → done
+    if (plan.pipeline === "skip") {
+      process.stdout.write(JSON.stringify({ action: "done", summary: "Pipeline skipped per plan.", artifacts: [] }) + "\n");
+      return;
+    }
+
+    // Flow 解決: --flow CLI > plan の ## Selected flow
+    const flowName = args.flow ?? plan.flow;
+    const flowDef = resolveFlow(flowName, projectDir, fs) ?? getFlowDefinition(flowName);
+    if (!flowDef) {
+      process.stderr.write(JSON.stringify({ error: `Unknown flow: ${flowName}` }) + "\n");
+      process.exit(1);
+    }
+
+    // Feature ディレクトリ作成
+    const featuresDir = path.join(projectDir, "features");
+    const nextNum = resolveNextFeatureNumber(featuresDir, fs);
+    const paddedNum = String(nextNum).padStart(3, "0");
+    const featureDirName = `${paddedNum}-${plan.featureName}`;
+    const featureDir = path.join(featuresDir, featureDirName);
+    const featureDirRelative = path.relative(projectDir, featureDir);
+    mkdirSync(featureDir, { recursive: true });
+
+    // discussion-summary.md 書き込み
+    const summaryContent = generateDiscussionSummary(plan);
+    const summaryPath = path.join(featureDir, "discussion-summary.md");
+    fs.writeFile(summaryPath, summaryContent);
+
+    // pipeline-state.json 初期化
+    const stateManager = new FilePipelineStateManager(fs);
+    const stateFile = path.join(featureDir, "pipeline-state.json");
+    stateManager.init(stateFile, flowName, flowDef.steps);
+
+    // 最初のアクション計算
+    const state = stateManager.read(stateFile);
+    const action = computeNextInstruction(
+      { state, featureDir: featureDirRelative, projectDir, flowDef },
+      fs
+    );
+
+    // prompt をファイルに書き出し
+    const promptDir = args.promptDir ?? path.join(featureDir, ".pd-dispatch");
+    writePromptsToFiles(action, promptDir);
+
+    // _initFromPlan メタデータ付きで出力
+    const output = {
+      ...action,
+      _initFromPlan: {
+        featureDir: featureDirRelative,
+        flow: flowName,
+        featureName: plan.featureName,
+        warnings: parseResult.warnings,
+      },
+    };
+    process.stdout.write(JSON.stringify(output) + "\n");
     return;
   }
 
