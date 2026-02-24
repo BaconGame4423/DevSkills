@@ -148,6 +148,12 @@ function resolveConditionalBranch(
   }
 }
 
+// --- Prompt Dir 解決 ---
+
+function resolvePromptDir(args: CliArgs, stateDir: string): string {
+  return args.promptDir ?? path.join(stateDir, ".pd-dispatch");
+}
+
 // --- Prompt-to-File ---
 
 function writePromptsToFiles(action: TeamAction, promptDir: string): void {
@@ -405,6 +411,8 @@ async function main(): Promise<void> {
         { state, featureDir, projectDir, flowDef },
         fs
       );
+      const promptDir = resolvePromptDir(args, stateDir);
+      writePromptsToFiles(action, promptDir);
       process.stdout.write(JSON.stringify(action) + "\n");
     }
     return;
@@ -441,6 +449,8 @@ async function main(): Promise<void> {
         { state, featureDir, projectDir, flowDef },
         fs
       );
+      const promptDir = resolvePromptDir(args, stateDir);
+      writePromptsToFiles(action, promptDir);
       process.stdout.write(JSON.stringify(action) + "\n");
     }
     return;
@@ -471,6 +481,8 @@ async function main(): Promise<void> {
         { state, featureDir, projectDir, flowDef },
         fs
       );
+      const promptDir = resolvePromptDir(args, stateDir);
+      writePromptsToFiles(action, promptDir);
       process.stdout.write(JSON.stringify(action) + "\n");
       return;
     }
@@ -503,6 +515,8 @@ async function main(): Promise<void> {
       { state, featureDir, projectDir, flowDef },
       fs
     );
+    const promptDir = resolvePromptDir(args, stateDir);
+    writePromptsToFiles(action, promptDir);
     process.stdout.write(JSON.stringify(action) + "\n");
     return;
   }
@@ -527,6 +541,8 @@ async function main(): Promise<void> {
       { state: updatedState, featureDir, projectDir, flowDef },
       fs
     );
+    const promptDir = resolvePromptDir(args, stateDir);
+    writePromptsToFiles(nextAction, promptDir);
     process.stdout.write(JSON.stringify(nextAction) + "\n");
     return;
   }
@@ -560,10 +576,9 @@ async function main(): Promise<void> {
     fs
   );
 
-  // --prompt-dir: prompt をファイルに書き出し、JSON の prompt フィールドを参照パスに置換
-  if (args.promptDir) {
-    writePromptsToFiles(action, args.promptDir);
-  }
+  // prompt をファイルに書き出し、JSON の prompt フィールドを参照パスに置換
+  const promptDir = resolvePromptDir(args, stateDir);
+  writePromptsToFiles(action, promptDir);
 
   process.stdout.write(JSON.stringify(action) + "\n");
 }
