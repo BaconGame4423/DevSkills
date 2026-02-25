@@ -147,6 +147,40 @@ describe("buildBashReviewPrompt", () => {
     expect(prompt).toContain("/proj/specs/001/spec.md");
     expect(prompt).toContain("Reviewer");
   });
+
+  it("priorFixes ありの場合 'Already Fixed' セクションを含む", () => {
+    const targets = ["/proj/specs/001/index.html"];
+    const priorFixes = [
+      "(architecturereview) SRIハッシュを追加",
+      "(architecturereview) CSP ヘッダー設定",
+    ];
+    const prompt = buildBashReviewPrompt(
+      "qualityreview",
+      "/proj/specs/001",
+      targets,
+      { steps: ["qualityreview"] },
+      mockFs(),
+      priorFixes
+    );
+
+    expect(prompt).toContain("## Already Fixed (do not re-flag)");
+    expect(prompt).toContain("(architecturereview) SRIハッシュを追加");
+    expect(prompt).toContain("(architecturereview) CSP ヘッダー設定");
+  });
+
+  it("priorFixes が空の場合 'Already Fixed' セクションを含まない", () => {
+    const targets = ["/proj/specs/001/index.html"];
+    const prompt = buildBashReviewPrompt(
+      "qualityreview",
+      "/proj/specs/001",
+      targets,
+      { steps: ["qualityreview"] },
+      mockFs(),
+      []
+    );
+
+    expect(prompt).not.toContain("Already Fixed");
+  });
 });
 
 describe("buildBashFixerBasePrompt", () => {

@@ -103,13 +103,15 @@ export function buildBashDispatchPrompt(
 
 /**
  * Bash dispatch reviewer 用のプロンプトを構築する。
+ * priorFixes: 前のレビューステップで修正済みの issue 概要リスト（二重指摘防止用）
  */
 export function buildBashReviewPrompt(
   step: string,
   fd: string,
   targetFiles: string[],
   flowDef: FlowDefinition,
-  fs: Pick<FileSystem, "exists" | "readFile">
+  fs: Pick<FileSystem, "exists" | "readFile">,
+  priorFixes?: string[]
 ): string {
   const targetDesc = targetFiles.map((f) => `  - ${f}`).join("\n");
   const parts: string[] = [
@@ -120,6 +122,12 @@ export function buildBashReviewPrompt(
   ];
 
   appendContextToParts(parts, buildContextBlocks(step, fd, flowDef, fs));
+  if (priorFixes && priorFixes.length > 0) {
+    parts.push(
+      `## Already Fixed (do not re-flag)\n` +
+      priorFixes.map(f => `- ${f}`).join("\n")
+    );
+  }
   parts.push(BASH_DISPATCH_SUFFIX);
   return parts.join("\n");
 }

@@ -119,7 +119,7 @@ export function computeNextInstruction(
     for (const step of parallelGroup) {
       const tc = flowDef.teamConfig?.[step];
       if (!tc) continue;
-      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs));
+      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet));
     }
     const meta: ActionMeta = {
       recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
@@ -161,7 +161,7 @@ export function computeNextInstruction(
   };
 
   // Bash dispatch
-  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet);
   action._meta = meta;
   return action;
 }
@@ -272,7 +272,9 @@ function buildBashDispatchTeamAction(
   fd: string,
   featureDir: string,
   flowDef: FlowDefinition,
-  fs: Pick<FileSystem, "exists" | "readFile">
+  fs: Pick<FileSystem, "exists" | "readFile">,
+  pipeline: string[] = [],
+  completedSet: Set<string> = new Set()
 ): BashDispatchAction | BashReviewDispatchAction {
   const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
@@ -328,7 +330,8 @@ function buildBashDispatchTeamAction(
       const fixerMaxTurns = fixerRole?.maxTurns ?? 20;
 
       const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
-      const reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs);
+      const priorFixes = collectPriorFixes(step, dispatchDir, pipeline, completedSet, fs);
+      const reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs, priorFixes);
       const fixerBasePrompt = buildBashFixerBasePrompt(step, fd, targetFiles, flowDef, fs);
 
       const reviewerPromptFile = path.join(dispatchDir, `${step}-review-prompt.txt`);
@@ -401,4 +404,61 @@ function collectReviewTargets(
     if (fs.exists(fullPath)) targets.push(fullPath);
   }
   return targets.length > 0 ? targets : [fd];
+}
+
+const FIXED_DESC_RE = /^\s*-?\s*desc:\s*"?(.+?)"?\s*$/;
+const MAX_PRIOR_FIXES = 5;
+
+/**
+ * fixer result テキストから desc 行を抽出する。
+ */
+export function extractFixedDescs(resultText: string): string[] {
+  const descs: string[] = [];
+  let inFixed = false;
+  for (const line of resultText.split("\n")) {
+    if (/^\s*fixed:\s*$/.test(line)) {
+      inFixed = true;
+      continue;
+    }
+    if (inFixed && /^\s*(rejected|cannot_fix|remaining|delta_lines):/.test(line)) {
+      inFixed = false;
+    }
+    if (inFixed) {
+      const m = FIXED_DESC_RE.exec(line);
+      if (m?.[1]) {
+        descs.push(m[1]);
+        if (descs.length >= MAX_PRIOR_FIXES) break;
+      }
+    }
+  }
+  return descs;
+}
+
+/**
+ * 現在のレビューステップより前に完了したレビューステップの fixer result から
+ * 修正済み issue の desc を収集する（二重指摘防止用）。
+ */
+export function collectPriorFixes(
+  currentStep: string,
+  dispatchDir: string,
+  pipeline: string[],
+  completedSet: Set<string>,
+  fs: Pick<FileSystem, "exists" | "readFile">
+): string[] {
+  const fixes: string[] = [];
+  const currentIdx = pipeline.indexOf(currentStep);
+  for (let i = currentIdx - 1; i >= 0; i--) {
+    const prevStep = pipeline[i]!;
+    if (!completedSet.has(prevStep)) continue;
+    const resultPath = path.join(dispatchDir, `${prevStep}-fixer-result.json`);
+    if (!fs.exists(resultPath)) continue;
+    try {
+      const data = JSON.parse(fs.readFile(resultPath));
+      const result: string = data?.result ?? "";
+      const fixedDescs = extractFixedDescs(result);
+      fixes.push(...fixedDescs.map(d => `(${prevStep}) ${d}`));
+    } catch { /* skip malformed JSON */ }
+    if (fixes.length >= MAX_PRIOR_FIXES) break;
+  }
+  return fixes.slice(0, MAX_PRIOR_FIXES);
 }

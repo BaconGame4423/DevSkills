@@ -93,6 +93,35 @@ describe("parseFixerOutput", () => {
     expect(result.fixed).toHaveLength(0);
     expect(result.rejected).toHaveLength(0);
   });
+
+  it("ハイフン付き ID (ARCH-001) を解析する", () => {
+    const raw = "fixed:\n  - ARCH-001\n  - SEC-002";
+    const result = parseFixerOutput(raw);
+    expect(result.fixed).toEqual(["ARCH-001", "SEC-002"]);
+  });
+
+  it("- id: XX-001 形式の fixed を解析する", () => {
+    const raw = [
+      "fixed:",
+      "  - id: ARCH-001",
+      '    desc: "SRIハッシュを追加"',
+      "  - id: QR-003",
+      '    desc: "テスト追加"',
+    ].join("\n");
+    const result = parseFixerOutput(raw);
+    expect(result.fixed).toEqual(["ARCH-001", "QR-003"]);
+  });
+
+  it("ハイフン付き ID の rejected を解析する", () => {
+    const raw = [
+      "rejected:",
+      "  - id: ARCH-002",
+      '    reason: "out of scope"',
+    ].join("\n");
+    const result = parseFixerOutput(raw);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]!.id).toBe("ARCH-002");
+  });
 });
 
 describe("checkConvergence", () => {

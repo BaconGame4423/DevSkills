@@ -35,7 +35,7 @@ export type ConvergenceResult =
 // --- パーサー ---
 
 const ISSUE_LINE_RE = /^ISSUE:\s*(C|H|M|L)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*$/;
-const ID_PATTERN = /[A-Z]{2}\d+/;
+const ID_PATTERN = /[A-Z]{2,}-?\d+/;
 
 function normalizeVerdict(raw: string): "GO" | "CONDITIONAL" | "NO-GO" {
   const upper = raw.toUpperCase().trim();
@@ -103,10 +103,16 @@ export function parseFixerOutput(raw: string): FixerOutput {
     }
 
     if (section === "fixed") {
-      const m = line.match(new RegExp(String.raw`^\s*-\s*(${ID_PATTERN.source})\s*$`));
-      if (m?.[1]) {
-        fixed.push(m[1]);
-      } else if (line.trim() !== "" && !line.trim().startsWith("-")) {
+      const directMatch = line.match(new RegExp(String.raw`^\s*-\s*(${ID_PATTERN.source})\s*$`));
+      const idKeyMatch = !directMatch
+        ? line.match(new RegExp(String.raw`^\s*-?\s*id:\s*(${ID_PATTERN.source})`))
+        : null;
+      if (directMatch?.[1]) {
+        fixed.push(directMatch[1]);
+      } else if (idKeyMatch?.[1]) {
+        fixed.push(idKeyMatch[1]);
+      } else if (line.trim() !== "" && !line.trim().startsWith("-") && !/^\s{2,}\w+:/.test(line)) {
+        // indented sub-property (desc:, reason: etc.) はスキップ
         section = "none";
       }
     }

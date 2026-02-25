@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeNextInstruction, type ComputeContext } from "../lib/team-state-machine.js";
+import { computeNextInstruction, type ComputeContext, extractFixedDescs, collectPriorFixes } from "../lib/team-state-machine.js";
 import { FEATURE_FLOW, BUGFIX_FLOW, EXPLORATION_FLOW } from "../lib/flow-definitions.js";
 import type { PipelineState } from "../lib/types.js";
 
@@ -554,6 +554,67 @@ describe("computeNextInstruction", () => {
     });
   });
 
+  describe("review-log 引き継ぎ (priorFixes)", () => {
+    it("qualityreview の reviewPrompt に前ステップの fix 結果が含まれる", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement", "testdesign",
+            "architecturereview",
+          ],
+        }),
+      });
+      const fixerResult = JSON.stringify({
+        result: [
+          "fixed:",
+          '  - id: ARCH-001',
+          '    desc: "SRIハッシュを追加"',
+          '  - id: ARCH-002',
+          '    desc: "CSP ヘッダー設定"',
+          "rejected:",
+          "  - id: ARCH-003",
+          '    reason: "out of scope"',
+        ].join("\n"),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+        "specs/001-test/.pd-dispatch/architecturereview-fixer-result.json": fixerResult,
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
+        expect(action.step).toBe("qualityreview");
+        expect(action.reviewPrompt).toContain("Already Fixed");
+        expect(action.reviewPrompt).toContain("SRIハッシュを追加");
+        expect(action.reviewPrompt).toContain("(architecturereview)");
+      }
+    });
+
+    it("fixer result がない場合 priorFixes が空でプロンプトに影響なし", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "plan", "planreview",
+            "tasks", "tasksreview", "implement", "testdesign",
+            "architecturereview",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
+        expect(action.step).toBe("qualityreview");
+        expect(action.reviewPrompt).not.toContain("Already Fixed");
+      }
+    });
+  });
+
   describe("done で artifacts を収集", () => {
     it("存在する全 artifacts を収集する", () => {
       const ctx = makeCtx({
@@ -579,5 +640,80 @@ describe("computeNextInstruction", () => {
         expect(action.artifacts).toContain("/proj/specs/001-test");
       }
     });
+  });
+});
+
+describe("extractFixedDescs", () => {
+  it("fixed セクションから desc 行を抽出する", () => {
+    const text = [
+      "fixed:",
+      "  - id: ARCH-001",
+      '    desc: "SRIハッシュを追加"',
+      "  - id: ARCH-002",
+      '    desc: "CSP ヘッダー設定"',
+      "rejected:",
+      "  - id: ARCH-003",
+    ].join("\n");
+    const descs = extractFixedDescs(text);
+    expect(descs).toEqual(["SRIハッシュを追加", "CSP ヘッダー設定"]);
+  });
+
+  it("fixed セクションがない場合は空配列を返す", () => {
+    const text = "rejected:\n  - id: ARCH-001";
+    expect(extractFixedDescs(text)).toEqual([]);
+  });
+
+  it("最大5件まで抽出する", () => {
+    const lines = ["fixed:"];
+    for (let i = 1; i <= 8; i++) {
+      lines.push(`  - id: FIX-${String(i).padStart(3, "0")}`);
+      lines.push(`    desc: "fix ${i}"`);
+    }
+    const descs = extractFixedDescs(lines.join("\n"));
+    expect(descs).toHaveLength(5);
+  });
+});
+
+describe("collectPriorFixes", () => {
+  it("前ステップの fixer result から修正 desc を収集する", () => {
+    const fixerResult = JSON.stringify({
+      result: [
+        "fixed:",
+        '  - id: ARCH-001',
+        '    desc: "SRIハッシュを追加"',
+        "rejected:",
+      ].join("\n"),
+    });
+    const fs = mockFs({
+      "specs/001/.pd-dispatch/architecturereview-fixer-result.json": fixerResult,
+    });
+    const pipeline = [
+      "specify", "plan", "planreview",
+      "tasks", "tasksreview", "implement",
+      "testdesign", "architecturereview", "qualityreview", "phasereview",
+    ];
+    const completedSet = new Set([
+      "specify", "plan", "planreview",
+      "tasks", "tasksreview", "implement",
+      "testdesign", "architecturereview",
+    ]);
+    const fixes = collectPriorFixes(
+      "qualityreview",
+      "specs/001/.pd-dispatch",
+      pipeline,
+      completedSet,
+      fs,
+    );
+    expect(fixes).toHaveLength(1);
+    expect(fixes[0]).toContain("architecturereview");
+    expect(fixes[0]).toContain("SRIハッシュを追加");
+  });
+
+  it("fixer result がない場合は空配列を返す", () => {
+    const fs = mockFs({});
+    const pipeline = ["architecturereview", "qualityreview"];
+    const completedSet = new Set(["architecturereview"]);
+    const fixes = collectPriorFixes("qualityreview", "dispatch", pipeline, completedSet, fs);
+    expect(fixes).toEqual([]);
   });
 });
