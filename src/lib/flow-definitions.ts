@@ -14,7 +14,7 @@ const PLANREVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
     { role: "reviewer-plan-unified", writeAccess: false, maxTurns: 10 },
-    { role: "review-fixer", maxTurns: 15 },
+    { role: "review-fixer", maxTurns: 20 },
   ],
   maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
@@ -24,7 +24,7 @@ const TASKSREVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
     { role: "reviewer-tasks-unified", writeAccess: false, maxTurns: 10 },
-    { role: "review-fixer", maxTurns: 15 },
+    { role: "review-fixer", maxTurns: 20 },
   ],
   maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
@@ -34,7 +34,7 @@ const ARCH_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
     { role: "reviewer-arch-unified", writeAccess: false, maxTurns: 10 },
-    { role: "review-fixer", maxTurns: 15 },
+    { role: "review-fixer", maxTurns: 20 },
   ],
   maxReviewIterations: 3,
   reviewCommunication: "opus-mediated",
@@ -44,7 +44,7 @@ const QUALITY_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
     { role: "reviewer-quality-unified", writeAccess: false, maxTurns: 10 },
-    { role: "review-fixer", maxTurns: 15 },
+    { role: "review-fixer", maxTurns: 20 },
   ],
   maxReviewIterations: 3,
   reviewCommunication: "opus-mediated",
@@ -54,7 +54,7 @@ const PHASE_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
     { role: "reviewer-phase-unified", writeAccess: false, maxTurns: 10 },
-    { role: "review-fixer", maxTurns: 15 },
+    { role: "review-fixer", maxTurns: 20 },
   ],
   maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
@@ -82,9 +82,9 @@ export const FEATURE_FLOW: FlowDefinition = {
     testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md", implementation: "*" },
     planreview:  { plan: "plan.md", spec: "spec.md" },
     tasksreview: { tasks: "tasks.md", spec: "spec.md", plan: "plan.md" },
-    architecturereview: { spec: "spec.md" },
-    qualityreview:      { spec: "spec.md" },
-    phasereview:        { spec: "spec.md" },
+    architecturereview: { spec: "spec.md", implementation: "*" },
+    qualityreview:      { spec: "spec.md", implementation: "*" },
+    phasereview:        { spec: "spec.md", implementation: "*" },
   },
   contextInject: {
     plan:      { spec: true },
