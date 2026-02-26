@@ -93,10 +93,29 @@
       "cli": "claude",
       "model_id": "sonnet",
       "fallback_model": "haiku"
+    },
+    "qwen35": {
+      "display_name": "Qwen3.5-122B",
+      "cli": "qwen",
+      "model_id": "qwen3.5",
+      "config_extras": {
+        "command_variant": "simple",
+        "review_mode": "bash",
+        "polling": {
+          "interval": 2,
+          "idle_timeout": 600,
+          "max_timeout": 1200,
+          "step_timeouts": {
+            "plan": { "idle_timeout": 600, "max_timeout": 2400 },
+            "implement": { "idle_timeout": 1800, "max_timeout": 4800 }
+          }
+        }
+      }
     }
   },
   "combinations": [
     { "dir_name": "claude_bash_glm5", "task": "function-visualizer", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" },
-    { "dir_name": "claude_bash_glm5_api", "task": "task-manager-api", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" }
+    { "dir_name": "claude_bash_glm5_api", "task": "task-manager-api", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" },
+    { "dir_name": "claude_bash_qwen35", "task": "function-visualizer", "orchestrator": "claude", "sub_agent": "qwen35", "mode": "team", "dispatch_mode": "bash" }
   ]
 }
