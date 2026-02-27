@@ -31,7 +31,7 @@ Phase 0 (Plan Mode) は Opus、Core Loop は Sonnet で自動切替されます�
 - feature ディレクトリの作成や Core Loop への進行は不要
 
 Before starting the pipeline:
-0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
+0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `poor-dev init` to set up the pipeline
 1. **Enter Plan Mode**: Call `EnterPlanMode` to enter read-only planning mode.
    Plan Mode ensures no files are created or modified during the discussion phase.
 
@@ -83,15 +83,21 @@ init-from-plan が feature ディレクトリ作成・pipeline 初期化・最�
 ### CRITICAL: Model Switch Checkpoint (opusplan)
 
 `opusplan` モードでは ExitPlanMode 後に Opus→Sonnet のモデル切替が発生します。
-Sonnet として Core Loop を開始する際:
 
-1. Step 6 の `--init-from-plan` を Bash で実行する
-2. stdout の **JSON をパースする** (テキストでの要約は禁止)
-3. JSON の `action` に応じて **即座に** Core Loop のアクションを実行:
-   - `bash_dispatch` → `command` をそのまま Bash で実行 (**コマンドを改変・自力構成しない**)
+**Phase 0 (Step 0〜5) は Opus が完了済み。再実行しないこと。**
+**TS helper 存在確認、EnterPlanMode、壁打ち等は全て完了済み。**
+
+Sonnet は以下を順に実行して Core Loop を開始する:
+
+1. CWD 確認: `pwd` を実行し、プロジェクトルート（ベンチマークディレクトリ）であることを確認
+2. TS helper 確認: `ls .poor-dev/dist/bin/poor-dev-next.js` を実行し存在を確認（**相対パスで実行、絶対パスに変換しない**）
+3. Plan 末尾の **`承認後:`** に記載されたコマンドをそのまま Bash で実行（コマンドを改変・自力構成しない）
+4. stdout の **JSON をパースする** (テキストでの要約は禁止)
+5. JSON の `action` に応じて **即座に** Core Loop のアクションを実行:
+   - `bash_dispatch` → `command` をそのまま Bash で実行
    - `bash_review_dispatch` → `reviewerCommand` をそのまま Bash で実行
    - `done` → 完了
-4. この Checkpoint を完了するまでテキスト出力・解説を行わないこと
+6. この Checkpoint を完了するまでテキスト出力・解説を行わないこと
 
 ## Core Loop
 

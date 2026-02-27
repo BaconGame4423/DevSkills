@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROXY_SCRIPT="${SCRIPT_DIR}/qwen-thinking-proxy.mjs"
 
-LLAMA_HOST="${LLAMA_HOST:-10.8.2.1}"
+LLAMA_HOST="${LLAMA_HOST:?環境変数 LLAMA_HOST を設定してください (例: 10.x.x.x)}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 LLAMA_API_KEY="${LLAMA_API_KEY:-aaaaa}"
 PROXY_PORT="${PROXY_PORT:-8081}"

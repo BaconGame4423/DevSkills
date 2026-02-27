@@ -13,7 +13,11 @@
 
 import http from 'node:http';
 
-const UPSTREAM_URL = process.env.UPSTREAM_URL || 'http://10.8.2.1:8080';
+if (!process.env.UPSTREAM_URL) {
+  console.error('環境変数 UPSTREAM_URL を設定してください (例: http://10.x.x.x:8080)');
+  process.exit(1);
+}
+const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const PORT = parseInt(process.env.PORT || '8081', 10);
 const upstream = new URL(UPSTREAM_URL);
 
