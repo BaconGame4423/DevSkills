@@ -16,7 +16,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync, openSync, closeSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, existsSync, openSync, closeSync } from "node:fs";
 import path from "node:path";
 
 // --- 型定義 ---
@@ -181,13 +181,39 @@ async function main(): Promise<void> {
 
   // --detach モード: 自身を detached 子プロセスとして再起動し、即座に exit
   if (args.detach) {
+    // compaction 後の重複起動防止: .pid ファイルが存在し、プロセスが生存中ならスキップ
+    const pidFile = `${args.resultFile}.pid`;
+    if (existsSync(pidFile)) {
+      try {
+        const existingPid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
+        process.kill(existingPid, 0); // 生存確認（シグナルは送らない）
+        process.stderr.write(
+          `[dispatch-worker] Already running: PID=${existingPid} (skipping spawn)\n`,
+        );
+        process.exit(0);
+      } catch {
+        // プロセスが存在しない → .pid ファイルは stale。続行して新しいワーカーを起動
+        process.stderr.write(
+          `[dispatch-worker] Stale PID file found, spawning new worker\n`,
+        );
+      }
+    }
+
+    // result-file が既に存在する場合はワーカー完了済み → スキップ
+    if (existsSync(args.resultFile)) {
+      process.stderr.write(
+        `[dispatch-worker] Result file already exists (worker completed), skipping spawn\n`,
+      );
+      process.exit(0);
+    }
+
     const childArgs = process.argv.slice(2).filter((a) => a !== "--detach");
     const child = spawn(process.execPath, [process.argv[1]!, ...childArgs], {
       detached: true,
       stdio: "ignore",
     });
     child.unref();
-    writeFileSync(`${args.resultFile}.pid`, String(child.pid));
+    writeFileSync(pidFile, String(child.pid));
     process.stderr.write(
       `[dispatch-worker] Detached: PID=${child.pid}\n`,
     );

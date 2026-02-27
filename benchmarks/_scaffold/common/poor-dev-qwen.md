@@ -15,6 +15,11 @@ node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir
 ```
 This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
 
+**Detached Dispatch 中のコンパクション回復**: `bash_dispatch` で `action.detached` が `true` の場合、
+dispatch-worker は冪等（既に実行中なら重複起動せず exit 0 で return）。
+回復手順: (1) dispatch command を再実行 (2) **即座に polling を開始** (3) `DISPATCH_COMPLETE` まで繰り返す。
+polling を開始せずに idle になるのは禁止。
+
 ### モデル設定
 このSkillは `opusplan` モデルで動作します。
 Phase 0 (Plan Mode) は Opus、Core Loop は Sonnet で自動切替されます。
@@ -207,13 +212,17 @@ dispatch-worker は `--detach` 付きで起動され、即座に return する�
 Qwen (ローカル llama.cpp) のディスパッチは 20-40 分かかることがある。
 
 1. `action.command` を Bash で実行（即座に return する）
-2. Result file を polling（Bash timeout 内で繰り返し確認）:
+   - dispatch-worker は**冪等**: .pid が存在し worker が生存中なら重複起動せず exit 0 で return する
+   - **コンパクション後に再実行しても安全**（同じ worker が二重起動されることはない）
+2. **即座に polling を開始する**（dispatch command の exit 直後に必ず以下を実行）:
    ```bash
    RESULT="<action.resultFile>"
    for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
    echo DISPATCH_PENDING
    ```
-3. `DISPATCH_PENDING` の場合 → **同じ polling コマンドを再実行**（worker がまだ実行中。これは正常）
+3. `DISPATCH_PENDING` の場合 → **同じ polling コマンドをそのまま再実行**（worker がまだ実行中。これは正常）
+   - **polling の再実行は必須**。`DISPATCH_PENDING` で停止してはならない
+   - polling → PENDING → polling → PENDING → ... → COMPLETE になるまで繰り返す
 4. `DISPATCH_COMPLETE` の場合 → result-file を Read
 5. 以降は通常モードの手順 2（result-file 解析）以降と同じ
 
@@ -222,6 +231,10 @@ Qwen (ローカル llama.cpp) のディスパッチは 20-40 分かかること�
 - `DISPATCH_PENDING` は正常（worker がまだ実行中）。**必ず polling を繰り返すこと**
 - result file が存在 = worker 完了。`.pid` ファイルは worker が自動削除する
 
+**コンパクション回復時**: Compaction Recovery で TS helper を再実行すると同じ `bash_dispatch` アクションが返る。
+dispatch command を再実行（冪等なので安全）→ **即座に polling を開始** → `DISPATCH_COMPLETE` まで繰り返す。
+コンパクション後もこの手順は同じ。dispatch 結果を待たずに idle になってはならない。
+
 ## Bash Review Dispatch (dispatch-worker)
 
 For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
@@ -229,13 +242,13 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
 ### Step 1: Reviewer 実行
 - `iteration += 1`
 - `action.reviewerCommand` をそのまま Bash で実行
-- **`action.detached` が `true` の場合**: コマンドは即座に return する。以下で polling:
+- **`action.detached` が `true` の場合**: コマンドは即座に return する（冪等: 重複起動なし）。**即座に** polling 開始:
   ```bash
   RESULT="<action.reviewerResultFile>"
   for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
   echo DISPATCH_PENDING
   ```
-  `DISPATCH_PENDING` → polling を再実行。`DISPATCH_COMPLETE` → result-file を Read。
+  `DISPATCH_PENDING` → **同じ polling コマンドをそのまま再実行**（必須）。`DISPATCH_COMPLETE` → result-file を Read。
 - **通常モード**: コマンド完了を待つ
 - 結果 JSON の `result` フィールドからテキスト出力を取得
 
@@ -258,13 +271,13 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
   ```bash
   <action.fixerCommandPrefix> --prompt-file <fixer-prompt-file>
   ```
-- **`action.detached` が `true` の場合**: コマンドは即座に return する。以下で polling:
+- **`action.detached` が `true` の場合**: コマンドは即座に return する（冪等: 重複起動なし）。**即座に** polling 開始:
   ```bash
   RESULT="<action.fixerResultFile>"
   for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
   echo DISPATCH_PENDING
   ```
-  `DISPATCH_PENDING` → polling を再実行。`DISPATCH_COMPLETE` → result-file を Read。
+  `DISPATCH_PENDING` → **同じ polling コマンドをそのまま再実行**（必須）。`DISPATCH_COMPLETE` → result-file を Read。
   **注意**: fixer の result file は毎 iteration 同じパスに上書きされる。polling 前に古い result file を削除すること:
   ```bash
   rm -f "<action.fixerResultFile>"
