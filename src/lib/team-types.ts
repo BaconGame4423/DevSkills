@@ -27,6 +27,10 @@ export interface BashDispatchAction {
   step: string;
   /** dispatch-worker.js の完全実行コマンド。Opus はこれをそのまま Bash 実行する */
   command: string;
+  /** detach モード: dispatch-worker が即座に return し、worker がバックグラウンドで実行される */
+  detached?: boolean;
+  /** detach モード: polling 対象の result file パス */
+  resultFile?: string;
   worker: {
     role: string;
     agentFile: string;
@@ -46,6 +50,12 @@ export interface BashReviewDispatchAction {
   reviewerCommand: string;
   /** fixer の dispatch-worker.js コマンドプレフィックス（--prompt-file を除く）。Opus は --prompt-file <path> を追加するだけ */
   fixerCommandPrefix: string;
+  /** detach モード: dispatch-worker が即座に return し、worker がバックグラウンドで実行される */
+  detached?: boolean;
+  /** detach モード: reviewer の polling 対象 result file パス */
+  reviewerResultFile?: string;
+  /** detach モード: fixer の polling 対象 result file パス */
+  fixerResultFile?: string;
   reviewer: {
     role: string;
     agentFile: string;

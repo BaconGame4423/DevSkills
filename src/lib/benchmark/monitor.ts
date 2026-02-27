@@ -142,18 +142,28 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
 
 /**
  * Check if a dispatch-worker process is currently running.
- * dispatch-worker is spawned by the orchestrator via Bash tool for each pipeline step.
- * Only one benchmark runs at a time (bench Skill enforces this), so no cross-benchmark false positives.
+ * PID ファイルベース: detach モードの .pid ファイルを探し、process.kill(pid, 0) で生存確認。
+ * non-detach モード（GLM5 combo）では .pid ファイルが生成されないため常に false を返す。
  */
-function isDispatchWorkerRunning(): boolean {
+function isDispatchWorkerRunning(comboDir: string): boolean {
   try {
-    const result = execSync("pgrep -c dispatch-worker", {
-      encoding: "utf8",
-      timeout: 3000,
-    });
-    return parseInt(result.trim(), 10) > 0;
+    const result = execSync(
+      `find "${comboDir}" -path '*/.pd-dispatch/*.pid' 2>/dev/null`,
+      { encoding: "utf8", timeout: 3000 }
+    );
+    if (!result.trim()) return false;
+    for (const pidFile of result.trim().split("\n").filter(Boolean)) {
+      try {
+        const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+        if (!isNaN(pid)) {
+          process.kill(pid, 0); // throws if process doesn't exist
+          return true;
+        }
+      } catch { /* dead process or bad pid file — continue */ }
+    }
+    return false;
   } catch {
-    return false; // pgrep exit 1 = no match, or timeout
+    return false;
   }
 }
 
@@ -377,7 +387,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
                 lastKnownStep = currentStep;
                 consecutiveIdleCount = 0;
                 recoveryAttempts = 0; // Fresh recovery budget for each new step
-              } else if (isDispatchWorkerRunning()) {
+              } else if (isDispatchWorkerRunning(options.comboDir)) {
                 consecutiveIdleCount = 0; // dispatch in progress → suppress idle count
               } else {
                 consecutiveIdleCount++;
@@ -435,7 +445,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       const lineDelta = currentLineCount - lastPaneLineCount;
       lastPaneLineCount = currentLineCount;
 
-      const dispatching = isDispatchWorkerRunning();
+      const dispatching = isDispatchWorkerRunning(options.comboDir);
       let tuiState = "idle";
       if (paneContent.includes("esc to int")) tuiState = "streaming";
       else if (paneContent.includes("⎿  Running")) tuiState = "running";

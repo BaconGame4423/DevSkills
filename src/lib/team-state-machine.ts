@@ -189,6 +189,7 @@ export function computeNextInstruction(
 interface DispatchConfig {
   timeout?: number;
   max_retries?: number;
+  detach?: boolean;
   step_overrides?: Record<string, { timeout?: number; max_retries?: number }>;
 }
 
@@ -302,6 +303,7 @@ function buildDispatchCommand(opts: {
   timeout?: number;
   maxRetries?: number;
   cli?: string;
+  detach?: boolean;
 }): string {
   const parts = [
     "node .poor-dev/dist/bin/dispatch-worker.js",
@@ -314,6 +316,9 @@ function buildDispatchCommand(opts: {
     `--timeout ${opts.timeout ?? 600}`,
     `--max-retries ${opts.maxRetries ?? 1}`,
   ];
+  if (opts.detach) {
+    parts.push("--detach");
+  }
   return parts.join(" ");
 }
 
@@ -344,6 +349,7 @@ function buildBashDispatchTeamAction(
       const promptFile = path.join(dispatchDir, `${step}-prompt.txt`);
       const resultFile = path.join(dispatchDir, `${step}-worker-result.json`);
       const dp = resolveDispatchParams(step, dispatchConfig);
+      const detach = !!(dispatchConfig?.detach);
       const command = buildDispatchCommand({
         promptFile,
         agentFile,
@@ -353,6 +359,7 @@ function buildBashDispatchTeamAction(
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
         cli: workerCli,
+        detach,
       });
 
       const artifactDef = flowDef.artifacts?.[step];
@@ -364,7 +371,7 @@ function buildBashDispatchTeamAction(
             ? artifactDef.map((f) => path.join(fd, f))
             : [path.join(fd, artifactDef)];
 
-      return {
+      const action: BashDispatchAction = {
         action: "bash_dispatch",
         step,
         command,
@@ -372,6 +379,11 @@ function buildBashDispatchTeamAction(
         prompt,
         artifacts,
       };
+      if (detach) {
+        action.detached = true;
+        action.resultFile = resultFile;
+      }
+      return action;
     }
 
     case "review-loop":
@@ -394,6 +406,7 @@ function buildBashDispatchTeamAction(
       const reviewerPromptFile = path.join(dispatchDir, `${step}-review-prompt.txt`);
       const reviewerResultFile = path.join(dispatchDir, `${step}-reviewer-result.json`);
       const dp = resolveDispatchParams(step, dispatchConfig);
+      const detach = !!(dispatchConfig?.detach);
       const reviewerCommand = buildDispatchCommand({
         promptFile: reviewerPromptFile,
         agentFile: reviewerAgentFile,
@@ -403,6 +416,7 @@ function buildBashDispatchTeamAction(
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
         cli: workerCli,
+        detach,
       });
 
       // fixer は --prompt-file が動的（iteration ごとに変わる）なので prefix のみ
@@ -416,9 +430,10 @@ function buildBashDispatchTeamAction(
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
         cli: workerCli,
+        detach,
       }).replace(" --prompt-file __PROMPT_FILE__", "");
 
-      return {
+      const reviewAction: BashReviewDispatchAction = {
         action: "bash_review_dispatch",
         step,
         reviewerCommand,
@@ -440,6 +455,12 @@ function buildBashDispatchTeamAction(
         targetFiles,
         maxIterations: teamConfig.maxReviewIterations ?? 12,
       };
+      if (detach) {
+        reviewAction.detached = true;
+        reviewAction.reviewerResultFile = reviewerResultFile;
+        reviewAction.fixerResultFile = fixerResultFile;
+      }
+      return reviewAction;
     }
   }
 }

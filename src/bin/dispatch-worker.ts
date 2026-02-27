@@ -16,7 +16,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, openSync, closeSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, openSync, closeSync } from "node:fs";
 import path from "node:path";
 
 // --- 型定義 ---
@@ -31,6 +31,7 @@ interface CliArgs {
   maxRetries: number;
   retryDelay: number;
   cli: string;
+  detach: boolean;
 }
 
 interface FailureResult {
@@ -53,6 +54,7 @@ function parseArgs(argv: string[]): CliArgs {
     maxRetries: 1,
     retryDelay: 30,
     cli: "glm",
+    detach: false,
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -94,6 +96,9 @@ function parseArgs(argv: string[]): CliArgs {
       case "--cli":
         args.cli = next ?? "glm";
         i++;
+        break;
+      case "--detach":
+        args.detach = true;
         break;
     }
   }
@@ -174,6 +179,21 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // --detach モード: 自身を detached 子プロセスとして再起動し、即座に exit
+  if (args.detach) {
+    const childArgs = process.argv.slice(2).filter((a) => a !== "--detach");
+    const child = spawn(process.execPath, [process.argv[1]!, ...childArgs], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    writeFileSync(`${args.resultFile}.pid`, String(child.pid));
+    process.stderr.write(
+      `[dispatch-worker] Detached: PID=${child.pid}\n`,
+    );
+    process.exit(0);
+  }
+
   let prompt: string;
   try {
     prompt = readFileSync(args.promptFile, "utf-8");
@@ -203,6 +223,7 @@ async function main(): Promise<void> {
     if (result.exitCode === 0) {
       // 成功: result-file に stdout を書き込み
       writeFileSync(args.resultFile, result.stdout, "utf-8");
+      try { unlinkSync(`${args.resultFile}.pid`); } catch { /* ignore */ }
       process.exit(0);
     }
 
@@ -234,6 +255,7 @@ async function main(): Promise<void> {
     lastError,
   };
   writeFileSync(args.resultFile, JSON.stringify(failure, null, 2), "utf-8");
+  try { unlinkSync(`${args.resultFile}.pid`); } catch { /* ignore */ }
   process.exit(1);
 }
 

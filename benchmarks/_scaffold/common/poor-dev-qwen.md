@@ -183,7 +183,7 @@ When the TS helper returns `done`, generate a cost report before reporting compl
 
 For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトライを内包。
 
-### 手順
+### 手順 (通常モード: `action.detached` が未設定または `false`)
 1. `action.command` をそのまま Bash で実行:
    ```bash
    <action.command>
@@ -201,17 +201,42 @@ For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトラ�
 4. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
 5. 次のステップへ (Core Loop に戻る)
 
+### Detached Dispatch (長時間 worker: `action.detached` が `true`)
+
+dispatch-worker は `--detach` 付きで起動され、即座に return する。worker 本体はバックグラウンドで動作。
+Qwen (ローカル llama.cpp) のディスパッチは 20-40 分かかることがある。
+
+1. `action.command` を Bash で実行（即座に return する）
+2. Result file を polling（Bash timeout 内で繰り返し確認）:
+   ```bash
+   RESULT="<action.resultFile>"
+   for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
+   echo DISPATCH_PENDING
+   ```
+3. `DISPATCH_PENDING` の場合 → **同じ polling コマンドを再実行**（worker がまだ実行中。これは正常）
+4. `DISPATCH_COMPLETE` の場合 → result-file を Read
+5. 以降は通常モードの手順 2（result-file 解析）以降と同じ
+
+**注意**:
+- polling ループは `36 × 16s = 576s < 600s` で Bash timeout 内に収まる
+- `DISPATCH_PENDING` は正常（worker がまだ実行中）。**必ず polling を繰り返すこと**
+- result file が存在 = worker 完了。`.pid` ファイルは worker が自動削除する
+
 ## Bash Review Dispatch (dispatch-worker)
 
 For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
 
 ### Step 1: Reviewer 実行
 - `iteration += 1`
-- `action.reviewerCommand` をそのまま Bash で実行:
+- `action.reviewerCommand` をそのまま Bash で実行
+- **`action.detached` が `true` の場合**: コマンドは即座に return する。以下で polling:
   ```bash
-  <action.reviewerCommand>
+  RESULT="<action.reviewerResultFile>"
+  for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
+  echo DISPATCH_PENDING
   ```
-  コマンドは TS ヘルパーが完全生成済み。dispatch-worker が timeout + リトライを処理。
+  `DISPATCH_PENDING` → polling を再実行。`DISPATCH_COMPLETE` → result-file を Read。
+- **通常モード**: コマンド完了を待つ
 - 結果 JSON の `result` フィールドからテキスト出力を取得
 
 ### Step 2: Review Cycle 処理
@@ -232,6 +257,17 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
 - fixer プロンプトをファイルに保存し、`action.fixerCommandPrefix` + `--prompt-file <path>` で実行:
   ```bash
   <action.fixerCommandPrefix> --prompt-file <fixer-prompt-file>
+  ```
+- **`action.detached` が `true` の場合**: コマンドは即座に return する。以下で polling:
+  ```bash
+  RESULT="<action.fixerResultFile>"
+  for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done
+  echo DISPATCH_PENDING
+  ```
+  `DISPATCH_PENDING` → polling を再実行。`DISPATCH_COMPLETE` → result-file を Read。
+  **注意**: fixer の result file は毎 iteration 同じパスに上書きされる。polling 前に古い result file を削除すること:
+  ```bash
+  rm -f "<action.fixerResultFile>"
   ```
 - fixer 結果の `result` から fixed/rejected ID を抽出 → `fixed_ids` に追加
 - commit fixes

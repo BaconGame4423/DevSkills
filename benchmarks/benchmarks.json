@@ -104,6 +104,7 @@
         "dispatch": {
           "timeout": 3600,
           "max_retries": 1,
+          "detach": true,
           "step_overrides": {
             "plan": { "timeout": 7200 },
             "implement": { "timeout": 7200, "max_retries": 2 }
