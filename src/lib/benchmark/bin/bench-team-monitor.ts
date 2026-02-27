@@ -24,7 +24,7 @@ const { values } = parseArgs({
     timeout: {
       type: "string",
       short: "T",
-      default: "7200",
+      default: "0",
     },
     "project-root": {
       type: "string",

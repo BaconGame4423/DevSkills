@@ -102,11 +102,11 @@
         "command_variant": "simple",
         "review_mode": "bash",
         "dispatch": {
-          "timeout": 1800,
+          "timeout": 3600,
           "max_retries": 1,
           "step_overrides": {
-            "plan": { "timeout": 2400 },
-            "implement": { "timeout": 3600, "max_retries": 2 }
+            "plan": { "timeout": 7200 },
+            "implement": { "timeout": 7200, "max_retries": 2 }
           }
         },
         "polling": {

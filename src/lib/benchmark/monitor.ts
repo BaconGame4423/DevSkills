@@ -140,6 +140,23 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
   ].join("\n");
 }
 
+/**
+ * Check if a dispatch-worker process is currently running.
+ * dispatch-worker is spawned by the orchestrator via Bash tool for each pipeline step.
+ * Only one benchmark runs at a time (bench Skill enforces this), so no cross-benchmark false positives.
+ */
+function isDispatchWorkerRunning(): boolean {
+  try {
+    const result = execSync("pgrep -c dispatch-worker", {
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    return parseInt(result.trim(), 10) > 0;
+  } catch {
+    return false; // pgrep exit 1 = no match, or timeout
+  }
+}
+
 function hasArtifacts(comboDir: string): boolean {
   const findOpts = `-maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
     `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/.git/*' ` +
@@ -244,7 +261,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
     const elapsed = Date.now() - startTime;
     const elapsedSeconds = Math.floor(elapsed / 1000);
 
-    if (elapsedSeconds >= options.timeoutSeconds) {
+    if (options.timeoutSeconds > 0 && elapsedSeconds >= options.timeoutSeconds) {
       return {
         exitReason: "timeout",
         elapsedSeconds,
@@ -360,6 +377,8 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
                 lastKnownStep = currentStep;
                 consecutiveIdleCount = 0;
                 recoveryAttempts = 0; // Fresh recovery budget for each new step
+              } else if (isDispatchWorkerRunning()) {
+                consecutiveIdleCount = 0; // dispatch in progress → suppress idle count
               } else {
                 consecutiveIdleCount++;
                 if (consecutiveIdleCount >= idleCountBeforeExit) {
@@ -416,10 +435,12 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       const lineDelta = currentLineCount - lastPaneLineCount;
       lastPaneLineCount = currentLineCount;
 
+      const dispatching = isDispatchWorkerRunning();
       let tuiState = "idle";
       if (paneContent.includes("esc to int")) tuiState = "streaming";
       else if (paneContent.includes("⎿  Running")) tuiState = "running";
       else if (isSelectionUIActive(paneContent)) tuiState = "selectionUI";
+      else if (dispatching) tuiState = "dispatch";
 
       const elapsedStr = formatElapsed(elapsedSeconds);
       const parts = [
