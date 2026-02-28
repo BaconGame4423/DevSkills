@@ -132,10 +132,18 @@ export function readPipelineInfo(comboDir: string): PipelineInfo | null {
   }
 }
 
-export function buildRecoveryMessage(info: PipelineInfo): string {
+export function buildRecoveryMessage(info: PipelineInfo, comboDir?: string): string {
+  // dispatch ワーカー実行中の場合、polling 再開を明示するメッセージに変更
+  if (comboDir && isDispatchWorkerRunning(comboDir)) {
+    return [
+      `[MONITOR] Dispatch worker is running but orchestrator is idle (current: ${info.current}).`,
+      `Resume polling: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${info.stateDir} --project-dir .`,
+      `Parse the JSON output, then execute action.pollCommand immediately. Do NOT kill the worker.`,
+    ].join("\n");
+  }
   return [
     `[MONITOR] TUI idle but pipeline incomplete (current: ${info.current}, ${info.completed.length}/${info.pipeline.length} steps done).`,
-    `Resume: node .poor-dev/dist/bin/poor-dev-next.js --flow ${info.flow} --state-dir ${info.stateDir} --project-dir .`,
+    `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${info.stateDir} --project-dir .`,
     `Parse JSON output and execute the action per poor-dev Core Loop.`,
   ].join("\n");
 }
@@ -401,7 +409,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
                   };
                 } else if (consecutiveIdleCount >= idleCountBeforeRecovery && recoveryAttempts < maxRecoveryAttempts) {
                   recoveryAttempts++;
-                  const msg = buildRecoveryMessage(pipelineInfo);
+                  const msg = buildRecoveryMessage(pipelineInfo, options.comboDir);
                   pasteBuffer(options.targetPane, "monitor-recovery", msg);
                   sendKeys(options.targetPane, "Enter");
                   logs.push(`Recovery #${recoveryAttempts} sent (current: ${currentStep}, idle cycles: ${consecutiveIdleCount})`);

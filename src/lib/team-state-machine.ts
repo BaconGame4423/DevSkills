@@ -326,9 +326,18 @@ function buildDispatchCommand(opts: {
  * detach モード用の polling コマンドを生成。
  * 36×16s = 576s（Bash tool timeout 600s 以内）で result file を監視。
  * DISPATCH_COMPLETE or DISPATCH_PENDING を stdout に出力。
+ * DISPATCH_PENDING 時はワーカーの生存状態と経過時間を付与し、
+ * LLM が pgrep 等のプロセス調査を行う動機を消す。
  */
 function buildPollCommand(resultFile: string): string {
-  return `RESULT='${resultFile}'; for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done; echo DISPATCH_PENDING`;
+  const pidFile = `${resultFile}.pid`;
+  return [
+    `RESULT='${resultFile}'`,
+    `PID_FILE='${pidFile}'`,
+    `for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done`,
+    `PID=$(cat "$PID_FILE" 2>/dev/null | tr -d "[:space:]")`,
+    'if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then ELAPSED=$(ps -o etimes= -p "$PID" 2>/dev/null | tr -d " "); echo "DISPATCH_PENDING worker_alive=true pid=$PID elapsed=${ELAPSED}s"; else echo "DISPATCH_PENDING worker_alive=false"; fi',
+  ].join("; ");
 }
 
 function buildBashDispatchTeamAction(

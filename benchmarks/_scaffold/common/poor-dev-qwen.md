@@ -234,6 +234,16 @@ action JSON には `command`（dispatch 用）と `pollCommand`（polling 用）
 - polling 間にテキスト出力・解説を行わない。即座に `action.pollCommand` を再実行する
 - `DISPATCH_PENDING` は正常（worker がまだ実行中）。**polling を停止してはならない**
 
+**絶対禁止事項** (hook でも強制):
+- `kill`, `pkill`, `killall` でワーカープロセスを終了させてはならない（hook がブロックする）
+- `pgrep`, `pidof`, `ps` でワーカープロセスを調査してはならない（hook がブロックする）
+  - 理由: ワーカーは `exec claude` で動作するため `pgrep qwen` は常に空を返す。false negative で誤判断する
+- ワーカーの代わりに直接コードを書いてはならない（hook がブロックする）
+  - 理由: implement ステップ以外での実装ファイル書き込みは hook でブロックされる
+- `DISPATCH_PENDING` を「エラー」「タイムアウト」と解釈してはならない
+  - `DISPATCH_PENDING` は正常シグナル。Qwen のディスパッチは 20-40 分かかる
+  - `pollCommand` 出力に `worker_alive=true` が含まれていれば、ワーカーは正常に動作中
+
 **コンパクション回復時**: Compaction Recovery で TS helper を再実行すると同じ action JSON が返る。
 `action.command` を再実行（冪等）→ `action.pollCommand` を実行 → `DISPATCH_COMPLETE` まで繰り返す。
 

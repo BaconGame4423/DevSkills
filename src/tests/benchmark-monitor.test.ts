@@ -523,7 +523,7 @@ describe("benchmark-monitor", () => {
   });
 
   describe("buildRecoveryMessage", () => {
-    it("正しいフォーマットのメッセージを返す", async () => {
+    it("正しいフォーマットのメッセージを返す（通常時）", async () => {
       const { buildRecoveryMessage } = await importMonitor();
 
       const msg = buildRecoveryMessage({
@@ -537,9 +537,32 @@ describe("benchmark-monitor", () => {
       expect(msg).toContain("[MONITOR] TUI idle but pipeline incomplete");
       expect(msg).toContain("current: implement");
       expect(msg).toContain("3/5 steps done");
-      expect(msg).toContain("--flow feature");
       expect(msg).toContain("--state-dir features/my-feature");
       expect(msg).toContain("poor-dev Core Loop");
+    });
+
+    it("dispatch ワーカー実行中は polling 再開メッセージを返す", async () => {
+      const { buildRecoveryMessage } = await importMonitor();
+
+      // comboDir が未指定の場合は通常メッセージ
+      const msgNoDir = buildRecoveryMessage({
+        flow: "feature",
+        current: "implement",
+        completed: ["specify"],
+        pipeline: ["specify", "implement"],
+        stateDir: "features/my-feature",
+      });
+      expect(msgNoDir).toContain("[MONITOR] TUI idle but pipeline incomplete");
+
+      // comboDir を渡してもワーカーが実行中でなければ通常メッセージ
+      const msgNoWorker = buildRecoveryMessage({
+        flow: "feature",
+        current: "implement",
+        completed: ["specify"],
+        pipeline: ["specify", "implement"],
+        stateDir: "features/my-feature",
+      }, "/tmp/nonexistent-combo");
+      expect(msgNoWorker).toContain("[MONITOR] TUI idle but pipeline incomplete");
     });
   });
 
