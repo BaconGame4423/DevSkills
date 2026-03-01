@@ -55,6 +55,7 @@
   "models": {
     "m2.5": {
       "display_name": "MiniMax M2.5",
+      "monitor_timeout": 7200,
       "cli": "opencode",
       "model_id": "opencode/minimax-m2.5-free",
       "config_extras": {
@@ -65,6 +66,7 @@
     },
     "glm5": {
       "display_name": "GLM-5",
+      "monitor_timeout": 7200,
       "cli": "opencode",
       "model_id": "zai-coding-plan/glm-5",
       "config_extras": {
@@ -84,18 +86,21 @@
     },
     "claude": {
       "display_name": "Claude",
+      "monitor_timeout": 7200,
       "cli": "claude",
       "model_id": "opus",
       "fallback_model": "haiku"
     },
     "sonnet": {
       "display_name": "Claude Sonnet 4.6",
+      "monitor_timeout": 7200,
       "cli": "claude",
       "model_id": "sonnet",
       "fallback_model": "haiku"
     },
     "qwen35": {
       "display_name": "Qwen3.5-122B",
+      "monitor_timeout": 14400,
       "cli": "qwen",
       "model_id": "qwen3.5",
       "config_extras": {

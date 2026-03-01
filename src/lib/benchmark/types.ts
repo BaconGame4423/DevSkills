@@ -32,6 +32,7 @@ export interface BenchCombo {
   mode?: string;
   dispatch_mode?: "bash";
   step_overrides?: Record<string, string>;
+  monitor_timeout?: number;
 }
 
 export interface BenchModel {
@@ -39,6 +40,7 @@ export interface BenchModel {
   cli: string;
   model_id: string;
   fallback_model?: string;
+  monitor_timeout?: number;
   config_extras?: Record<string, unknown>;
 }
 

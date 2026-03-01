@@ -222,13 +222,21 @@ if [ "$SUB_CLI" != "claude" ]; then
   VERBOSE_FLAG="--verbose-heartbeat"
 fi
 
+# Resolve monitor timeout: combination.monitor_timeout > models[sub_agent].monitor_timeout > 7200
+COMBO_TIMEOUT=$(jq -r --arg c "<combo>" '
+  .combinations[] | select(.dir_name == $c) | .monitor_timeout // empty
+' benchmarks/benchmarks.json)
+if [ -z "$COMBO_TIMEOUT" ]; then
+  COMBO_TIMEOUT=$(jq -r --arg m "$SUB_AGENT" '.models[$m].monitor_timeout // 7200' benchmarks/benchmarks.json)
+fi
+
 node dist/lib/benchmark/bin/bench-team-monitor.js \
   --combo <combo> \
   --target $TARGET \
   --combo-dir benchmarks/<combo> \
   --phase0-config "$PHASE0_CONFIG" \
   --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
-  --timeout 7200 \
+  --timeout $COMBO_TIMEOUT \
   --caller-pane $CURRENT \
   $VERBOSE_FLAG
 ```
