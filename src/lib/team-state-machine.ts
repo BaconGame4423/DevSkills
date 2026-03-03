@@ -157,16 +157,20 @@ export function computeNextInstruction(
   const completedSet = new Set(state.completed ?? []);
   const pipeline = state.pipeline?.length > 0 ? state.pipeline : flowDef.steps;
 
-  // config.json から worker CLI + dispatch 設定を解決
+  // config.json から worker CLI + dispatch 設定 + command_variant を解決
   const configPath = path.join(projectDir, ".poor-dev", "config.json");
   let workerCli = "glm";
   let dispatchConfig: DispatchConfig | undefined;
+  let commandVariant: string | undefined;
   if (fs.exists(configPath)) {
     try {
       const cfg = JSON.parse(fs.readFile(configPath));
       workerCli = resolveWorkerCli(cfg?.default?.cli);
       if (cfg?.dispatch) {
         dispatchConfig = cfg.dispatch as DispatchConfig;
+      }
+      if (typeof cfg?.command_variant === "string") {
+        commandVariant = cfg.command_variant;
       }
     } catch { /* fallback to glm */ }
   }
@@ -193,7 +197,7 @@ export function computeNextInstruction(
     for (const step of parallelGroup) {
       const tc = flowDef.teamConfig?.[step];
       if (!tc) continue;
-      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig));
+      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig, commandVariant));
     }
     const meta: ActionMeta = {
       recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
@@ -235,7 +239,7 @@ export function computeNextInstruction(
   };
 
   // Bash dispatch
-  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig);
+  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig, commandVariant);
   action._meta = meta;
   return action;
 }
@@ -250,7 +254,7 @@ interface DispatchConfig {
   timeout?: number;
   max_retries?: number;
   detach?: boolean;
-  step_overrides?: Record<string, { timeout?: number; max_retries?: number }>;
+  step_overrides?: Record<string, { timeout?: number; max_retries?: number; max_turns?: number }>;
 }
 
 /**
@@ -259,12 +263,16 @@ interface DispatchConfig {
 function resolveDispatchParams(
   step: string,
   dispatchConfig?: DispatchConfig
-): { timeout: number; maxRetries: number } {
+): { timeout: number; maxRetries: number; maxTurnsOverride?: number } {
   const stepOverride = dispatchConfig?.step_overrides?.[step];
-  return {
+  const result: { timeout: number; maxRetries: number; maxTurnsOverride?: number } = {
     timeout: stepOverride?.timeout ?? dispatchConfig?.timeout ?? 600,
     maxRetries: stepOverride?.max_retries ?? dispatchConfig?.max_retries ?? 1,
   };
+  if (stepOverride?.max_turns != null) {
+    result.maxTurnsOverride = stepOverride.max_turns;
+  }
+  return result;
 }
 
 /**
@@ -402,6 +410,22 @@ function buildPollCommand(resultFile: string, timeoutSec?: number): string {
   ].join("; ");
 }
 
+/**
+ * command_variant 付きの agent ファイルパスを解決する。
+ * variant あり → agents/claude/{role}-{variant}.md が存在すれば使用、なければフォールバック。
+ */
+function resolveAgentFile(
+  role: string,
+  commandVariant: string | undefined,
+  fs: Pick<FileSystem, "exists">
+): string {
+  if (commandVariant) {
+    const variantFile = `agents/claude/${role}-${commandVariant}.md`;
+    if (fs.exists(variantFile)) return variantFile;
+  }
+  return `agents/claude/${role}.md`;
+}
+
 function buildBashDispatchTeamAction(
   step: string,
   teamConfig: StepTeamConfig,
@@ -412,7 +436,8 @@ function buildBashDispatchTeamAction(
   pipeline: string[] = [],
   completedSet: Set<string> = new Set(),
   workerCli: string = "glm",
-  dispatchConfig?: DispatchConfig
+  dispatchConfig?: DispatchConfig,
+  commandVariant?: string
 ): BashDispatchAction | BashReviewDispatchAction {
   const WORKER_TOOLS = teamConfig.tools ?? "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
@@ -423,15 +448,15 @@ function buildBashDispatchTeamAction(
     case "team": {
       const teammate = (teamConfig.teammates ?? [])[0];
       const role = teammate?.role ?? `worker-${step}`;
-      const agentFile = `agents/claude/${role}.md`;
-      const maxTurns = teammate?.maxTurns ?? 30;
+      const agentFile = resolveAgentFile(role, commandVariant, fs);
+      const dp = resolveDispatchParams(step, dispatchConfig);
+      const maxTurns = dp.maxTurnsOverride ?? teammate?.maxTurns ?? 30;
       const prompt = buildBashDispatchPrompt(step, fd, flowDef, fs, {
         teamEnabled: !!teamConfig.cli,
       });
 
       const promptFile = path.join(dispatchDir, `${step}-prompt.txt`);
       const resultFile = path.join(dispatchDir, `${step}-worker-result.json`);
-      const dp = resolveDispatchParams(step, dispatchConfig);
       const detach = !!(dispatchConfig?.detach);
       const command = buildDispatchCommand({
         promptFile,

@@ -87,6 +87,7 @@ export const FEATURE_FLOW: FlowDefinition = {
     phasereview:        { spec: "spec.md", implementation: "*" },
   },
   contextInject: {
+    specify:   { input: true, discussion: true },
     plan:      { spec: true },
     tasks:     { spec: true },
     implement: { spec: true, tasks: true },

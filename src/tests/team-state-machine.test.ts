@@ -833,6 +833,111 @@ describe("collectReviewTargets", () => {
   });
 });
 
+describe("command_variant routing", () => {
+  it("command_variant: simple 指定時に -simple.md を解決する", () => {
+    const ctx = makeCtx();
+    const configJson = JSON.stringify({
+      default: { cli: "qwen" },
+      command_variant: "simple",
+    });
+    const fs = mockFs({
+      "/proj/.poor-dev/config.json": configJson,
+      "agents/claude/worker-specify-simple.md": "simple agent",
+    });
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_dispatch");
+    if (action.action === "bash_dispatch") {
+      expect(action.step).toBe("specify");
+      expect(action.worker.agentFile).toBe("agents/claude/worker-specify-simple.md");
+      expect(action.command).toContain("--append-system-prompt-file agents/claude/worker-specify-simple.md");
+    }
+  });
+
+  it("command_variant: simple 指定で -simple.md が存在しない場合はフォールバック", () => {
+    const ctx = makeCtx();
+    const configJson = JSON.stringify({
+      default: { cli: "qwen" },
+      command_variant: "simple",
+    });
+    // worker-specify-simple.md は存在しない → フォールバック
+    const fs = mockFs({
+      "/proj/.poor-dev/config.json": configJson,
+    });
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_dispatch");
+    if (action.action === "bash_dispatch") {
+      expect(action.step).toBe("specify");
+      expect(action.worker.agentFile).toBe("agents/claude/worker-specify.md");
+      expect(action.command).toContain("--append-system-prompt-file agents/claude/worker-specify.md");
+    }
+  });
+
+  it("command_variant 未設定時は既存の agent ファイルを使用する", () => {
+    const ctx = makeCtx();
+    const configJson = JSON.stringify({ default: { cli: "qwen" } });
+    const fs = mockFs({
+      "/proj/.poor-dev/config.json": configJson,
+      "agents/claude/worker-specify-simple.md": "simple agent",
+    });
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_dispatch");
+    if (action.action === "bash_dispatch") {
+      expect(action.worker.agentFile).toBe("agents/claude/worker-specify.md");
+    }
+  });
+});
+
+describe("max_turns override via step_overrides", () => {
+  it("step_overrides.specify.max_turns=12 がデフォルト30を上書きする", () => {
+    const ctx = makeCtx();
+    const configJson = JSON.stringify({
+      default: { cli: "qwen" },
+      dispatch: {
+        timeout: 3600,
+        step_overrides: {
+          specify: { timeout: 2400, max_turns: 12 },
+        },
+      },
+    });
+    const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_dispatch");
+    if (action.action === "bash_dispatch") {
+      expect(action.step).toBe("specify");
+      expect(action.worker.maxTurns).toBe(12);
+      expect(action.command).toContain("--max-turns 12");
+      expect(action.command).toContain("--timeout 2400");
+    }
+  });
+
+  it("step_overrides に max_turns がないステップは teamConfig のデフォルトを使用", () => {
+    const ctx = makeCtx();
+    const configJson = JSON.stringify({
+      default: { cli: "qwen" },
+      dispatch: {
+        timeout: 3600,
+        step_overrides: {
+          implement: { max_turns: 15 },
+        },
+      },
+    });
+    const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_dispatch");
+    if (action.action === "bash_dispatch") {
+      // specify は step_overrides に max_turns がないので teamConfig のデフォルト (30)
+      expect(action.step).toBe("specify");
+      expect(action.worker.maxTurns).toBe(30);
+      expect(action.command).toContain("--max-turns 30");
+    }
+  });
+});
+
 describe("collectPriorFixes", () => {
   it("前ステップの fixer result から修正 desc を収集する", () => {
     const fixerResult = JSON.stringify({
