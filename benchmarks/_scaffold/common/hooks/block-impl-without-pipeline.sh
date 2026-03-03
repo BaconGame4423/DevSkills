@@ -4,6 +4,20 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name')
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // "."')
 
+# --- result ファイル保護 (dispatch-worker が writeFileSync で生成するため hook 非経由) ---
+if [[ "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Edit" ]]; then
+  if [[ "$FILE_PATH" =~ \.pd-dispatch/.*-result\.json$ ]]; then
+    jq -n '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: "BLOCKED: *-result.json は dispatch-worker が生成します。Orchestrator の直接書き込みは禁止です。dispatch command を実行してください。"
+      }
+    }'
+    exit 0
+  fi
+fi
+
 # pipeline-state.json 検索（feature dir 内） — TS helper が作成した正規フォーマットのみ有効
 HAS_VALID_PIPELINE=false
 CURRENT_STEP=""
@@ -21,6 +35,24 @@ done < <(find "$CWD/features" -name "pipeline-state.json" -maxdepth 3 2>/dev/nul
 # current ステップを取得
 if [[ "$HAS_VALID_PIPELINE" == "true" ]]; then
   CURRENT_STEP=$(jq -r '.current // "unknown"' "$FOUND_STATE_FILE")
+fi
+
+# --- パイプライン成果物保護 ---
+# dispatch worker が生成すべき成果物への直接書き込みをブロック
+PIPELINE_ARTIFACTS="spec\.md|plan\.md|tasks\.md|test-plan\.md"
+if [[ "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Edit" ]]; then
+  if [[ "$FILE_PATH" =~ features/[^/]+/($PIPELINE_ARTIFACTS)$ ]]; then
+    if [[ "$HAS_VALID_PIPELINE" == "true" ]]; then
+      jq -n '{
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: "BLOCKED: パイプライン成果物 (.md) は dispatch-worker 経由で生成してください。Orchestrator の直接書き込みは禁止です。"
+        }
+      }'
+      exit 0
+    fi
+  fi
 fi
 
 # 実装ファイルかどうかチェック

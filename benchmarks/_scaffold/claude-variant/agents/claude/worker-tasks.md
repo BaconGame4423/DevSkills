@@ -164,6 +164,12 @@ Output progress markers at key milestones:
 - `[PROGRESS: tasks validation]` — 依存関係検証中
 - `[PROGRESS: tasks complete]` — tasks.md 作成完了
 
+### Phase Mapping 制約
+
+- plan.md に Phase 分割がある場合、各 Phase を最低 1 タスクにマッピングすること
+- 「Phase 1-N 全統合」は禁止。Phase 単位でタスクを分割すること
+- 単一ファイルプロジェクトでも、Phase ごとの Acceptance Criteria を個別に定義すること
+
 ### Phase Structure
 
 - **Phase 1**: Setup (project initialization)

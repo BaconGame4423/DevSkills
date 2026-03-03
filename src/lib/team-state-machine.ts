@@ -48,6 +48,11 @@ export function validateResultFile(
     const data = JSON.parse(fs.readFile(resultPath));
     // dispatch-worker.js 成功パス: worker CLI の stdout をそのまま書き込み
     if (data.type === "result") {
+      // CLI (--output-format json) は必ず subtype を出力 (success/error_max_turns/error_during_execution)
+      // Opus fabrication は subtype を含まない → 拒否
+      if (typeof data.subtype !== "string") {
+        return { valid: false, reason: `missing "subtype" field in ${resultPath} — not from dispatch-worker (CLI JSON always includes subtype)` };
+      }
       return { valid: true };
     }
     // dispatch-worker.js 失敗パス: 全リトライ失敗時の構造化エラー
@@ -384,14 +389,16 @@ function buildDispatchCommand(opts: {
  * DISPATCH_PENDING 時はワーカーの生存状態と経過時間を付与し、
  * LLM が pgrep 等のプロセス調査を行う動機を消す。
  */
-function buildPollCommand(resultFile: string): string {
+function buildPollCommand(resultFile: string, timeoutSec?: number): string {
   const pidFile = `${resultFile}.pid`;
+  const timeout = timeoutSec ?? 600;
   return [
     `RESULT='${resultFile}'`,
     `PID_FILE='${pidFile}'`,
+    `TIMEOUT=${timeout}`,
     `for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done`,
     `PID=$(cat "$PID_FILE" 2>/dev/null | tr -d "[:space:]")`,
-    'if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then ELAPSED=$(ps -o etimes= -p "$PID" 2>/dev/null | tr -d " "); echo "DISPATCH_PENDING worker_alive=true pid=$PID elapsed=${ELAPSED}s"; else echo "DISPATCH_PENDING worker_alive=false"; fi',
+    `if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then ELAPSED=$(ps -o etimes= -p "$PID" 2>/dev/null | tr -d " "); REMAINING=$((TIMEOUT - \${ELAPSED:-0})); echo "DISPATCH_PENDING worker_alive=true pid=$PID elapsed=\${ELAPSED}s timeout=\${TIMEOUT}s remaining=~\${REMAINING}s"; else echo "DISPATCH_PENDING worker_alive=false"; fi`,
   ].join("; ");
 }
 
@@ -458,7 +465,7 @@ function buildBashDispatchTeamAction(
       if (detach) {
         action.detached = true;
         action.resultFile = resultFile;
-        action.pollCommand = buildPollCommand(resultFile);
+        action.pollCommand = buildPollCommand(resultFile, dp.timeout);
       }
       return action;
     }
@@ -538,9 +545,9 @@ function buildBashDispatchTeamAction(
       if (detach) {
         reviewAction.detached = true;
         reviewAction.reviewerResultFile = reviewerResultFile;
-        reviewAction.reviewerPollCommand = buildPollCommand(reviewerResultFile);
+        reviewAction.reviewerPollCommand = buildPollCommand(reviewerResultFile, dp.timeout);
         reviewAction.fixerResultFile = fixerResultFile;
-        reviewAction.fixerPollCommand = buildPollCommand(fixerResultFile);
+        reviewAction.fixerPollCommand = buildPollCommand(fixerResultFile, dp.timeout);
       }
       return reviewAction;
     }

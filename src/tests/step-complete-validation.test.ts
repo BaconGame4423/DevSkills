@@ -55,6 +55,42 @@ describe("validateResultFile", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("Opus 捏造 (type:result + exitCode のみ、subtype なし) を invalid として拒否する", () => {
+    const fabricated = JSON.stringify({
+      type: "result",
+      exitCode: 0,
+      artifacts: ["plan.md"],
+      message: "Plan generated successfully",
+    });
+    const fs = mockFs({ "/result.json": fabricated });
+    const result = validateResultFile("/result.json", fs);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain('missing "subtype"');
+  });
+
+  it("Opus 捏造 (type:result 最小形、127B) を invalid として拒否する", () => {
+    const fabricated = JSON.stringify({
+      type: "result",
+      exitCode: 0,
+    });
+    const fs = mockFs({ "/result.json": fabricated });
+    const result = validateResultFile("/result.json", fs);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain('missing "subtype"');
+  });
+
+  it("dispatch-worker.js 成功出力 (subtype:error_max_turns) を valid として受け入れる", () => {
+    const result_data = JSON.stringify({
+      type: "result",
+      subtype: "error_max_turns",
+      duration_ms: 300000,
+      num_turns: 30,
+    });
+    const fs = mockFs({ "/result.json": result_data });
+    const result = validateResultFile("/result.json", fs);
+    expect(result.valid).toBe(true);
+  });
+
   it("dispatch-worker.js 失敗出力 (status:failed + exitCode) を valid として受け入れる", () => {
     const failResult = JSON.stringify({
       status: "failed",
